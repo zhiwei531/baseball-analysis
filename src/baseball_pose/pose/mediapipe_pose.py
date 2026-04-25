@@ -38,7 +38,10 @@ class MediaPipePoseEstimator(PoseEstimator):
         min_detection_confidence: float = 0.5,
         min_tracking_confidence: float = 0.5,
     ) -> None:
+        Path(".cache/matplotlib").mkdir(parents=True, exist_ok=True)
+        Path(".cache/fontconfig").mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("MPLCONFIGDIR", str(Path(".cache/matplotlib").resolve()))
+        os.environ.setdefault("XDG_CACHE_HOME", str(Path(".cache").resolve()))
 
         try:
             import mediapipe as mp
@@ -58,7 +61,10 @@ class MediaPipePoseEstimator(PoseEstimator):
 
         self._mp = mp
         options = vision.PoseLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=str(model_path)),
+            base_options=BaseOptions(
+                model_asset_path=str(model_path),
+                delegate=BaseOptions.Delegate.CPU,
+            ),
             running_mode=vision.RunningMode.IMAGE,
             num_poses=1,
             min_pose_detection_confidence=min_detection_confidence,
