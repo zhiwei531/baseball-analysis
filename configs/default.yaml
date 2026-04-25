@@ -18,6 +18,7 @@ video:
   resize_longest_side: 1280
   preserve_aspect_ratio: true
   write_frames: true
+  max_frames_per_clip: 180
 
 pose:
   backend: mediapipe

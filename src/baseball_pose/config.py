@@ -41,6 +41,32 @@ class RuntimeConfig:
         return list(self.raw.get("experiments", {}).get("default_conditions", []))
 
     @property
+    def data_dir(self) -> Path:
+        return Path(self.raw.get("project", {}).get("data_dir", "data"))
+
+    @property
+    def output_dir(self) -> Path:
+        return Path(self.raw.get("project", {}).get("output_dir", "outputs"))
+
+    @property
+    def clips_file(self) -> Path:
+        return Path(self.raw.get("dataset", {}).get("clips_file", "data/metadata/clips.csv"))
+
+    @property
+    def target_fps(self) -> float:
+        return float(self.raw.get("video", {}).get("target_fps", 30))
+
+    @property
+    def resize_longest_side(self) -> int | None:
+        value = self.raw.get("video", {}).get("resize_longest_side")
+        return int(value) if value else None
+
+    @property
+    def max_frames_per_clip(self) -> int | None:
+        value = self.raw.get("video", {}).get("max_frames_per_clip")
+        return int(value) if value else None
+
+    @property
     def pipeline_stages(self) -> tuple[str, ...]:
         return DEFAULT_PIPELINE_STAGES
 
