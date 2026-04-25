@@ -38,6 +38,17 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
+MediaPipe Tasks also needs a local pose model file:
+
+```bash
+mkdir -p models
+curl -L \
+  https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task \
+  -o models/pose_landmarker_lite.task
+```
+
+The `.task` file is ignored by git.
+
 ## Initial Checks
 
 ```bash
@@ -45,6 +56,17 @@ python -m compileall src
 python -m pytest
 baseball-pose validate-config
 baseball-pose plan
+baseball-pose run-baseline --clip-id batting_1 --max-frames 30
+```
+
+Baseline outputs are written to:
+
+```text
+data/interim/frames/<clip_id>/baseline_raw/
+data/interim/frames/<clip_id>/baseline_raw.csv
+data/processed/poses/<clip_id>/baseline_raw.csv
+outputs/overlays/<clip_id>__baseline_raw.mp4
+outputs/overlays/frames/<clip_id>/baseline_raw/
 ```
 
 ## MVP Conditions

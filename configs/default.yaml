@@ -22,6 +22,7 @@ video:
 
 pose:
   backend: mediapipe
+  model_asset_path: models/pose_landmarker_lite.task
   min_detection_confidence: 0.5
   min_tracking_confidence: 0.5
   canonical_coordinate_space: normalized

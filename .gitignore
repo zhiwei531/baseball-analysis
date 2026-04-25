@@ -9,6 +9,8 @@ venv/
 data/interim/
 data/processed/
 outputs/
+.cache/
+models/*.task
 
 # Keep raw videos local unless the submission explicitly requires binaries.
 raw/*.mov

@@ -68,6 +68,7 @@ def run_baseline_clip(
     write_frame_records(frames_csv, frames)
 
     estimator = MediaPipePoseEstimator(
+        model_asset_path=config.raw["pose"].get("model_asset_path", "models/pose_landmarker_lite.task"),
         min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
         min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
     )
