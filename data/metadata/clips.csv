@@ -1,0 +1,5 @@
+clip_id,source_path,action_type,fps_original,fps_target,width,height,duration_sec,start_time_sec,end_time_sec,difficulty_tags,notes
+batting_1,raw/batting-1.mov,batting,,30,,,,,,"slow_motion;low_motion_blur","Raw long clip. Trim action window later."
+batting_2,raw/batting-2.mov,batting,,30,,,,,,"slow_motion;low_motion_blur","Raw long clip. Trim action window later."
+pitching_1,raw/pitching-1.mov,pitching,,30,,,,,,"slow_motion;low_motion_blur","Raw long clip. Trim action window later."
+pitching_2,raw/pitching-2.mov,pitching,,30,,,,,,"slow_motion;low_motion_blur","Raw long clip. Trim action window later."

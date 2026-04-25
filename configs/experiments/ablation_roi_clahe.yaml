@@ -1,0 +1,29 @@
+extends: ../default.yaml
+
+experiments:
+  name: ablation_roi_clahe
+  default_conditions:
+    - baseline_raw
+    - roi_only
+    - clahe_only
+    - roi_clahe
+    - roi_clahe_smooth
+
+conditions:
+  roi_only:
+    roi:
+      enabled: true
+      source: data/metadata/manual_rois.csv
+      expansion: 0.2
+    preprocessing: []
+    postprocess:
+      enabled: false
+  clahe_only:
+    roi:
+      enabled: false
+    preprocessing:
+      - name: clahe
+        clip_limit: 2.0
+        tile_grid_size: [8, 8]
+    postprocess:
+      enabled: false

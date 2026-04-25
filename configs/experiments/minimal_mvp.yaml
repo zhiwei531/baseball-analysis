@@ -1,0 +1,15 @@
+extends: ../default.yaml
+
+dataset:
+  clip_ids:
+    - batting_1
+    - batting_2
+    - pitching_1
+    - pitching_2
+
+experiments:
+  name: minimal_mvp
+  default_conditions:
+    - baseline_raw
+    - roi_clahe
+    - roi_clahe_smooth

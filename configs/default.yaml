@@ -1,0 +1,71 @@
+project:
+  name: baseball-analysis
+  data_dir: data
+  raw_video_dir: raw
+  output_dir: outputs
+
+dataset:
+  clips_file: data/metadata/clips.csv
+  difficulty_file: data/metadata/difficulty_labels.csv
+  clip_ids:
+    - batting_1
+    - batting_2
+    - pitching_1
+    - pitching_2
+
+video:
+  target_fps: 30
+  resize_longest_side: 1280
+  preserve_aspect_ratio: true
+  write_frames: true
+
+pose:
+  backend: mediapipe
+  min_detection_confidence: 0.5
+  min_tracking_confidence: 0.5
+  canonical_coordinate_space: normalized
+
+postprocess:
+  confidence_threshold: 0.5
+  interpolate_max_gap_frames: 3
+  smoothing:
+    enabled: true
+    method: savgol
+    window_length: 7
+    polyorder: 2
+
+experiments:
+  default_conditions:
+    - baseline_raw
+    - roi_clahe
+    - roi_clahe_smooth
+
+conditions:
+  baseline_raw:
+    roi:
+      enabled: false
+    preprocessing: []
+    postprocess:
+      enabled: false
+  roi_clahe:
+    roi:
+      enabled: true
+      source: data/metadata/manual_rois.csv
+      expansion: 0.2
+    preprocessing:
+      - name: clahe
+        clip_limit: 2.0
+        tile_grid_size: [8, 8]
+    postprocess:
+      enabled: false
+  roi_clahe_smooth:
+    roi:
+      enabled: true
+      source: data/metadata/manual_rois.csv
+      expansion: 0.2
+    preprocessing:
+      - name: clahe
+        clip_limit: 2.0
+        tile_grid_size: [8, 8]
+    postprocess:
+      enabled: true

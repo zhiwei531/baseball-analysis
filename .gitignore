@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+data/interim/
+data/processed/
+outputs/
+
+# Keep raw videos local unless the submission explicitly requires binaries.
+raw/*.mov
+raw/*.mp4
+raw/*.mkv
+raw/*.avi

@@ -1,0 +1,10 @@
+extends: ../default.yaml
+
+pose:
+  backend: rtmpose
+
+experiments:
+  name: optional_rtmpose
+  default_conditions:
+    - rtmpose_baseline
+    - rtmpose_roi_clahe

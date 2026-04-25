@@ -1,0 +1,5 @@
+clip_id,motion_blur,low_contrast,self_occlusion,partial_body_truncation,camera_shake,background_clutter,notes
+batting_1,low,unknown,unknown,unknown,unknown,unknown,Slow-motion raw video; review labels before experiments.
+batting_2,low,unknown,unknown,unknown,unknown,unknown,Slow-motion raw video; review labels before experiments.
+pitching_1,low,unknown,unknown,unknown,unknown,unknown,Slow-motion raw video; review labels before experiments.
+pitching_2,low,unknown,unknown,unknown,unknown,unknown,Slow-motion raw video; review labels before experiments.

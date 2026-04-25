@@ -1,0 +1,5 @@
+clip_id,x,y,width,height,coordinate_space,notes
+batting_1,,,,,pixel,Fill after reviewing sampled frames.
+batting_2,,,,,pixel,Fill after reviewing sampled frames.
+pitching_1,,,,,pixel,Fill after reviewing sampled frames.
+pitching_2,,,,,pixel,Fill after reviewing sampled frames.
