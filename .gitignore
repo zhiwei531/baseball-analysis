@@ -1,10 +1,13 @@
 __pycache__/
 *.py[cod]
+.DS_Store
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .venv/
+.venv312/
 venv/
+*.egg-info/
 
 data/interim/
 data/processed/
