@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 from baseball_pose.config import load_config
+from baseball_pose.evaluation.roi_ablation import summarize_roi_ablation
 from baseball_pose.io.metadata import load_clips
 from baseball_pose.pipeline.run_experiment import (
     run_auto_roi_experiment,
@@ -30,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
             "run-motion-preview",
             "run-auto-roi",
             "run-pose-prior-roi",
+            "summarize-roi-ablation",
         ],
         help="Command to run.",
     )
@@ -137,6 +139,17 @@ def main() -> None:
             print(f"  roi debug: {result.roi_debug_video}")
             print(f"  poses: {result.poses_csv}")
             print(f"  overlay: {result.overlay_video}")
+        return
+
+    if args.command == "summarize-roi-ablation":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        rows = summarize_roi_ablation(
+            clip_ids=clip_ids,
+            data_dir=config.data_dir,
+            confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+        )
+        output_path = config.data_dir / "processed" / "metrics" / "roi_ablation.csv"
+        print(f"Wrote {len(rows)} ROI ablation metric rows: {output_path}")
         return
 
 
