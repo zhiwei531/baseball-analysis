@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from baseball_pose.config import RuntimeConfig
 from baseball_pose.io.metadata import ClipMetadata
-from baseball_pose.pipeline.run_clip import ClipRunResult, run_baseline_clip
+from baseball_pose.pipeline.run_clip import (
+    ClipRunResult,
+    MotionPreviewResult,
+    run_baseline_clip,
+    run_motion_preview_clip,
+)
 
 
 def planned_runs(config: RuntimeConfig) -> list[tuple[str, str]]:
@@ -21,4 +26,17 @@ def run_baseline_experiment(
     results: list[ClipRunResult] = []
     for clip in selected:
         results.append(run_baseline_clip(clip, config, max_frames=max_frames))
+    return results
+
+
+def run_motion_preview_experiment(
+    clips: list[ClipMetadata],
+    config: RuntimeConfig,
+    clip_ids: set[str] | None = None,
+    max_frames: int | None = None,
+) -> list[MotionPreviewResult]:
+    selected = [clip for clip in clips if clip_ids is None or clip.clip_id in clip_ids]
+    results: list[MotionPreviewResult] = []
+    for clip in selected:
+        results.append(run_motion_preview_clip(clip, config, max_frames=max_frames))
     return results

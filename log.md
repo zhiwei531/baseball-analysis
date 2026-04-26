@@ -266,7 +266,7 @@ Report relevance:
 
 Date: 2026-04-26
 
-Commit: pending
+Commit: `20b53ac Add iteration log`
 
 Goal:
 
@@ -283,3 +283,78 @@ Next steps:
 - Commit this log.
 - Retry runtime execution through Python 3.12 or choose a fallback pose backend if MediaPipe Tasks remains blocked.
 
+## Iteration 7: External Drive Git Cleanup
+
+Date: 2026-04-26
+
+Commit: `faa70b2 Ignore external drive metadata files`
+
+Goal:
+
+- Restore clean git tracking after moving the project to external storage.
+
+Failure:
+
+- `git status` reported many untracked `._*` AppleDouble files.
+- Git also printed:
+
+```text
+error: non-monotonic index .git/objects/pack/._pack-...idx
+```
+
+Cause:
+
+- macOS generated AppleDouble resource-fork files on the external drive.
+- Some of these files were created inside `.git/objects/pack/`, so git attempted to read them as pack indexes.
+
+Revision:
+
+- Removed generated `._*` metadata files.
+- Added ignore rules for external-drive and macOS metadata:
+  - `._*`
+  - `.Spotlight-V100/`
+  - `.Trashes/`
+  - `.fseventsd/`
+  - `.TemporaryItems/`
+- Pushed the cleanup commit to `origin/main`.
+
+Current status:
+
+- `main` tracks `origin/main`.
+- Local `HEAD` matches `origin/main`.
+- The working tree is clean after metadata cleanup.
+
+Report relevance:
+
+- External storage can affect reproducibility and git hygiene through filesystem metadata files.
+- The repository now explicitly ignores those files.
+
+## Iteration 8: Motion Preview Fallback Visualization
+
+Date: 2026-04-26
+
+Commit: pending
+
+Goal:
+
+- Produce a first working video-processing visualization without depending on the currently blocked MediaPipe runtime.
+
+Work completed:
+
+- Added an OpenCV Lucas-Kanade optical-flow preview path.
+- Added CLI command:
+  - `baseball-pose run-motion-preview --clip-id <clip_id> --max-frames <n>`
+- Added output paths for motion preview frames and videos.
+
+Expected outputs:
+
+- `data/interim/frames/<clip_id>/motion_preview/`
+- `data/interim/frames/<clip_id>/motion_preview.csv`
+- `outputs/motion_preview/frames/<clip_id>/`
+- `outputs/motion_preview/<clip_id>__motion_preview.mp4`
+
+Interpretation:
+
+- This preview is not pose estimation.
+- It verifies that video decoding, frame sampling, track visualization, and video writing work end to end.
+- Pose visualization will still use MediaPipe or another pose backend once the runtime issue is resolved.

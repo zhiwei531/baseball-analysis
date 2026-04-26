@@ -31,3 +31,11 @@ def overlay_frame_dir(output_dir: str | Path, clip_id: str, condition_id: str) -
 
 def overlay_video_path(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
     return Path(output_dir) / "overlays" / f"{clip_id}__{condition_id}.mp4"
+
+
+def motion_preview_frame_dir(output_dir: str | Path, clip_id: str) -> Path:
+    return Path(output_dir) / "motion_preview" / "frames" / clip_id
+
+
+def motion_preview_video_path(output_dir: str | Path, clip_id: str) -> Path:
+    return Path(output_dir) / "motion_preview" / f"{clip_id}__motion_preview.mp4"

@@ -56,10 +56,20 @@ python -m compileall src
 python -m pytest
 baseball-pose validate-config
 baseball-pose plan
+baseball-pose run-motion-preview --clip-id batting_1 --max-frames 60
 baseball-pose run-baseline --clip-id batting_1 --max-frames 30
 ```
 
-Baseline outputs are written to:
+Motion preview outputs are written to:
+
+```text
+data/interim/frames/<clip_id>/motion_preview/
+data/interim/frames/<clip_id>/motion_preview.csv
+outputs/motion_preview/<clip_id>__motion_preview.mp4
+outputs/motion_preview/frames/<clip_id>/
+```
+
+Baseline pose outputs are written to:
 
 ```text
 data/interim/frames/<clip_id>/baseline_raw/

@@ -11,6 +11,8 @@ from baseball_pose.io.metadata import ClipMetadata
 from baseball_pose.io.paths import (
     frame_dir,
     frame_manifest_path,
+    motion_preview_frame_dir,
+    motion_preview_video_path,
     overlay_frame_dir,
     overlay_video_path,
     pose_path,
@@ -19,6 +21,7 @@ from baseball_pose.io.pose_csv import write_pose_records
 from baseball_pose.io.video import read_frame, sample_video_frames, write_video_from_frames
 from baseball_pose.pose.mediapipe_pose import MediaPipePoseEstimator
 from baseball_pose.pose.schema import PoseRecord
+from baseball_pose.visualization.motion_preview import create_motion_preview
 from baseball_pose.visualization.overlays import draw_pose_overlay
 
 @dataclass(frozen=True)
@@ -43,6 +46,15 @@ class ClipRunResult:
     pose_record_count: int
 
 
+@dataclass(frozen=True)
+class MotionPreviewResult:
+    clip_id: str
+    condition_id: str
+    frames_csv: Path
+    preview_video: Path
+    frame_count: int
+
+
 def run_baseline_clip(
     clip: ClipMetadata,
     config: RuntimeConfig,
@@ -63,6 +75,44 @@ def run_baseline_clip(
         resize_longest_side=config.resize_longest_side,
         condition_id=condition_id,
         max_frames=max_frames if max_frames is not None else config.max_frames_per_clip,
+    )
+
+
+def run_motion_preview_clip(
+    clip: ClipMetadata,
+    config: RuntimeConfig,
+    max_frames: int | None = None,
+) -> MotionPreviewResult:
+    """Sample frames and create an OpenCV point-track preview video."""
+
+    condition_id = "motion_preview"
+    frame_output_dir = frame_dir(config.data_dir, clip.clip_id, condition_id)
+    frames = sample_video_frames(
+        video_path=clip.source_path,
+        clip_id=clip.clip_id,
+        output_dir=frame_output_dir,
+        target_fps=config.target_fps,
+        resize_longest_side=config.resize_longest_side,
+        condition_id=condition_id,
+        max_frames=max_frames if max_frames is not None else config.max_frames_per_clip,
+    )
+    frames_csv = frame_manifest_path(config.data_dir, clip.clip_id, condition_id)
+    write_frame_records(frames_csv, frames)
+
+    preview_video = motion_preview_video_path(config.output_dir, clip.clip_id)
+    create_motion_preview(
+        frames=frames,
+        output_dir=motion_preview_frame_dir(config.output_dir, clip.clip_id),
+        output_video_path=preview_video,
+        fps=config.target_fps,
+    )
+
+    return MotionPreviewResult(
+        clip_id=clip.clip_id,
+        condition_id=condition_id,
+        frames_csv=frames_csv,
+        preview_video=preview_video,
+        frame_count=len(frames),
     )
     frames_csv = frame_manifest_path(config.data_dir, clip.clip_id, condition_id)
     write_frame_records(frames_csv, frames)
