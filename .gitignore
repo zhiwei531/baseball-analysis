@@ -1,6 +1,11 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+._*
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+.TemporaryItems/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
