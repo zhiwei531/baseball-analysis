@@ -410,3 +410,60 @@ Next steps:
 
 - Run baseline pose extraction on all four clips for a small bounded frame count.
 - Inspect overlay quality and decide whether manual ROI should be added before expanding frame counts.
+
+## Iteration 10: Four-Clip MediaPipe Baseline Run
+
+Date: 2026-04-26
+
+Commit: pending
+
+Goal:
+
+- Generate the first successful MediaPipe pose outputs and overlay videos for all four raw clips.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/default.yaml run-baseline --max-frames 30
+```
+
+Outputs generated:
+
+- `data/interim/frames/batting_1/baseline_raw.csv`
+- `data/interim/frames/batting_2/baseline_raw.csv`
+- `data/interim/frames/pitching_1/baseline_raw.csv`
+- `data/interim/frames/pitching_2/baseline_raw.csv`
+- `data/processed/poses/batting_1/baseline_raw.csv`
+- `data/processed/poses/batting_2/baseline_raw.csv`
+- `data/processed/poses/pitching_1/baseline_raw.csv`
+- `data/processed/poses/pitching_2/baseline_raw.csv`
+- `outputs/overlays/batting_1__baseline_raw.mp4`
+- `outputs/overlays/batting_2__baseline_raw.mp4`
+- `outputs/overlays/pitching_1__baseline_raw.mp4`
+- `outputs/overlays/pitching_2__baseline_raw.mp4`
+
+Validation:
+
+- Each clip processed 30 frames.
+- Each pose CSV contains 390 landmark rows:
+  - 30 frames x 13 canonical joints.
+- 120 overlay frames were generated in total.
+- Overlay video files were successfully written:
+  - `batting_1__baseline_raw.mp4`: about 702 KB
+  - `batting_2__baseline_raw.mp4`: about 627 KB
+  - `pitching_1__baseline_raw.mp4`: about 440 KB
+  - `pitching_2__baseline_raw.mp4`: about 478 KB
+
+Observations:
+
+- MediaPipe initializes successfully under Python 3.12.
+- Runtime logs still mention GL context creation, but the run completes and TensorFlow Lite uses the CPU delegate.
+- The output is now true pose-overlay visualization, unlike the earlier optical-flow motion preview.
+
+Next steps:
+
+- Review the four overlay videos visually.
+- Add manual ROI support before expanding frame count if overlays show background or wrong-person detections.
+- Start computing basic completeness and runtime summaries from the generated pose CSV files.
