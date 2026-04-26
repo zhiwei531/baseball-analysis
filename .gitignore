@@ -16,7 +16,9 @@ venv/
 
 data/interim/
 data/processed/
+data_full/
 outputs/
+outputs_full/
 .cache/
 models/*.task
 

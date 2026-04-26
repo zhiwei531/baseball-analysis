@@ -91,6 +91,25 @@ XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 .venv312/bin/python -m baseball_pose.cli --config configs/default.yaml run-baseline --clip-id batting_1 --max-frames 30
 ```
 
+Full-video runs use a separate config and separate output roots so the 30-frame experiment outputs are preserved:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-baseline
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-pose-prior-roi
+```
+
+Full-video outputs are written under:
+
+```text
+data_full/
+outputs_full/
+```
+
 Motion preview outputs are written to:
 
 ```text

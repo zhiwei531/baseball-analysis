@@ -1,0 +1,27 @@
+extends: ../default.yaml
+
+project:
+  data_dir: data_full
+  output_dir: outputs_full
+
+dataset:
+  clips_file: data/metadata/clips.csv
+  difficulty_file: data/metadata/difficulty_labels.csv
+  clip_ids:
+    - batting_1
+    - batting_2
+    - pitching_1
+    - pitching_2
+
+video:
+  target_fps: 30
+  resize_longest_side: 1280
+  preserve_aspect_ratio: true
+  write_frames: true
+  max_frames_per_clip: null
+
+experiments:
+  name: full_video
+  default_conditions:
+    - baseline_raw
+    - auto_roi_pose_prior
