@@ -76,6 +76,7 @@ def summarize_roi_ablation(
     if output_path is None:
         output_path = metric_path(data_dir, "roi_ablation")
     write_roi_metric_rows(output_path, rows)
+    write_roi_summary_table(Path(output_path).with_name("roi_ablation_summary.csv"), rows)
     return rows
 
 
@@ -108,6 +109,52 @@ def write_roi_metric_rows(path: str | Path, rows: list[RoiMetricRow]) -> None:
                     "notes": row.notes,
                 }
             )
+
+
+def write_roi_summary_table(path: str | Path, rows: list[RoiMetricRow]) -> None:
+    """Write a compact wide table for report-friendly comparison."""
+
+    wanted = {
+        ("keypoint_completeness", "all"),
+        ("keypoint_completeness", "upper_body"),
+        ("runtime_ms_per_frame", "all"),
+        ("temporal_jitter", "left_wrist"),
+        ("temporal_jitter", "right_wrist"),
+        ("trajectory_smoothness", "left_wrist"),
+        ("trajectory_smoothness", "right_wrist"),
+    }
+    grouped: dict[tuple[str, str], dict[str, float | str]] = {}
+    for row in rows:
+        if row.value is None or (row.metric_name, row.joint_group) not in wanted:
+            continue
+        key = (row.clip_id, row.condition_id)
+        grouped.setdefault(key, {"clip_id": row.clip_id, "condition_id": row.condition_id})
+        grouped[key][_summary_column(row.metric_name, row.joint_group)] = row.value
+
+    fieldnames = (
+        "clip_id",
+        "condition_id",
+        "keypoint_completeness_all",
+        "keypoint_completeness_upper_body",
+        "runtime_ms_per_frame",
+        "temporal_jitter_left_wrist",
+        "temporal_jitter_right_wrist",
+        "trajectory_smoothness_left_wrist",
+        "trajectory_smoothness_right_wrist",
+    )
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for key in sorted(grouped):
+            writer.writerow(grouped[key])
+
+
+def _summary_column(metric_name: str, joint_group: str) -> str:
+    if metric_name == "runtime_ms_per_frame" and joint_group == "all":
+        return metric_name
+    return f"{metric_name}_{joint_group}"
 
 
 def _summarize_records(

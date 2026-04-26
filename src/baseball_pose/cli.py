@@ -150,6 +150,7 @@ def main() -> None:
         )
         output_path = config.data_dir / "processed" / "metrics" / "roi_ablation.csv"
         print(f"Wrote {len(rows)} ROI ablation metric rows: {output_path}")
+        print(f"Wrote ROI ablation summary table: {output_path.with_name('roi_ablation_summary.csv')}")
         return
 
 

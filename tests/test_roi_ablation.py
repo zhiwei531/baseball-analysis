@@ -22,4 +22,5 @@ def test_summarize_roi_ablation_writes_metrics(tmp_path):
 
     assert rows
     assert (tmp_path / "metrics.csv").exists()
+    assert (tmp_path / "roi_ablation_summary.csv").exists()
     assert any(row.metric_name == "temporal_jitter" for row in rows)
