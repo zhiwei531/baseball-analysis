@@ -662,3 +662,77 @@ Next revision ideas:
 - Add vertical crop constraints once overlay review confirms the head, feet, and throwing arm are consistently inside the ROI.
 - Compare `baseline_raw`, `auto_roi_raw`, and `auto_roi_pose_prior` visually in a report figure.
 - Compute keypoint completeness and jitter across the three conditions.
+
+## Iteration 14: ROI Ablation Metrics
+
+Date: 2026-04-26
+
+Commits:
+
+- `2dbce97 Add ROI ablation metrics`
+- `27f9339 Add ROI ablation summary table`
+
+Goal:
+
+- Quantify the effect of ROI conditions before adding more preprocessing.
+- Compare `baseline_raw`, `auto_roi_raw`, and `auto_roi_pose_prior`.
+
+Command:
+
+```bash
+.venv312/bin/python -m baseball_pose.cli --config configs/default.yaml summarize-roi-ablation
+```
+
+Outputs:
+
+- `data/processed/metrics/roi_ablation.csv`
+- `data/processed/metrics/roi_ablation_summary.csv`
+
+Metrics:
+
+- keypoint completeness for all joints,
+- keypoint completeness for upper body,
+- wrist missing rate,
+- wrist temporal jitter,
+- wrist trajectory smoothness,
+- mean MediaPipe inference time per frame.
+
+Validation:
+
+- `pytest` passed: 9 tests.
+- Metric table contains 120 long-form rows.
+- Summary table contains 12 rows:
+  - 4 clips x 3 conditions.
+
+Initial findings:
+
+- Completeness is 1.0 for the tested 30-frame subset across all three conditions, so this subset is too easy for completeness to distinguish conditions.
+- ROI conditions generally reduce wrist jitter and smoothness values compared with baseline.
+- `pitching_1` has identical baseline and `auto_roi_raw` pose metrics because `auto_roi_raw` fell back to a full-frame ROI.
+- `auto_roi_pose_prior` reduces runtime for pitching clips by using a tighter horizontal crop.
+
+Example summary:
+
+```text
+batting_1 left_wrist jitter:
+baseline_raw          0.0891
+auto_roi_raw          0.0142
+auto_roi_pose_prior   0.0189
+
+pitching_1 runtime ms/frame:
+baseline_raw          63.35
+auto_roi_raw          71.60
+auto_roi_pose_prior   31.25
+```
+
+Interpretation:
+
+- ROI is helping most clearly on trajectory stability and runtime.
+- Completeness alone is not enough for this dataset slice.
+- The report should combine metrics with overlay examples because lower jitter can also indicate over-stabilization or wrong-person lock-in.
+
+Next steps:
+
+- Generate report-ready visual comparisons for selected frames.
+- Add wrist trajectory plots across conditions.
+- Then implement angle features and smoothing.
