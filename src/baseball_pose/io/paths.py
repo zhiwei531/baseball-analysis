@@ -39,3 +39,11 @@ def motion_preview_frame_dir(output_dir: str | Path, clip_id: str) -> Path:
 
 def motion_preview_video_path(output_dir: str | Path, clip_id: str) -> Path:
     return Path(output_dir) / "motion_preview" / f"{clip_id}__motion_preview.mp4"
+
+
+def auto_roi_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(data_dir) / "interim" / "rois" / clip_id / f"{condition_id}.csv"
+
+
+def roi_debug_video_path(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(output_dir) / "roi_debug" / f"{clip_id}__{condition_id}.mp4"
