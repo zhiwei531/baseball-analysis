@@ -900,3 +900,78 @@ Next revision ideas:
 - Add angle-over-time plots for elbow and shoulder angles.
 - Add selected overlay still frames for report figures.
 - Add a compact per-clip feature summary table with min/max/range for key angles and wrist speed.
+
+## Iteration 17: Temporal Smoothing for Full-Video Trajectories
+
+Date: 2026-04-26
+
+Goal:
+
+- Fix the overly noisy wrist trajectory plots from raw MediaPipe coordinates.
+- Add a real temporal smoothing stage instead of the previous placeholder function.
+- Generate smoothed pose CSVs, smoothed features, updated trajectory figures, and metrics.
+
+Implementation:
+
+- Implemented `smooth_pose_records` using:
+  - low-confidence coordinate masking,
+  - isolated jump outlier rejection,
+  - short-gap linear interpolation,
+  - Savitzky-Golay filtering on valid trajectory segments.
+- Added CLI command:
+  - `smooth-poses`
+- Added full-video smooth conditions:
+  - `baseline_raw_smooth`
+  - `auto_roi_pose_prior_smooth`
+- Updated `summarize-roi-ablation` to follow configured conditions, so smooth metrics are included.
+
+Commands:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml summarize-roi-ablation
+```
+
+Outputs:
+
+- `data_full/processed/poses/<clip_id>/baseline_raw_smooth.csv`
+- `data_full/processed/poses/<clip_id>/auto_roi_pose_prior_smooth.csv`
+- `data_full/processed/features/<clip_id>/baseline_raw_smooth.csv`
+- `data_full/processed/features/<clip_id>/auto_roi_pose_prior_smooth.csv`
+- Updated `outputs_full/figures/<clip_id>__wrist_trajectories.png`
+- Updated `data_full/processed/metrics/roi_ablation_summary.csv`
+
+Metric changes:
+
+- `batting_1` auto-ROI left wrist jitter: `0.0110 -> 0.0068`.
+- `batting_1` auto-ROI left wrist smoothness: `0.0189 -> 0.0056`.
+- `batting_2` baseline left wrist jitter: `0.0323 -> 0.0174`.
+- `batting_2` auto-ROI left wrist jitter: `0.0224 -> 0.0137`.
+- `pitching_1` auto-ROI left wrist jitter: `0.0168 -> 0.0086`.
+- `pitching_2` auto-ROI left wrist smoothness: `0.0136 -> 0.0045`.
+
+Validation:
+
+- Added unit tests for isolated jump rejection and low-confidence gap interpolation.
+- Smoothed pose record counts match the original pose record counts for all four clips.
+
+Limitations:
+
+- Temporal smoothing reduces jitter but does not fully solve long wrong-person tracking segments.
+- If the detector follows the wrong person for many consecutive frames, smoothing can make that wrong track look cleaner.
+- The report should present smoothing as temporal denoising, not as identity tracking.
+
+Next revision ideas:
+
+- Add visual still-frame comparisons for raw vs smoothed overlays.
+- Add a simple identity-consistency gate using torso center continuity.
+- Add angle-over-time plots for the smoothed conditions.
