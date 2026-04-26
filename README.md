@@ -80,6 +80,7 @@ baseball-pose plan
 baseball-pose run-motion-preview --clip-id batting_1 --max-frames 60
 baseball-pose run-baseline --clip-id batting_1 --max-frames 30
 baseball-pose run-auto-roi --clip-id batting_1 --max-frames 30
+baseball-pose run-pose-prior-roi --clip-id batting_1 --max-frames 30
 ```
 
 For MediaPipe baseline on this machine:
@@ -120,6 +121,17 @@ outputs/roi_debug/<clip_id>__auto_roi_raw.mp4
 outputs/roi_debug/frames/<clip_id>/
 outputs/overlays/<clip_id>__auto_roi_raw.mp4
 outputs/overlays/frames/<clip_id>/auto_roi_raw/
+```
+
+Pose-prior ROI uses `baseline_raw` pose CSV files to estimate a tighter athlete crop:
+
+```text
+data/interim/frames/<clip_id>/auto_roi_pose_prior/
+data/interim/frames/<clip_id>/auto_roi_pose_prior.csv
+data/interim/rois/<clip_id>/auto_roi_pose_prior.csv
+data/processed/poses/<clip_id>/auto_roi_pose_prior.csv
+outputs/roi_debug/<clip_id>__auto_roi_pose_prior.mp4
+outputs/overlays/<clip_id>__auto_roi_pose_prior.mp4
 ```
 
 ## MVP Conditions

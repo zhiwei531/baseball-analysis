@@ -5,6 +5,7 @@ experiments:
   default_conditions:
     - baseline_raw
     - auto_roi_raw
+    - auto_roi_pose_prior
     - auto_roi_clahe
     - roi_only
     - clahe_only

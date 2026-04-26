@@ -59,6 +59,19 @@ conditions:
     preprocessing: []
     postprocess:
       enabled: false
+  auto_roi_pose_prior:
+    roi:
+      enabled: true
+      mode: pose_prior
+      source_condition: baseline_raw
+      confidence_threshold: 0.5
+      min_joints_per_frame: 4
+      horizontal_padding: 0.35
+      top_padding: 0.45
+      bottom_padding: 0.25
+    preprocessing: []
+    postprocess:
+      enabled: false
   roi_clahe:
     roi:
       enabled: true
