@@ -122,6 +122,99 @@ def aggregate_roi_boxes(
     return RoiBox(left, top, right - left, bottom - top).clamped(image_width, image_height)
 
 
+def estimate_pose_prior_roi(
+    records: list[PoseRecord],
+    image_width: int,
+    image_height: int,
+    condition_id: str = "auto_roi_pose_prior",
+    confidence_threshold: float = 0.5,
+    min_joints_per_frame: int = 4,
+    horizontal_padding: float = 0.35,
+    top_padding: float = 0.45,
+    bottom_padding: float = 0.25,
+) -> AutoRoiResult:
+    """Estimate one clip-level ROI from baseline pose landmarks."""
+
+    boxes = _pose_frame_boxes(
+        records,
+        image_width=image_width,
+        image_height=image_height,
+        confidence_threshold=confidence_threshold,
+        min_joints_per_frame=min_joints_per_frame,
+    )
+    if not boxes:
+        clip_id = records[0].clip_id if records else "unknown"
+        return AutoRoiResult(
+            clip_id=clip_id,
+            condition_id=condition_id,
+            roi=RoiBox(0, 0, image_width, image_height),
+            source_frame_count=0,
+            candidate_count=0,
+        )
+
+    left = _percentile([box.x for box in boxes], 0.10)
+    top = _percentile([box.y for box in boxes], 0.05)
+    right = _percentile([box.x + box.width for box in boxes], 0.90)
+    bottom = _percentile([box.y + box.height for box in boxes], 0.95)
+    width = max(1.0, right - left)
+    height = max(1.0, bottom - top)
+
+    padded = RoiBox(
+        x=left - width * horizontal_padding,
+        y=top - height * top_padding,
+        width=width * (1 + 2 * horizontal_padding),
+        height=height * (1 + top_padding + bottom_padding),
+    ).clamped(image_width, image_height)
+    return AutoRoiResult(
+        clip_id=records[0].clip_id,
+        condition_id=condition_id,
+        roi=padded,
+        source_frame_count=len({record.frame_index for record in records}),
+        candidate_count=len(boxes),
+    )
+
+
+def _pose_frame_boxes(
+    records: list[PoseRecord],
+    image_width: int,
+    image_height: int,
+    confidence_threshold: float,
+    min_joints_per_frame: int,
+) -> list[RoiBox]:
+    by_frame: dict[int, list[PoseRecord]] = {}
+    for record in records:
+        if record.x is None or record.y is None:
+            continue
+        score = record.confidence if record.confidence is not None else record.visibility
+        if score is not None and score < confidence_threshold:
+            continue
+        by_frame.setdefault(record.frame_index, []).append(record)
+
+    boxes: list[RoiBox] = []
+    for frame_records in by_frame.values():
+        if len(frame_records) < min_joints_per_frame:
+            continue
+        xs = [record.x * image_width for record in frame_records if record.x is not None]
+        ys = [record.y * image_height for record in frame_records if record.y is not None]
+        if not xs or not ys:
+            continue
+        boxes.append(RoiBox(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)))
+    return boxes
+
+
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        raise ValueError("values cannot be empty.")
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = q * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return ordered[lower] * (1 - weight) + ordered[upper] * weight
+
+
 def crop_to_roi(image, roi: RoiBox):
     x, y, width, height = roi.as_int_tuple()
     return image[y : y + height, x : x + width]
@@ -182,12 +275,13 @@ def write_roi_debug_video(
     output_dir.mkdir(parents=True, exist_ok=True)
     debug_frames: list[Path] = []
     x, y, width, height = roi.as_int_tuple()
+    condition_id = frames[0].condition_id
 
     for frame in frames:
         image = read_frame(frame.frame_path)
         debug = image.copy()
         cv2.rectangle(debug, (x, y), (x + width, y + height), (60, 220, 255), 3)
-        label = f"{frame.clip_id} auto_roi_raw x={x} y={y} w={width} h={height}"
+        label = f"{frame.clip_id} {condition_id} x={x} y={y} w={width} h={height}"
         cv2.rectangle(debug, (12, 12), (12 + min(920, 11 * len(label)), 44), (0, 0, 0), -1)
         cv2.putText(debug, label, (22, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
         frame_path = output_dir / frame.frame_path.name
