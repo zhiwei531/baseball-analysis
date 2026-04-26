@@ -518,3 +518,77 @@ Expected diagnostics:
 - mask / contour debug frames,
 - ROI debug video,
 - side-by-side `baseline_raw` vs `auto_roi_raw` overlay comparison.
+
+## Iteration 12: Implement and Run `auto_roi_raw`
+
+Date: 2026-04-26
+
+Commits:
+
+- `2b9e68f Add automatic ROI proposal helpers`
+- `2e195b2 Add auto ROI pipeline command`
+
+Goal:
+
+- Implement the first automatic ROI crop based on traditional image processing.
+- Preserve separate outputs for report comparison without overwriting `baseline_raw` or `motion_preview`.
+
+Implementation:
+
+- Added `RoiBox` helpers for expansion, clamping, crop extraction, and coordinate remapping.
+- Added automatic ROI proposal:
+  - grayscale frame difference,
+  - Otsu-thresholded motion mask,
+  - Canny edge mask,
+  - motion-edge combined mask,
+  - contour candidate boxes,
+  - clip-level fixed ROI aggregation,
+  - expanded ROI crop.
+- Added coordinate remapping so MediaPipe keypoints estimated on cropped ROI are converted back to full-frame normalized coordinates.
+- Added ROI debug videos with selected boxes drawn on original frames.
+- Added CLI command:
+
+```bash
+.venv312/bin/python -m baseball_pose.cli --config configs/default.yaml run-auto-roi --max-frames 30
+```
+
+Outputs generated:
+
+- `data/interim/frames/<clip_id>/auto_roi_raw.csv`
+- `data/interim/rois/<clip_id>/auto_roi_raw.csv`
+- `data/processed/poses/<clip_id>/auto_roi_raw.csv`
+- `outputs/roi_debug/<clip_id>__auto_roi_raw.mp4`
+- `outputs/roi_debug/frames/<clip_id>/`
+- `outputs/overlays/<clip_id>__auto_roi_raw.mp4`
+- `outputs/overlays/frames/<clip_id>/auto_roi_raw/`
+
+Validation:
+
+- `pytest` passed: 7 tests.
+- `auto_roi_raw` ran on all four clips for 30 frames each.
+- Each clip produced 390 pose rows:
+  - 30 frames x 13 canonical joints.
+- Each clip produced 30 ROI debug frames and 30 overlay frames.
+
+Selected ROI boxes:
+
+```text
+batting_1:  x=102.675, y=0.0,     w=1177.325, h=714.0
+batting_2:  x=143.775, y=182.575, w=1136.225, h=531.425
+pitching_1: x=0.0,     y=0.0,     w=1280.0,   h=714.0
+pitching_2: x=0.0,     y=0.0,     w=1280.0,   h=714.0
+```
+
+Observations:
+
+- The first version gives useful crops for the batting clips.
+- The pitching clips currently fall back to full-frame ROI, likely because the motion-edge candidate aggregation captures too much background or whole-scene motion.
+- This is not a failure of the pipeline; it is a useful failure case for the automatic ROI module.
+
+Next revision ideas:
+
+- Add a maximum ROI area threshold before aggregation.
+- Prefer vertically centered human-scale boxes instead of unioning too many candidates.
+- Use median candidate box rather than full union for clips with many candidates.
+- Add an optional action-region prior per clip type.
+- Compare overlay videos to decide whether `auto_roi_raw` actually reduces wrong-person switches on batting clips.
