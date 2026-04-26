@@ -736,3 +736,93 @@ Next steps:
 - Generate report-ready visual comparisons for selected frames.
 - Add wrist trajectory plots across conditions.
 - Then implement angle features and smoothing.
+
+## Iteration 15: Full-Video Baseline and Pose-Prior ROI Runs
+
+Date: 2026-04-26
+
+Commit:
+
+- `6beeff7 Add full-video experiment config`
+
+Goal:
+
+- Expand from short 30-frame checks to full-length video processing.
+- Preserve the previous short-run outputs by writing full-video artifacts to separate directories.
+- Generate complete overlay and ROI-debug videos for report review.
+
+Config:
+
+- `configs/experiments/full_video.yaml`
+- `project.data_dir: data_full`
+- `project.output_dir: outputs_full`
+- `video.max_frames_per_clip: null`
+- Conditions run: `baseline_raw`, `auto_roi_pose_prior`
+
+Commands:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-baseline
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-pose-prior-roi
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml summarize-roi-ablation
+```
+
+Outputs:
+
+- `data_full/interim/frames/<clip_id>/baseline_raw.csv`
+- `data_full/interim/frames/<clip_id>/auto_roi_pose_prior.csv`
+- `data_full/interim/rois/<clip_id>/auto_roi_pose_prior.csv`
+- `data_full/processed/poses/<clip_id>/baseline_raw.csv`
+- `data_full/processed/poses/<clip_id>/auto_roi_pose_prior.csv`
+- `outputs_full/overlays/<clip_id>__baseline_raw.mp4`
+- `outputs_full/overlays/<clip_id>__auto_roi_pose_prior.mp4`
+- `outputs_full/roi_debug/<clip_id>__auto_roi_pose_prior.mp4`
+- `data_full/processed/metrics/roi_ablation.csv`
+- `data_full/processed/metrics/roi_ablation_summary.csv`
+
+Frame and pose record counts:
+
+| clip_id | frames | baseline pose records | pose-prior ROI pose records |
+| --- | ---: | ---: | ---: |
+| batting_1 | 997 | 12961 | 12961 |
+| batting_2 | 758 | 9854 | 9854 |
+| pitching_1 | 624 | 8112 | 8112 |
+| pitching_2 | 424 | 5512 | 5512 |
+
+Pose-prior ROI boxes:
+
+| clip_id | x | y | width | height | candidate_count |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| batting_1 | 371.40 | 0.00 | 742.48 | 714.00 | 997 |
+| batting_2 | 446.40 | 0.00 | 595.05 | 714.00 | 677 |
+| pitching_1 | 184.72 | 0.00 | 750.86 | 714.00 | 615 |
+| pitching_2 | 188.73 | 0.00 | 1007.41 | 714.00 | 424 |
+
+Metrics summary:
+
+- `batting_1`: pose-prior ROI preserved completeness at 1.0 and reduced wrist jitter relative to baseline.
+- `batting_2`: pose-prior ROI reduced jitter but completeness dropped from about 0.893 to 0.765, so this clip needs visual inspection before treating ROI as an improvement.
+- `pitching_1`: pose-prior ROI reduced runtime from about 37.06 ms/frame to 29.59 ms/frame and reduced wrist jitter, with a small completeness drop.
+- `pitching_2`: completeness stayed at 1.0; ROI and baseline runtime were similar, with slightly lower jitter for pose-prior ROI.
+
+Failures or limitations:
+
+- Full-video `auto_roi_raw` was not rerun in this iteration; the ablation long table records `missing_pose_file` rows for that condition.
+- `batting_2` remains the main weak case for ROI because the subject crop can lose useful body context.
+- The current pose-prior crop is horizontal only, so the vertical extent remains full height.
+
+Disk usage:
+
+- `data_full`: about 7.6 GB.
+- `outputs_full`: about 12 GB.
+
+Next revision ideas:
+
+- Review full-video overlays for wrong-person tracking and `batting_2` body coverage.
+- Add report-ready still-frame comparisons from `outputs_full`.
+- Continue with trajectory/angle feature extraction using full-video pose CSVs.
