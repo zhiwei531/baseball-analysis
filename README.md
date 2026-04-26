@@ -104,6 +104,10 @@ XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
 XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 .venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features
 
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
@@ -121,6 +125,7 @@ outputs_full/
 Full-video feature and figure outputs are written to:
 
 ```text
+data_full/processed/poses/<clip_id>/<condition_id>_smooth.csv
 data_full/processed/features/<clip_id>/<condition_id>.csv
 outputs_full/figures/<clip_id>__wrist_trajectories.png
 ```

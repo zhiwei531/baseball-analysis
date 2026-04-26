@@ -15,6 +15,7 @@ from baseball_pose.pipeline.run_experiment import (
 )
 from baseball_pose.pipeline.features import extract_feature_files
 from baseball_pose.pipeline.figures import make_report_figures
+from baseball_pose.pipeline.postprocess import smooth_pose_files
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
             "run-motion-preview",
             "run-auto-roi",
             "run-pose-prior-roi",
+            "smooth-poses",
             "extract-features",
             "make-figures",
             "summarize-roi-ablation",
@@ -49,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Override config video.max_frames_per_clip for quick runs.",
+    )
+    parser.add_argument(
+        "--condition",
+        action="append",
+        help="Condition id for commands that read existing pose or feature files.",
     )
     return parser
 
@@ -145,9 +152,24 @@ def main() -> None:
             print(f"  overlay: {result.overlay_video}")
         return
 
+    if args.command == "smooth-poses":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = smooth_pose_files(
+            clip_ids=clip_ids,
+            config=config,
+            source_conditions=args.condition,
+        )
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.source_condition_id} -> {result.condition_id}: "
+                f"{result.pose_record_count} pose records"
+            )
+            print(f"  poses: {result.pose_csv}")
+        return
+
     if args.command == "extract-features":
         clip_ids = args.clip_id if args.clip_id else config.clip_ids
-        results = extract_feature_files(clip_ids=clip_ids, config=config)
+        results = extract_feature_files(clip_ids=clip_ids, config=config, conditions=args.condition)
         for result in results:
             print(
                 f"{result.clip_id}/{result.condition_id}: "
@@ -158,7 +180,7 @@ def main() -> None:
 
     if args.command == "make-figures":
         clip_ids = args.clip_id if args.clip_id else config.clip_ids
-        results = make_report_figures(clip_ids=clip_ids, config=config)
+        results = make_report_figures(clip_ids=clip_ids, config=config, conditions=args.condition)
         for result in results:
             print(
                 f"{result.clip_id}: wrote figure from "
@@ -172,6 +194,7 @@ def main() -> None:
         rows = summarize_roi_ablation(
             clip_ids=clip_ids,
             data_dir=config.data_dir,
+            conditions=tuple(args.condition if args.condition else config.condition_ids),
             confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
         )
         output_path = config.data_dir / "processed" / "metrics" / "roi_ablation.csv"
