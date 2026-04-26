@@ -11,6 +11,20 @@ raw video -> frame sampling -> optional ROI -> CLAHE -> MediaPipe Pose
   -> temporal post-processing -> motion features -> evaluation -> visualization
 ```
 
+Current next ROI direction:
+
+```text
+sampled frames
+  -> frame-difference motion mask
+  -> Canny/Sobel edge mask
+  -> connected components / contour boxes
+  -> clip-level fixed auto ROI
+  -> MediaPipe Pose on cropped ROI
+  -> remap keypoints to full-frame coordinates
+```
+
+The planned condition name is `auto_roi_raw`, followed by `auto_roi_clahe` after the ROI-only effect is inspected. Manual ROI remains a fallback and comparison point when automatic ROI follows another person or background structure.
+
 The first experiment uses four local raw videos:
 
 - `raw/batting-1.mov`

@@ -467,3 +467,54 @@ Next steps:
 - Review the four overlay videos visually.
 - Add manual ROI support before expanding frame count if overlays show background or wrong-person detections.
 - Start computing basic completeness and runtime summaries from the generated pose CSV files.
+
+## Iteration 11: Plan Automatic ROI Module
+
+Date: 2026-04-26
+
+Commit: pending
+
+Goal:
+
+- Update project documentation to include an automatic ROI crop module based on traditional image processing.
+- Address observed wrong-person switches in MediaPipe baseline overlays.
+
+Planned method:
+
+```text
+sampled frames
+  -> grayscale frame difference
+  -> motion mask
+  -> Canny / Sobel edge mask
+  -> combined motion-edge ROI score
+  -> contour / connected-component candidate boxes
+  -> clip-level fixed ROI aggregation
+  -> expanded crop
+  -> MediaPipe pose
+  -> keypoint remapping to original frame coordinates
+```
+
+Why this matters:
+
+- Current MediaPipe baseline uses one pose but can switch to a different person across frames.
+- Automatic ROI can reduce wrong-person switches without relying on a learned detector.
+- The method directly matches course topics such as edge detection, feature extraction, connected components, and image-processing based preprocessing.
+
+Design decision:
+
+- Use a clip-level fixed ROI first instead of a per-frame ROI.
+- Per-frame ROI may introduce crop jitter and distort downstream trajectory smoothness metrics.
+- Manual ROI remains a fallback and upper-bound comparison when automatic ROI fails.
+
+Planned conditions:
+
+- `auto_roi_raw`
+- `auto_roi_clahe`
+- optional manual ROI comparison on failure clips
+
+Expected diagnostics:
+
+- selected ROI CSV per clip,
+- mask / contour debug frames,
+- ROI debug video,
+- side-by-side `baseline_raw` vs `auto_roi_raw` overlay comparison.
