@@ -38,6 +38,13 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
+On the external-drive macOS setup, MediaPipe Tasks currently works under Python 3.12 but fails under Python 3.13 with an OpenGL service initialization error. Use the Python 3.12 venv for pose runs:
+
+```bash
+/opt/anaconda3/bin/python3.12 -m venv .venv312
+.venv312/bin/python -m pip install --timeout 120 -e ".[dev]"
+```
+
 MediaPipe Tasks also needs a local pose model file:
 
 ```bash
@@ -58,6 +65,14 @@ baseball-pose validate-config
 baseball-pose plan
 baseball-pose run-motion-preview --clip-id batting_1 --max-frames 60
 baseball-pose run-baseline --clip-id batting_1 --max-frames 30
+```
+
+For MediaPipe baseline on this machine:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/default.yaml run-baseline --clip-id batting_1 --max-frames 30
 ```
 
 Motion preview outputs are written to:

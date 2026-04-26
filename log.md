@@ -358,3 +358,55 @@ Interpretation:
 - This preview is not pose estimation.
 - It verifies that video decoding, frame sampling, track visualization, and video writing work end to end.
 - Pose visualization will still use MediaPipe or another pose backend once the runtime issue is resolved.
+
+## Iteration 9: Restore MediaPipe on Python 3.12
+
+Date: 2026-04-26
+
+Commit: `8f15f25 Fix baseline clip result return`
+
+Goal:
+
+- Continue the MediaPipe baseline path after the Python 3.13 OpenGL failure.
+- Verify whether Python 3.12 can run MediaPipe Tasks successfully on the same machine.
+
+Work completed:
+
+- Installed project dependencies into `.venv312` with Python 3.12.
+- Removed AppleDouble `._*` files generated inside the virtual environment because they broke Matplotlib style loading.
+- Re-ran MediaPipe baseline with cache paths set to `/tmp`:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/default.yaml run-baseline --clip-id batting_1 --max-frames 5
+```
+
+Failure found:
+
+- The first 5-frame run reached CLI output but returned `None` because the baseline result-return code had been accidentally placed after the motion-preview return path.
+
+Revision:
+
+- Fixed `run_baseline_clip()` so it writes frame records, pose records, overlay frames, overlay video, and returns `ClipRunResult`.
+
+Validation:
+
+- `pytest` passed: 5 tests.
+- AST parse passed for `src/` and `tests/`.
+- A 5-frame MediaPipe baseline succeeded:
+  - `data/interim/frames/batting_1/baseline_raw.csv`
+  - `data/processed/poses/batting_1/baseline_raw.csv`
+  - `outputs/overlays/batting_1__baseline_raw.mp4`
+  - 5 frames
+  - 65 pose records
+
+Current interpretation:
+
+- MediaPipe Tasks is viable on this machine when run through Python 3.12.
+- Python 3.13 remains unsuitable for this MediaPipe runtime because it triggers the earlier OpenGL service failure.
+
+Next steps:
+
+- Run baseline pose extraction on all four clips for a small bounded frame count.
+- Inspect overlay quality and decide whether manual ROI should be added before expanding frame counts.
