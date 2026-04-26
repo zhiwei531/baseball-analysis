@@ -79,6 +79,7 @@ baseball-pose validate-config
 baseball-pose plan
 baseball-pose run-motion-preview --clip-id batting_1 --max-frames 60
 baseball-pose run-baseline --clip-id batting_1 --max-frames 30
+baseball-pose run-auto-roi --clip-id batting_1 --max-frames 30
 ```
 
 For MediaPipe baseline on this machine:
@@ -106,6 +107,19 @@ data/interim/frames/<clip_id>/baseline_raw.csv
 data/processed/poses/<clip_id>/baseline_raw.csv
 outputs/overlays/<clip_id>__baseline_raw.mp4
 outputs/overlays/frames/<clip_id>/baseline_raw/
+```
+
+Auto ROI pose outputs are written to:
+
+```text
+data/interim/frames/<clip_id>/auto_roi_raw/
+data/interim/frames/<clip_id>/auto_roi_raw.csv
+data/interim/rois/<clip_id>/auto_roi_raw.csv
+data/processed/poses/<clip_id>/auto_roi_raw.csv
+outputs/roi_debug/<clip_id>__auto_roi_raw.mp4
+outputs/roi_debug/frames/<clip_id>/
+outputs/overlays/<clip_id>__auto_roi_raw.mp4
+outputs/overlays/frames/<clip_id>/auto_roi_raw/
 ```
 
 ## MVP Conditions

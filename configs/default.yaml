@@ -49,6 +49,16 @@ conditions:
     preprocessing: []
     postprocess:
       enabled: false
+  auto_roi_raw:
+    roi:
+      enabled: true
+      mode: auto
+      expansion: 0.35
+      proposal_frames: 60
+      min_area_ratio: 0.002
+    preprocessing: []
+    postprocess:
+      enabled: false
   roi_clahe:
     roi:
       enabled: true

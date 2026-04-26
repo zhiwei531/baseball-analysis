@@ -6,7 +6,11 @@ import argparse
 
 from baseball_pose.config import load_config
 from baseball_pose.io.metadata import load_clips
-from baseball_pose.pipeline.run_experiment import run_baseline_experiment, run_motion_preview_experiment
+from baseball_pose.pipeline.run_experiment import (
+    run_auto_roi_experiment,
+    run_baseline_experiment,
+    run_motion_preview_experiment,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -18,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "command",
-        choices=["validate-config", "plan", "run-baseline", "run-motion-preview"],
+        choices=["validate-config", "plan", "run-baseline", "run-motion-preview", "run-auto-roi"],
         help="Command to run.",
     )
     parser.add_argument(
@@ -83,6 +87,27 @@ def main() -> None:
             print(f"{result.clip_id}/{result.condition_id}: {result.frame_count} frames")
             print(f"  frames: {result.frames_csv}")
             print(f"  preview: {result.preview_video}")
+        return
+
+    if args.command == "run-auto-roi":
+        clips = load_clips(config.clips_file)
+        clip_filter = set(args.clip_id) if args.clip_id else set(config.clip_ids)
+        results = run_auto_roi_experiment(
+            clips,
+            config,
+            clip_ids=clip_filter,
+            max_frames=args.max_frames,
+        )
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.condition_id}: "
+                f"{result.frame_count} frames, {result.pose_record_count} pose records"
+            )
+            print(f"  frames: {result.frames_csv}")
+            print(f"  roi: {result.roi_csv}")
+            print(f"  roi debug: {result.roi_debug_video}")
+            print(f"  poses: {result.poses_csv}")
+            print(f"  overlay: {result.overlay_video}")
         return
 
 

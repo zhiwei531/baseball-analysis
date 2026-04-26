@@ -4,12 +4,27 @@ experiments:
   name: ablation_roi_clahe
   default_conditions:
     - baseline_raw
+    - auto_roi_raw
+    - auto_roi_clahe
     - roi_only
     - clahe_only
     - roi_clahe
     - roi_clahe_smooth
 
 conditions:
+  auto_roi_clahe:
+    roi:
+      enabled: true
+      mode: auto
+      expansion: 0.35
+      proposal_frames: 60
+      min_area_ratio: 0.002
+    preprocessing:
+      - name: clahe
+        clip_limit: 2.0
+        tile_grid_size: [8, 8]
+    postprocess:
+      enabled: false
   roi_only:
     roi:
       enabled: true
