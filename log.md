@@ -826,3 +826,77 @@ Next revision ideas:
 - Review full-video overlays for wrong-person tracking and `batting_2` body coverage.
 - Add report-ready still-frame comparisons from `outputs_full`.
 - Continue with trajectory/angle feature extraction using full-video pose CSVs.
+
+## Iteration 16: Full-Video Motion Features and Trajectory Figures
+
+Date: 2026-04-26
+
+Goal:
+
+- Add a real feature extraction stage after full-video pose estimation.
+- Generate report-friendly trajectory plots from the full-video feature CSVs.
+- Keep generated data and figures outside git while tracking the reusable code and instructions.
+
+Implementation:
+
+- Added frame-level motion feature extraction from long-form pose landmarks.
+- Added feature CSV writing under `data_full/processed/features/<clip_id>/<condition_id>.csv`.
+- Added report figure generation under `outputs_full/figures/`.
+- Added CLI commands:
+  - `extract-features`
+  - `make-figures`
+
+Extracted features:
+
+- left and right elbow angle,
+- left and right shoulder angle,
+- left and right knee angle,
+- trunk tilt,
+- left and right wrist x/y trajectory,
+- left and right wrist speed.
+
+Commands:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
+```
+
+Feature row counts:
+
+| clip_id | condition_id | feature rows |
+| --- | --- | ---: |
+| batting_1 | baseline_raw | 997 |
+| batting_1 | auto_roi_pose_prior | 997 |
+| batting_2 | baseline_raw | 758 |
+| batting_2 | auto_roi_pose_prior | 758 |
+| pitching_1 | baseline_raw | 624 |
+| pitching_1 | auto_roi_pose_prior | 624 |
+| pitching_2 | baseline_raw | 424 |
+| pitching_2 | auto_roi_pose_prior | 424 |
+
+Report figures:
+
+- `outputs_full/figures/batting_1__wrist_trajectories.png`
+- `outputs_full/figures/batting_2__wrist_trajectories.png`
+- `outputs_full/figures/pitching_1__wrist_trajectories.png`
+- `outputs_full/figures/pitching_2__wrist_trajectories.png`
+
+Validation:
+
+- Added a unit test for angle extraction and wrist speed.
+- Initial feature extraction attempt failed under sandboxed write permissions on the T7 drive; reran with approved elevated access and completed successfully.
+
+Limitations:
+
+- The trajectory figures currently compare wrist paths only; angle-time plots are still needed for a stronger report narrative.
+- Wrist trajectories can still include wrong-person tracks if MediaPipe locks onto another person in the frame.
+
+Next revision ideas:
+
+- Add angle-over-time plots for elbow and shoulder angles.
+- Add selected overlay still frames for report figures.
+- Add a compact per-clip feature summary table with min/max/range for key angles and wrist speed.
