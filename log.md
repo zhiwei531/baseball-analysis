@@ -592,3 +592,73 @@ Next revision ideas:
 - Use median candidate box rather than full union for clips with many candidates.
 - Add an optional action-region prior per clip type.
 - Compare overlay videos to decide whether `auto_roi_raw` actually reduces wrong-person switches on batting clips.
+
+## Iteration 13: Pose-Prior ROI for Tighter Subject Crops
+
+Date: 2026-04-26
+
+Commits:
+
+- `b3b683d Add pose-prior ROI estimation`
+- `3fe5930 Add pose-prior ROI pipeline command`
+
+Goal:
+
+- Improve automatic ROI after observing that `auto_roi_raw` kept too much background and cropped the head in `batting_2`.
+- Use baseline pose landmarks as a subject prior while preserving a separate output condition.
+
+Implementation:
+
+- Added `auto_roi_pose_prior`.
+- Reads `data/processed/poses/<clip_id>/baseline_raw.csv`.
+- Filters confident baseline landmarks.
+- Builds per-frame pose boxes.
+- Aggregates boxes with percentile bounds instead of full min/max union.
+- Adds asymmetric safety padding:
+  - larger top padding to avoid head cropping,
+  - horizontal padding for arms and bat motion,
+  - bottom padding for lower-body context.
+- Reruns MediaPipe on cropped frames and remaps keypoints back to full-frame normalized coordinates.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/default.yaml run-pose-prior-roi --max-frames 30
+```
+
+Outputs generated:
+
+- `data/interim/frames/<clip_id>/auto_roi_pose_prior.csv`
+- `data/interim/rois/<clip_id>/auto_roi_pose_prior.csv`
+- `data/processed/poses/<clip_id>/auto_roi_pose_prior.csv`
+- `outputs/roi_debug/<clip_id>__auto_roi_pose_prior.mp4`
+- `outputs/overlays/<clip_id>__auto_roi_pose_prior.mp4`
+
+Validation:
+
+- `pytest` passed: 8 tests.
+- All four clips ran for 30 frames.
+- Each clip produced 390 pose rows.
+
+Selected ROI boxes:
+
+```text
+batting_1:  x=0.0,     y=0.0, w=1050.49, h=714.0
+batting_2:  x=487.41,  y=0.0, w=468.16,  h=714.0
+pitching_1: x=406.29,  y=0.0, w=207.48,  h=714.0
+pitching_2: x=339.94,  y=0.0, w=269.63,  h=714.0
+```
+
+Observations:
+
+- `batting_2` no longer has the head-cropping problem from `auto_roi_raw`.
+- Pitching clips now have much tighter horizontal crops instead of full-frame ROI.
+- The first pose-prior implementation is intentionally conservative vertically and keeps full frame height for all four clips.
+
+Next revision ideas:
+
+- Add vertical crop constraints once overlay review confirms the head, feet, and throwing arm are consistently inside the ROI.
+- Compare `baseline_raw`, `auto_roi_raw`, and `auto_roi_pose_prior` visually in a report figure.
+- Compute keypoint completeness and jitter across the three conditions.
