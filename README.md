@@ -101,6 +101,14 @@ XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
 XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 .venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-pose-prior-roi
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
 ```
 
 Full-video outputs are written under:
@@ -108,6 +116,13 @@ Full-video outputs are written under:
 ```text
 data_full/
 outputs_full/
+```
+
+Full-video feature and figure outputs are written to:
+
+```text
+data_full/processed/features/<clip_id>/<condition_id>.csv
+outputs_full/figures/<clip_id>__wrist_trajectories.png
 ```
 
 Motion preview outputs are written to:

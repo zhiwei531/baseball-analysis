@@ -13,6 +13,8 @@ from baseball_pose.pipeline.run_experiment import (
     run_motion_preview_experiment,
     run_pose_prior_roi_experiment,
 )
+from baseball_pose.pipeline.features import extract_feature_files
+from baseball_pose.pipeline.figures import make_report_figures
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,6 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
             "run-motion-preview",
             "run-auto-roi",
             "run-pose-prior-roi",
+            "extract-features",
+            "make-figures",
             "summarize-roi-ablation",
         ],
         help="Command to run.",
@@ -139,6 +143,28 @@ def main() -> None:
             print(f"  roi debug: {result.roi_debug_video}")
             print(f"  poses: {result.poses_csv}")
             print(f"  overlay: {result.overlay_video}")
+        return
+
+    if args.command == "extract-features":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = extract_feature_files(clip_ids=clip_ids, config=config)
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.condition_id}: "
+                f"{result.frame_count} feature rows"
+            )
+            print(f"  features: {result.feature_csv}")
+        return
+
+    if args.command == "make-figures":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = make_report_figures(clip_ids=clip_ids, config=config)
+        for result in results:
+            print(
+                f"{result.clip_id}: wrote figure from "
+                f"{result.condition_count} conditions"
+            )
+            print(f"  figure: {result.figure_path}")
         return
 
     if args.command == "summarize-roi-ablation":
