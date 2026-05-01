@@ -23,15 +23,17 @@ def make_report_figures(
     conditions: list[str] | None = None,
 ) -> list[FigureResult]:
     condition_ids = conditions if conditions is not None else config.condition_ids
+    prefer_smoothed = conditions is None
     output_dir = config.output_dir / "figures"
     results: list[FigureResult] = []
 
     for clip_id in clip_ids:
-        feature_paths = {
+        available_feature_paths = {
             condition_id: feature_path(config.data_dir, clip_id, condition_id)
             for condition_id in condition_ids
             if feature_path(config.data_dir, clip_id, condition_id).exists()
         }
+        feature_paths = _select_figure_feature_paths(available_feature_paths, prefer_smoothed)
         if not feature_paths:
             continue
         wrist_output_path = output_dir / f"{clip_id}__wrist_trajectories.png"
@@ -62,3 +64,24 @@ def make_report_figures(
         )
 
     return results
+
+
+def _select_figure_feature_paths(
+    feature_paths: dict[str, Path],
+    prefer_smoothed: bool,
+) -> dict[str, Path]:
+    if not prefer_smoothed:
+        return feature_paths
+    smoothed = {
+        condition_id: path
+        for condition_id, path in feature_paths.items()
+        if condition_id.endswith("_smooth")
+    }
+    if not smoothed:
+        return feature_paths
+    roi_smoothed = {
+        condition_id: path
+        for condition_id, path in smoothed.items()
+        if "roi" in condition_id
+    }
+    return roi_smoothed if roi_smoothed else smoothed
