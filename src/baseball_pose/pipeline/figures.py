@@ -7,7 +7,7 @@ from pathlib import Path
 
 from baseball_pose.config import RuntimeConfig
 from baseball_pose.io.paths import feature_path
-from baseball_pose.visualization.plots import plot_wrist_trajectories
+from baseball_pose.visualization.plots import plot_posture_analysis, plot_wrist_trajectories
 
 
 @dataclass(frozen=True)
@@ -34,16 +34,29 @@ def make_report_figures(
         }
         if not feature_paths:
             continue
-        output_path = output_dir / f"{clip_id}__wrist_trajectories.png"
+        wrist_output_path = output_dir / f"{clip_id}__wrist_trajectories.png"
         plot_wrist_trajectories(
             feature_paths,
-            output_path,
+            wrist_output_path,
             title=f"{clip_id} wrist trajectories",
         )
         results.append(
             FigureResult(
                 clip_id=clip_id,
-                figure_path=output_path,
+                figure_path=wrist_output_path,
+                condition_count=len(feature_paths),
+            )
+        )
+        posture_output_path = output_dir / f"{clip_id}__posture_analysis.png"
+        plot_posture_analysis(
+            feature_paths,
+            posture_output_path,
+            title=f"{clip_id} posture analysis",
+        )
+        results.append(
+            FigureResult(
+                clip_id=clip_id,
+                figure_path=posture_output_path,
                 condition_count=len(feature_paths),
             )
         )
