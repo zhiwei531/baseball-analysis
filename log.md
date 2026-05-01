@@ -1075,6 +1075,21 @@ Validation:
 - `python -m pytest tests/test_smoothing.py` passed.
 - `python -m compileall src/baseball_pose/postprocess src/baseball_pose/pipeline tests/test_smoothing.py` passed after removing macOS `._*` metadata files.
 - Ruff passed on the modified smoothing, postprocess, figures, overlays, CLI, and smoothing-test files.
+- Full test suite passed: 17 tests.
+- Regenerated `auto_roi_pose_prior_smooth` pose CSVs, feature CSVs, report figures, smoothed overlay videos, and ROI ablation metrics.
+
+Metric changes after stronger stabilization:
+
+| clip_id | metric | auto_roi_pose_prior | auto_roi_pose_prior_smooth |
+| --- | --- | ---: | ---: |
+| batting_1 | left wrist jitter | 0.0110 | 0.0028 |
+| batting_1 | left wrist smoothness | 0.0189 | 0.0014 |
+| batting_2 | keypoint completeness | 0.7652 | 0.8650 |
+| batting_2 | left wrist jitter | 0.0224 | 0.0049 |
+| pitching_1 | left wrist jitter | 0.0168 | 0.0035 |
+| pitching_1 | left wrist smoothness | 0.0276 | 0.0007 |
+| pitching_2 | left wrist jitter | 0.0080 | 0.0037 |
+| pitching_2 | left wrist smoothness | 0.0136 | 0.0006 |
 
 Remaining limitation:
 
