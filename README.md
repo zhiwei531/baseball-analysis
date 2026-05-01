@@ -128,7 +128,20 @@ Full-video feature and figure outputs are written to:
 data_full/processed/poses/<clip_id>/<condition_id>_smooth.csv
 data_full/processed/features/<clip_id>/<condition_id>.csv
 outputs_full/figures/<clip_id>__wrist_trajectories.png
+outputs_full/figures/<clip_id>__posture_analysis.png
 ```
+
+The feature CSV includes report-oriented 2D posture proxies that can be computed from the current skeleton-only data:
+
+- joint angles for elbows, shoulders, and knees,
+- pelvis and shoulder line rotation,
+- hip-shoulder separation,
+- pelvis and trunk rotation velocity,
+- approximate center-of-mass path from torso and lower-body landmarks,
+- knee extension from the first valid frame and knee angular velocity,
+- wrist speed and a max-wrist hand-speed proxy.
+
+These are intentionally limited to 2D pose-derived quantities. Ball, bat, release, impact, MER, and SFC-specific metrics require event labels or extra object tracking before they should be reported as exact biomechanics.
 
 Motion preview outputs are written to:
 

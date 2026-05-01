@@ -975,3 +975,55 @@ Next revision ideas:
 - Add visual still-frame comparisons for raw vs smoothed overlays.
 - Add a simple identity-consistency gate using torso center continuity.
 - Add angle-over-time plots for the smoothed conditions.
+
+## Iteration 18: Posture Analysis Features and Figures
+
+Date: 2026-05-01
+
+Goal:
+
+- Expand the feature CSV beyond wrist trajectories into report-ready posture analysis.
+- Select metrics that are meaningful for pitching and batting while remaining honest about the current 2D skeleton-only inputs.
+- Add visualization for rotation chain, hip-shoulder separation, COM path, knee extension, and hand-speed proxy.
+
+Implemented feature additions:
+
+- pelvis rotation from the left-hip to right-hip line,
+- shoulder/trunk rotation from the left-shoulder to right-shoulder line,
+- hip-shoulder separation as the signed shoulder-vs-pelvis angle,
+- pelvis and trunk rotation velocity from frame-to-frame signed angle deltas,
+- approximate center of mass as the average of available shoulder, hip, knee, and ankle landmarks,
+- left/right knee extension from the first valid frame,
+- left/right knee angular velocity,
+- hand-speed proxy as the larger visible wrist speed per frame.
+
+Implemented visualization additions:
+
+- `outputs_full/figures/<clip_id>__posture_analysis.png`
+- Four-panel layout:
+  - pelvis / shoulder rotation and hip-shoulder separation,
+  - pelvis and trunk rotation velocity,
+  - approximate COM path,
+  - knee extension and hand-speed proxy.
+
+Design decision:
+
+- Did not implement exact stride length, SFC/MER/BR/IMP windows, shoulder external rotation, bat-tip velocity, attack angle, contact location, or swing plane yet. Those require event annotations, 3D joint orientation, ball/bat tracking, or a calibrated target axis. Reporting them from the current 2D body-only pose CSV would be misleading.
+
+Validation:
+
+- Unit tests cover the new angle helpers and posture proxy extraction.
+- `python -m compileall src tests` passed after removing macOS `._*` metadata files.
+- `.venv312/bin/python -m pytest` passed: 15 tests.
+- `.venv312/bin/ruff check` passed on the modified feature, CSV, figure, plot, and feature-test files.
+- Regenerated full-video feature CSVs for all four clips and four configured conditions.
+- Generated both wrist trajectory and posture analysis figures for all four clips.
+- Existing feature extraction and figure commands remain the same:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
+```
