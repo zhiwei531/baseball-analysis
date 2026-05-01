@@ -29,12 +29,13 @@ pose:
 
 postprocess:
   confidence_threshold: 0.5
-  interpolate_max_gap_frames: 3
+  interpolate_max_gap_frames: 4
   smoothing:
     enabled: true
     method: savgol
-    window_length: 7
+    window_length: 9
     polyorder: 2
+    refine_window_length: 5
 
 experiments:
   default_conditions:

@@ -17,6 +17,7 @@ def smooth_pose_records(
     method: str = "savgol",
     window_length: int = 7,
     polyorder: int = 2,
+    refine_window_length: int = 1,
     confidence_threshold: float = 0.5,
     max_gap_frames: int = 3,
     jump_threshold_multiplier: float = 6.0,
@@ -35,6 +36,8 @@ def smooth_pose_records(
         raise ValueError("window_length must be odd.")
     if polyorder >= window_length:
         raise ValueError("polyorder must be smaller than window_length.")
+    if refine_window_length < 1:
+        raise ValueError("refine_window_length must be at least 1.")
     if max_gap_frames < 0:
         raise ValueError("max_gap_frames must be non-negative.")
     if jump_threshold_multiplier <= 0:
@@ -47,6 +50,7 @@ def smooth_pose_records(
             key_records,
             window_length=window_length,
             polyorder=polyorder,
+            refine_window_length=refine_window_length,
             confidence_threshold=confidence_threshold,
             max_gap_frames=max_gap_frames,
             jump_threshold_multiplier=jump_threshold_multiplier,
@@ -75,6 +79,7 @@ def _smooth_joint_records(
     records: list[PoseRecord],
     window_length: int,
     polyorder: int,
+    refine_window_length: int,
     confidence_threshold: float,
     max_gap_frames: int,
     jump_threshold_multiplier: float,
@@ -89,6 +94,8 @@ def _smooth_joint_records(
     y_values = _interpolate_short_gaps(y_values, max_gap_frames)
     x_values = _savgol_valid_segments(x_values, window_length, polyorder)
     y_values = _savgol_valid_segments(y_values, window_length, polyorder)
+    x_values = _moving_average_valid_segments(x_values, refine_window_length)
+    y_values = _moving_average_valid_segments(y_values, refine_window_length)
 
     output: list[PoseRecord] = []
     for record, x_value, y_value in zip(records, x_values, y_values):
@@ -205,4 +212,30 @@ def _savgol_valid_segments(values: np.ndarray, window_length: int, polyorder: in
         if segment_window <= polyorder or segment_window < 3:
             continue
         output[start:end] = savgol_filter(output[start:end], segment_window, polyorder)
+    return output
+
+
+def _moving_average_valid_segments(values: np.ndarray, window_length: int) -> np.ndarray:
+    if window_length <= 1:
+        return values
+
+    output = values.copy()
+    index = 0
+    while index < len(output):
+        if np.isnan(output[index]):
+            index += 1
+            continue
+        start = index
+        while index < len(output) and not np.isnan(output[index]):
+            index += 1
+        end = index
+        segment_length = end - start
+        if segment_length < 2:
+            continue
+        segment_window = min(window_length, segment_length)
+        pad_left = segment_window // 2
+        pad_right = segment_window - 1 - pad_left
+        padded = np.pad(output[start:end], (pad_left, pad_right), mode="edge")
+        kernel = np.ones(segment_window, dtype=float) / segment_window
+        output[start:end] = np.convolve(padded, kernel, mode="valid")
     return output

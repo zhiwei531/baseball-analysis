@@ -59,6 +59,7 @@ def smooth_pose_files(
                     method=str(smoothing_config.get("method", "savgol")),
                     window_length=int(smoothing_config.get("window_length", 7)),
                     polyorder=int(smoothing_config.get("polyorder", 2)),
+                    refine_window_length=int(smoothing_config.get("refine_window_length", 1)),
                     confidence_threshold=confidence_threshold,
                     max_gap_frames=max_gap_frames,
                 )
