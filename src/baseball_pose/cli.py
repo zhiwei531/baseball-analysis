@@ -15,6 +15,7 @@ from baseball_pose.pipeline.run_experiment import (
 )
 from baseball_pose.pipeline.features import extract_feature_files
 from baseball_pose.pipeline.figures import make_report_figures
+from baseball_pose.pipeline.overlays import render_pose_overlays
 from baseball_pose.pipeline.postprocess import smooth_pose_files
 
 
@@ -37,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
             "smooth-poses",
             "extract-features",
             "make-figures",
+            "render-overlays",
             "summarize-roi-ablation",
         ],
         help="Command to run.",
@@ -187,6 +189,17 @@ def main() -> None:
                 f"{result.condition_count} conditions"
             )
             print(f"  figure: {result.figure_path}")
+        return
+
+    if args.command == "render-overlays":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = render_pose_overlays(clip_ids=clip_ids, config=config, conditions=args.condition)
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.condition_id}: "
+                f"{result.frame_count} overlay frames"
+            )
+            print(f"  overlay: {result.overlay_video}")
         return
 
     if args.command == "summarize-roi-ablation":
