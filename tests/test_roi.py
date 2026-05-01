@@ -1,6 +1,7 @@
 from baseball_pose.pose.schema import PoseRecord
 from baseball_pose.preprocessing.roi import (
     RoiBox,
+    estimate_center_prior_roi,
     estimate_pose_prior_roi,
     remap_pose_records_to_full_frame,
 )
@@ -41,3 +42,19 @@ def test_pose_prior_roi_uses_confident_landmarks_and_padding():
     assert result.roi.y < 200
     assert result.roi.width > 200
     assert result.roi.height > 500
+
+
+def test_center_prior_roi_keeps_center_band():
+    result = estimate_center_prior_roi(
+        clip_id="clip",
+        image_width=1000,
+        image_height=500,
+        width_ratio=0.6,
+        height_ratio=1.0,
+    )
+
+    assert result.condition_id == "center_prior_roi"
+    assert result.roi.x == 200
+    assert result.roi.y == 0
+    assert result.roi.width == 600
+    assert result.roi.height == 500

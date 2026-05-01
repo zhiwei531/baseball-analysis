@@ -25,5 +25,7 @@ experiments:
   default_conditions:
     - baseline_raw
     - auto_roi_pose_prior
+    - center_prior_roi
     - baseline_raw_smooth
     - auto_roi_pose_prior_smooth
+    - center_prior_roi_smooth

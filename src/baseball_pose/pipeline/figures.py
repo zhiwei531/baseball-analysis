@@ -79,6 +79,13 @@ def _select_figure_feature_paths(
     }
     if not smoothed:
         return feature_paths
+    center_smoothed = {
+        condition_id: path
+        for condition_id, path in smoothed.items()
+        if condition_id.startswith("center_prior_roi")
+    }
+    if center_smoothed:
+        return center_smoothed
     roi_smoothed = {
         condition_id: path
         for condition_id, path in smoothed.items()

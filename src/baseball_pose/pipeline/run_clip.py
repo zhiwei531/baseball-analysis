@@ -26,6 +26,7 @@ from baseball_pose.pose.schema import PoseRecord
 from baseball_pose.preprocessing.roi import (
     crop_to_roi,
     estimate_clip_auto_roi,
+    estimate_center_prior_roi,
     estimate_pose_prior_roi,
     remap_pose_records_to_full_frame,
     write_auto_roi_csv,
@@ -213,6 +214,77 @@ def run_auto_roi_clip(
         condition_id=condition_id,
         max_frames=max_frames if max_frames is not None else config.max_frames_per_clip,
     )
+    frames_csv = frame_manifest_path(config.data_dir, clip.clip_id, condition_id)
+    write_frame_records(frames_csv, frames)
+
+    roi_result = estimate_clip_auto_roi(
+        frames,
+        expansion=float(roi_config.get("expansion", 0.35)),
+        max_frames=int(roi_config.get("proposal_frames", 60)),
+        min_area_ratio=float(roi_config.get("min_area_ratio", 0.002)),
+    )
+    roi_csv = auto_roi_path(config.data_dir, clip.clip_id, condition_id)
+    write_auto_roi_csv(roi_csv, roi_result)
+
+    debug_video = roi_debug_video_path(config.output_dir, clip.clip_id, condition_id)
+    write_roi_debug_video(frames, roi_result.roi, debug_video, fps=config.target_fps)
+
+    estimator = MediaPipePoseEstimator(
+        model_asset_path=config.raw["pose"].get(
+            "model_asset_path",
+            "models/pose_landmarker_lite.task",
+        ),
+        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
+        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
+    )
+    all_pose_records: list[PoseRecord] = []
+    overlay_paths: list[Path] = []
+    tracks: dict[str, list[tuple[int, int]]] = {"left_wrist": [], "right_wrist": []}
+    overlay_dir = overlay_frame_dir(config.output_dir, clip.clip_id, condition_id)
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        for frame in frames:
+            image = read_frame(frame.frame_path)
+            crop = crop_to_roi(image, roi_result.roi)
+            crop_records = estimator.estimate_frame(crop, frame, condition_id)
+            records = remap_pose_records_to_full_frame(
+                crop_records,
+                roi=roi_result.roi,
+                image_width=frame.width or image.shape[1],
+                image_height=frame.height or image.shape[0],
+            )
+            all_pose_records.extend(records)
+            _update_tracks(tracks, records, frame.width, frame.height)
+            overlay = draw_pose_overlay(
+                image,
+                records,
+                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                tracks=tracks,
+            )
+            overlay_path = overlay_dir / frame.frame_path.name
+            _write_image(overlay_path, overlay)
+            overlay_paths.append(overlay_path)
+    finally:
+        estimator.close()
+
+    poses_csv = pose_path(config.data_dir, clip.clip_id, condition_id)
+    write_pose_records(poses_csv, all_pose_records)
+
+    video_path = overlay_video_path(config.output_dir, clip.clip_id, condition_id)
+    write_video_from_frames(overlay_paths, video_path, fps=config.target_fps)
+
+    return AutoRoiRunResult(
+        clip_id=clip.clip_id,
+        condition_id=condition_id,
+        frames_csv=frames_csv,
+        roi_csv=roi_csv,
+        roi_debug_video=debug_video,
+        poses_csv=poses_csv,
+        overlay_video=video_path,
+        frame_count=len(frames),
+        pose_record_count=len(all_pose_records),
+    )
 
 
 def run_pose_prior_roi_clip(
@@ -324,14 +396,45 @@ def run_pose_prior_roi_clip(
         frame_count=len(frames),
         pose_record_count=len(all_pose_records),
     )
+
+
+def run_center_prior_roi_clip(
+    clip: ClipMetadata,
+    config: RuntimeConfig,
+    condition_id: str = "center_prior_roi",
+    max_frames: int | None = None,
+) -> AutoRoiRunResult:
+    """Run MediaPipe inside a hard-coded center ROI for centered-subject videos."""
+
+    if condition_id != "center_prior_roi":
+        raise ValueError("run_center_prior_roi_clip currently supports only center_prior_roi.")
+
+    condition_config = config.raw["conditions"][condition_id]
+    roi_config = condition_config.get("roi", {})
+    frame_output_dir = frame_dir(config.data_dir, clip.clip_id, condition_id)
+    frames = sample_video_frames(
+        video_path=clip.source_path,
+        clip_id=clip.clip_id,
+        output_dir=frame_output_dir,
+        target_fps=config.target_fps,
+        resize_longest_side=config.resize_longest_side,
+        condition_id=condition_id,
+        max_frames=max_frames if max_frames is not None else config.max_frames_per_clip,
+    )
     frames_csv = frame_manifest_path(config.data_dir, clip.clip_id, condition_id)
     write_frame_records(frames_csv, frames)
 
-    roi_result = estimate_clip_auto_roi(
-        frames,
-        expansion=float(roi_config.get("expansion", 0.35)),
-        max_frames=int(roi_config.get("proposal_frames", 60)),
-        min_area_ratio=float(roi_config.get("min_area_ratio", 0.002)),
+    first_frame = read_frame(frames[0].frame_path)
+    image_height, image_width = first_frame.shape[:2]
+    roi_result = estimate_center_prior_roi(
+        clip_id=clip.clip_id,
+        image_width=image_width,
+        image_height=image_height,
+        condition_id=condition_id,
+        center_x=float(roi_config.get("center_x", 0.5)),
+        center_y=float(roi_config.get("center_y", 0.5)),
+        width_ratio=float(roi_config.get("width_ratio", 0.62)),
+        height_ratio=float(roi_config.get("height_ratio", 1.0)),
     )
     roi_csv = auto_roi_path(config.data_dir, clip.clip_id, condition_id)
     write_auto_roi_csv(roi_csv, roi_result)

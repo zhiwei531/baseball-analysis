@@ -174,6 +174,44 @@ def estimate_pose_prior_roi(
     )
 
 
+def estimate_center_prior_roi(
+    clip_id: str,
+    image_width: int,
+    image_height: int,
+    condition_id: str = "center_prior_roi",
+    center_x: float = 0.5,
+    center_y: float = 0.5,
+    width_ratio: float = 0.62,
+    height_ratio: float = 1.0,
+) -> AutoRoiResult:
+    """Create a fixed ROI from the hard prior that the athlete is centered."""
+
+    if not 0 < width_ratio <= 1:
+        raise ValueError("width_ratio must be in (0, 1].")
+    if not 0 < height_ratio <= 1:
+        raise ValueError("height_ratio must be in (0, 1].")
+    if not 0 <= center_x <= 1:
+        raise ValueError("center_x must be in [0, 1].")
+    if not 0 <= center_y <= 1:
+        raise ValueError("center_y must be in [0, 1].")
+
+    roi_width = image_width * width_ratio
+    roi_height = image_height * height_ratio
+    roi = RoiBox(
+        x=image_width * center_x - roi_width / 2,
+        y=image_height * center_y - roi_height / 2,
+        width=roi_width,
+        height=roi_height,
+    ).clamped(image_width, image_height)
+    return AutoRoiResult(
+        clip_id=clip_id,
+        condition_id=condition_id,
+        roi=roi,
+        source_frame_count=1,
+        candidate_count=1,
+    )
+
+
 def _pose_frame_boxes(
     records: list[PoseRecord],
     image_width: int,
