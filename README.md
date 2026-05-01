@@ -113,6 +113,10 @@ XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
 XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 .venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-overlays
 ```
 
 Full-video outputs are written under:
@@ -129,7 +133,22 @@ data_full/processed/poses/<clip_id>/<condition_id>_smooth.csv
 data_full/processed/features/<clip_id>/<condition_id>.csv
 outputs_full/figures/<clip_id>__wrist_trajectories.png
 outputs_full/figures/<clip_id>__posture_analysis.png
+outputs_full/overlays/<clip_id>__<condition_id>_smooth.mp4
 ```
+
+The current optimization path prioritizes the best readable output over baseline comparison:
+
+```text
+auto_roi_pose_prior pose CSV
+  -> torso-continuity gate
+  -> short-gap interpolation
+  -> median filter
+  -> Savitzky-Golay smoothing
+  -> moving-average refinement
+  -> smoothed feature CSVs, figures, and overlay videos
+```
+
+Default report figures prefer smoothed ROI feature files when they exist. Raw and baseline conditions can still be plotted explicitly with repeated `--condition` arguments.
 
 The feature CSV includes report-oriented 2D posture proxies that can be computed from the current skeleton-only data:
 

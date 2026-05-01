@@ -1027,3 +1027,55 @@ MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 .venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
 ```
+
+## Iteration 19: Stronger Pose Stabilization for Cleaner Report Output
+
+Date: 2026-05-01
+
+Goal:
+
+- Reduce visible skeleton jitter and unreadable trajectory figures.
+- Prioritize the best stabilized condition because the baseline comparison is not central to the final report.
+
+Implementation:
+
+- Added a torso-continuity gate before per-joint smoothing.
+  - The gate tracks the hip/shoulder torso center.
+  - Frames that jump too far from the previous accepted torso center are masked before interpolation.
+  - This targets short wrong-person locks and full-skeleton swaps, which per-joint filters alone cannot fix.
+- Added a median filter stage before Savitzky-Golay smoothing.
+  - This reduces alternating frame-to-frame landmark wiggle.
+- Strengthened default smoothing parameters:
+  - longer interpolation gap,
+  - larger Savitzky-Golay window,
+  - median refinement,
+  - moving-average refinement,
+  - lower jump threshold.
+- Updated default report figure selection so figures prefer smoothed ROI conditions when available.
+- Added `render-overlays`, which redraws overlay videos from existing smoothed pose CSVs instead of using only the raw inference-time overlays.
+
+Commands:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses --condition auto_roi_pose_prior
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-overlays --condition auto_roi_pose_prior_smooth
+```
+
+Validation:
+
+- `python -m pytest tests/test_smoothing.py` passed.
+- `python -m compileall src/baseball_pose/postprocess src/baseball_pose/pipeline tests/test_smoothing.py` passed after removing macOS `._*` metadata files.
+- Ruff passed on the modified smoothing, postprocess, figures, overlays, CLI, and smoothing-test files.
+
+Remaining limitation:
+
+- This is still post-processing of a single detected skeleton. If MediaPipe misses the athlete for a long continuous segment or consistently tracks another person, smoothing can hide short gaps but cannot recover the correct body without better person selection or manual/automatic ROI tightening.
