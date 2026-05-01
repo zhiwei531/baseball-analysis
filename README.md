@@ -104,6 +104,10 @@ XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
 XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-center-prior-roi
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 .venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses
 
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
@@ -139,7 +143,7 @@ outputs_full/overlays/<clip_id>__<condition_id>_smooth.mp4
 The current optimization path prioritizes the best readable output over baseline comparison:
 
 ```text
-auto_roi_pose_prior pose CSV
+center_prior_roi pose CSV
   -> torso-continuity gate
   -> short-gap interpolation
   -> median filter
@@ -148,7 +152,7 @@ auto_roi_pose_prior pose CSV
   -> smoothed feature CSVs, figures, and overlay videos
 ```
 
-Default report figures prefer smoothed ROI feature files when they exist. Raw and baseline conditions can still be plotted explicitly with repeated `--condition` arguments.
+The center-prior ROI is a hard project-specific assumption: the athlete is centered in the raw videos, so MediaPipe is run only on the central crop (`width_ratio: 0.62`, full height by default). This intentionally sacrifices some generality to reduce wrong-person selection from spectators or other players near the subject. Default report figures and overlay rendering prefer `center_prior_roi_smooth` when it exists. Raw and baseline conditions can still be plotted explicitly with repeated `--condition` arguments.
 
 The feature CSV includes report-oriented 2D posture proxies that can be computed from the current skeleton-only data:
 

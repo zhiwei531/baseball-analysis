@@ -1094,3 +1094,77 @@ Metric changes after stronger stabilization:
 Remaining limitation:
 
 - This is still post-processing of a single detected skeleton. If MediaPipe misses the athlete for a long continuous segment or consistently tracks another person, smoothing can hide short gaps but cannot recover the correct body without better person selection or manual/automatic ROI tightening.
+
+## Iteration 20: Center-Prior Subject Recognition
+
+Date: 2026-05-01
+
+Goal:
+
+- Reduce wrong-person selection from spectators and nearby players.
+- Use the project-specific prior that the true athlete is centered in every raw video.
+
+Implementation:
+
+- Added a hard center-prior ROI condition:
+  - condition: `center_prior_roi`
+  - smoothed condition: `center_prior_roi_smooth`
+  - default crop: center x/y at 0.5, width ratio 0.62, full height.
+- Added CLI command:
+  - `run-center-prior-roi`
+- Added config entries for the new center-prior conditions.
+- Updated report figure and overlay selection so `center_prior_roi_smooth` is preferred when available.
+- Fixed the previously incomplete `run_auto_roi_clip` path while adding the new center-prior path.
+
+Commands run:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-center-prior-roi
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses --condition center_prior_roi
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-overlays --condition center_prior_roi_smooth
+```
+
+Outputs:
+
+- `data_full/processed/poses/<clip_id>/center_prior_roi.csv`
+- `data_full/processed/poses/<clip_id>/center_prior_roi_smooth.csv`
+- `data_full/processed/features/<clip_id>/center_prior_roi_smooth.csv`
+- `outputs_full/roi_debug/<clip_id>__center_prior_roi.mp4`
+- `outputs_full/overlays/<clip_id>__center_prior_roi_smooth.mp4`
+- Updated default report figures under `outputs_full/figures/`.
+
+Metric notes:
+
+| clip_id | metric | auto_roi_pose_prior_smooth | center_prior_roi_smooth |
+| --- | --- | ---: | ---: |
+| batting_1 | completeness | 0.9829 | 0.9829 |
+| batting_1 | left wrist jitter | 0.0028 | 0.0029 |
+| batting_2 | completeness | 0.8650 | 0.9591 |
+| batting_2 | left wrist jitter | 0.0049 | 0.0079 |
+| pitching_1 | completeness | 1.0000 | 1.0000 |
+| pitching_1 | left wrist jitter | 0.0035 | 0.0034 |
+| pitching_2 | completeness | 1.0000 | 0.9991 |
+| pitching_2 | left wrist jitter | 0.0037 | 0.0034 |
+
+Interpretation:
+
+- Center-prior ROI is meant to improve subject selection, not necessarily minimize every smoothness metric.
+- The biggest quantitative gain is `batting_2` completeness, which increased from 0.8650 to 0.9591.
+- Qualitatively, the central crop should reduce the probability that MediaPipe locks onto side/background people because they are outside the inference image.
+
+Validation:
+
+- Full test suite passed: 18 tests.
+- `python -m compileall src tests` passed after removing macOS `._*` metadata files.
+- Ruff passed on the modified ROI, pipeline, CLI, and ROI test files.
