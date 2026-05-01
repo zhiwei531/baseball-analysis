@@ -29,13 +29,18 @@ pose:
 
 postprocess:
   confidence_threshold: 0.5
-  interpolate_max_gap_frames: 4
+  interpolate_max_gap_frames: 12
   smoothing:
     enabled: true
     method: savgol
-    window_length: 9
+    window_length: 15
     polyorder: 2
-    refine_window_length: 5
+    median_window_length: 5
+    refine_window_length: 9
+    jump_threshold_multiplier: 4.0
+    torso_gate_enabled: true
+    torso_jump_threshold_multiplier: 6.0
+    min_torso_jump_distance: 0.06
 
 experiments:
   default_conditions:

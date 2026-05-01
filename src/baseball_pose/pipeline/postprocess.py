@@ -59,9 +59,20 @@ def smooth_pose_files(
                     method=str(smoothing_config.get("method", "savgol")),
                     window_length=int(smoothing_config.get("window_length", 7)),
                     polyorder=int(smoothing_config.get("polyorder", 2)),
+                    median_window_length=int(smoothing_config.get("median_window_length", 1)),
                     refine_window_length=int(smoothing_config.get("refine_window_length", 1)),
                     confidence_threshold=confidence_threshold,
                     max_gap_frames=max_gap_frames,
+                    jump_threshold_multiplier=float(
+                        smoothing_config.get("jump_threshold_multiplier", 6.0)
+                    ),
+                    torso_gate_enabled=bool(smoothing_config.get("torso_gate_enabled", True)),
+                    torso_jump_threshold_multiplier=float(
+                        smoothing_config.get("torso_jump_threshold_multiplier", 8.0)
+                    ),
+                    min_torso_jump_distance=float(
+                        smoothing_config.get("min_torso_jump_distance", 0.08)
+                    ),
                 )
             ]
             output_path = pose_path(config.data_dir, clip_id, condition_id)
