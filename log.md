@@ -1518,3 +1518,66 @@ Outputs:
 Validation:
 
 - The command completed for all 997 `batting_1` frames.
+
+## Iteration 29: Optical-Flow Image-Proposal Center Tracking
+
+Date: 2026-05-03
+
+Goal:
+
+- Fix the dynamic image-proposal center after review showed an invalid 3-4 second jump and under-coverage before 10 seconds.
+- Remove the earlier behavior where the tracker could be pulled by the full proposal ROI center instead of the actual hitter.
+
+Issue found:
+
+- The previous dynamic center version was not reliable subject recognition.
+- Warm-up could abruptly move `center_x` after 90 frames because it used the whole proposal ROI / mask center, which was biased by right-side background included by GrabCut.
+- This produced a center shift faster than the hitter's actual motion.
+
+Implementation:
+
+- Stopped using the whole proposal ROI center as the primary tracker measurement.
+- Added a subject-core center estimate from vertical mask structure.
+- Added Lucas-Kanade optical-flow tracking over good features inside the subject core.
+- During warm-up, the tracker now initializes and tracks features without applying a one-frame center jump.
+- After warm-up, the tracker updates `center_x` from the tracked subject-feature median, while still limiting per-frame center and width updates.
+- The debug overlay now prints both `center_x` and `subject_x` so the tracker can be audited frame by frame.
+
+Validation:
+
+- `pytest tests/test_image_proposal.py` passed with 5 tests.
+- Targeted `compileall` passed for image proposal, debug rendering, and pose-run files.
+- Ruff passed on modified image proposal, debug rendering, pose-run, and test files.
+- A 360-frame `batting_1` intermediate run no longer showed the earlier center jump near frames 90-120.
+- Sampled frames around 90, 120, and 300 showed `center_x` remaining close to the tracked subject core instead of jumping to the right background.
+- A 360-frame `batting_1` MediaPipe smoke run completed with 4680 pose records.
+- Full `batting_1` intermediate videos were regenerated for 997 frames.
+- Full `batting_1` image-proposal pose inference completed with 997 frames and 12961 pose records.
+
+Commands:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_1 --max-frames 360
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-image-proposal-roi --clip-id batting_1 --max-frames 360
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_1
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-image-proposal-roi --clip-id batting_1
+```
+
+Outputs:
+
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__proposal_overlay.mp4`
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__masked_frame.mp4`
+- `data_full/processed/poses/batting_1/image_center_motion_grabcut_pose.csv`
+- `outputs_full/overlays/batting_1__image_center_motion_grabcut_pose.mp4`
+
+Remaining limitation:
+
+- The mask still includes some background around the hitter because the proposal is intentionally broad enough to preserve limbs and bat motion.
+- Wrist trails in the overlay remain visually cluttered and should be handled separately from ROI tracking.
