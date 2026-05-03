@@ -24,6 +24,7 @@ def create_center_motion_grabcut_proposal(
     min_area_ratio: float = 0.006,
     grabcut_iterations: int = 2,
     processing_scale: float = 1.0,
+    vertical_body_width_ratio: float = 0.22,
 ) -> ImageProposal:
     """Create a subject mask from image evidence, center prior, and foreground segmentation."""
 
@@ -58,6 +59,7 @@ def create_center_motion_grabcut_proposal(
             min_area_ratio=min_area_ratio,
             grabcut_iterations=grabcut_iterations,
             processing_scale=1.0,
+            vertical_body_width_ratio=vertical_body_width_ratio,
         )
         mask = cv2.resize(
             small_proposal.mask,
@@ -106,7 +108,21 @@ def create_center_motion_grabcut_proposal(
         roi = _mask_roi(selected, width, height)
         candidate_count = 0
 
+    selected = _keep_center_vertical_body_region(
+        selected,
+        center_x=center_x,
+        image_width=width,
+        image_height=height,
+        body_width_ratio=vertical_body_width_ratio,
+    )
     selected = _smooth_subject_shape(selected)
+    selected = _keep_center_vertical_body_region(
+        selected,
+        center_x=center_x,
+        image_width=width,
+        image_height=height,
+        body_width_ratio=vertical_body_width_ratio,
+    )
     selected = _temporal_stabilize_mask(selected, previous_mask)
     if np.count_nonzero(selected) == 0:
         roi_width = width * center_width_ratio
@@ -299,6 +315,78 @@ def _select_subject_component(
     selected = np.zeros(mask.shape, dtype=np.uint8)
     cv2.drawContours(selected, [best_contour], -1, 255, -1)
     return selected, _mask_roi(selected, image_width, image_height), len(scored)
+
+
+def _keep_center_vertical_body_region(
+    mask,
+    center_x: float,
+    image_width: int,
+    image_height: int,
+    body_width_ratio: float,
+):
+    cv2 = _require_cv2()
+    import numpy as np
+
+    if cv2.countNonZero(mask) == 0:
+        return mask
+
+    guide_width = max(3, round(image_width * body_width_ratio))
+    guide_left = max(0, round(image_width * center_x - guide_width / 2))
+    guide_right = min(image_width, round(image_width * center_x + guide_width / 2))
+
+    vertical_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (max(3, round(image_width * 0.025)), max(15, round(image_height * 0.18))),
+    )
+    vertical_core = cv2.morphologyEx(mask, cv2.MORPH_OPEN, vertical_kernel)
+    if cv2.countNonZero(vertical_core) == 0:
+        vertical_core = cv2.bitwise_and(mask, _center_band_mask(image_height, image_width, center_x, body_width_ratio))
+
+    contours, _ = cv2.findContours(vertical_core, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return cv2.bitwise_and(mask, _center_band_mask(image_height, image_width, center_x, body_width_ratio))
+
+    best_contour = None
+    best_score = -1.0
+    for contour in contours:
+        x, y, width, height = cv2.boundingRect(contour)
+        if height < image_height * 0.18:
+            continue
+        component = np.zeros(mask.shape, dtype=np.uint8)
+        cv2.drawContours(component, [contour], -1, 255, -1)
+        guide_overlap = cv2.countNonZero(component[:, guide_left:guide_right])
+        if guide_overlap == 0:
+            continue
+        center_distance = abs((x + width / 2) / image_width - center_x)
+        score = guide_overlap * (1 + height / image_height) / (1 + 8 * center_distance)
+        if score > best_score:
+            best_score = score
+            best_contour = contour
+
+    if best_contour is None:
+        return cv2.bitwise_and(mask, _center_band_mask(image_height, image_width, center_x, body_width_ratio))
+
+    seed = np.zeros(mask.shape, dtype=np.uint8)
+    cv2.drawContours(seed, [best_contour], -1, 255, -1)
+    support_width = max(guide_width, round(image_width * min(0.34, body_width_ratio * 1.55)))
+    x, _, width, _ = cv2.boundingRect(seed)
+    seed_center = (x + width / 2) / image_width
+    support_band = _center_band_mask(image_height, image_width, seed_center, support_width / image_width)
+    seed = cv2.bitwise_and(seed, support_band)
+
+    grown = seed.copy()
+    grow_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17))
+    constrained_mask = cv2.bitwise_and(mask, support_band)
+    for _ in range(8):
+        expanded = cv2.dilate(grown, grow_kernel, iterations=1)
+        expanded = cv2.bitwise_and(expanded, constrained_mask)
+        if np.array_equal(expanded, grown):
+            break
+        grown = expanded
+
+    if cv2.countNonZero(grown) == 0:
+        return cv2.bitwise_and(mask, support_band)
+    return grown
 
 
 def _smooth_subject_shape(mask):
