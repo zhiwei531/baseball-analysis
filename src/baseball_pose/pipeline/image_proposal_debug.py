@@ -77,11 +77,13 @@ def render_image_proposal_debug_videos(
         masked_dir.mkdir(parents=True, exist_ok=True)
 
         previous_image = None
+        previous_mask = None
         for frame in frames:
             image = read_frame(frame.frame_path)
             proposal = create_center_motion_grabcut_proposal(
                 image=image,
                 previous_image=previous_image,
+                previous_mask=previous_mask,
                 background_subtractor=background_subtractor,
                 center_x=center_x,
                 center_width_ratio=center_width_ratio,
@@ -102,6 +104,7 @@ def render_image_proposal_debug_videos(
             proposal_paths.append(proposal_path)
             masked_paths.append(masked_path)
             previous_image = image
+            previous_mask = proposal.mask
 
         proposal_video = image_proposal_debug_video_path(
             config.output_dir,

@@ -17,6 +17,7 @@ class ImageProposal:
 def create_center_motion_grabcut_proposal(
     image,
     previous_image=None,
+    previous_mask=None,
     background_subtractor=None,
     center_x: float = 0.5,
     center_width_ratio: float = 0.54,
@@ -42,9 +43,15 @@ def create_center_motion_grabcut_proposal(
             if previous_image is None
             else cv2.resize(previous_image, small_size, interpolation=cv2.INTER_AREA)
         )
+        small_previous_mask = (
+            None
+            if previous_mask is None
+            else cv2.resize(previous_mask, small_size, interpolation=cv2.INTER_NEAREST)
+        )
         small_proposal = create_center_motion_grabcut_proposal(
             image=small_image,
             previous_image=small_previous,
+            previous_mask=small_previous_mask,
             background_subtractor=background_subtractor,
             center_x=center_x,
             center_width_ratio=center_width_ratio,
@@ -65,15 +72,18 @@ def create_center_motion_grabcut_proposal(
         ).clamped(image.shape[1], image.shape[0])
         return ImageProposal(mask=mask, roi=roi, candidate_count=small_proposal.candidate_count)
 
+    enhanced = _enhance_subject_contrast(image)
+    previous_enhanced = None if previous_image is None else _enhance_subject_contrast(previous_image)
     height, width = image.shape[:2]
     center_mask = _center_band_mask(height, width, center_x, center_width_ratio)
-    motion_mask = _motion_mask(image, previous_image)
-    foreground_mask = _foreground_mask(image, background_subtractor)
+    motion_mask = _motion_mask(enhanced, previous_enhanced)
+    foreground_mask = _foreground_mask(enhanced, background_subtractor)
     grabcut_mask = _grabcut_mask(
-        image,
+        enhanced,
         center_mask=center_mask,
         motion_mask=motion_mask,
         foreground_mask=foreground_mask,
+        previous_mask=previous_mask,
         center_x=center_x,
         center_width_ratio=center_width_ratio,
         iterations=grabcut_iterations,
@@ -89,6 +99,7 @@ def create_center_motion_grabcut_proposal(
         image_height=height,
         center_x=center_x,
         min_area_ratio=min_area_ratio,
+        previous_mask=previous_mask,
     )
     if selected is None:
         selected = _clean_mask(cv2.bitwise_and(grabcut_mask, center_mask))
@@ -96,6 +107,7 @@ def create_center_motion_grabcut_proposal(
         candidate_count = 0
 
     selected = _smooth_subject_shape(selected)
+    selected = _temporal_stabilize_mask(selected, previous_mask)
     if np.count_nonzero(selected) == 0:
         roi_width = width * center_width_ratio
         roi = RoiBox(width * center_x - roi_width / 2, 0, roi_width, height).clamped(width, height)
@@ -157,7 +169,7 @@ def _motion_mask(image, previous_image):
     previous_gray = cv2.cvtColor(previous_image, cv2.COLOR_BGR2GRAY)
     diff = cv2.absdiff(gray, previous_gray)
     diff = cv2.GaussianBlur(diff, (5, 5), 0)
-    _, mask = cv2.threshold(diff, 18, 255, cv2.THRESH_BINARY)
+    _, mask = cv2.threshold(diff, 14, 255, cv2.THRESH_BINARY)
     return _clean_mask(mask)
 
 
@@ -177,6 +189,7 @@ def _grabcut_mask(
     center_mask,
     motion_mask,
     foreground_mask,
+    previous_mask,
     center_x: float,
     center_width_ratio: float,
     iterations: int,
@@ -192,6 +205,17 @@ def _grabcut_mask(
     evidence_fg = cv2.bitwise_and(cv2.bitwise_or(motion_mask, foreground_mask), center_mask)
     mask[center_fg > 0] = cv2.GC_PR_FGD
     mask[evidence_fg > 0] = cv2.GC_FGD
+    if previous_mask is not None:
+        previous_core = cv2.erode(
+            previous_mask,
+            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)),
+        )
+        previous_support = cv2.dilate(
+            previous_mask,
+            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21)),
+        )
+        mask[previous_support > 0] = cv2.GC_PR_FGD
+        mask[previous_core > 0] = cv2.GC_FGD
 
     bgd_model = np.zeros((1, 65), np.float64)
     fgd_model = np.zeros((1, 65), np.float64)
@@ -222,12 +246,28 @@ def _clean_mask(mask):
     return cv2.dilate(mask, kernel, iterations=1)
 
 
+def _enhance_subject_contrast(image):
+    cv2 = _require_cv2()
+
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    lightness, a_channel, b_channel = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.6, tileGridSize=(8, 8))
+    enhanced_lightness = clahe.apply(lightness)
+    enhanced = cv2.cvtColor(
+        cv2.merge((enhanced_lightness, a_channel, b_channel)),
+        cv2.COLOR_LAB2BGR,
+    )
+    blurred = cv2.GaussianBlur(enhanced, (0, 0), 1.2)
+    return cv2.addWeighted(enhanced, 1.45, blurred, -0.45, 0)
+
+
 def _select_subject_component(
     mask,
     image_width: int,
     image_height: int,
     center_x: float,
     min_area_ratio: float,
+    previous_mask,
 ):
     cv2 = _require_cv2()
     import numpy as np
@@ -244,7 +284,13 @@ def _select_subject_component(
             continue
         center_distance = abs((x + width / 2) / image_width - center_x)
         vertical_bonus = height / image_height
-        score = area / (1 + 4 * center_distance) + area * vertical_bonus
+        overlap_bonus = 0.0
+        if previous_mask is not None:
+            component_mask = np.zeros(mask.shape, dtype=np.uint8)
+            cv2.drawContours(component_mask, [contour], -1, 255, -1)
+            overlap = np.count_nonzero(cv2.bitwise_and(component_mask, previous_mask))
+            overlap_bonus = 3.0 * overlap
+        score = area / (1 + 6 * center_distance) + area * vertical_bonus + overlap_bonus
         scored.append((score, contour))
     if not scored:
         return None, RoiBox(0, 0, image_width, image_height), len(contours)
@@ -260,6 +306,20 @@ def _smooth_subject_shape(mask):
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+
+def _temporal_stabilize_mask(mask, previous_mask):
+    if previous_mask is None:
+        return mask
+
+    cv2 = _require_cv2()
+    blended = cv2.addWeighted(mask, 0.72, previous_mask, 0.28, 0)
+    _, stabilized = cv2.threshold(blended, 120, 255, cv2.THRESH_BINARY)
+    support = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)), iterations=1)
+    stabilized = cv2.bitwise_and(stabilized, support)
+    if cv2.countNonZero(stabilized) == 0:
+        return mask
+    return stabilized
 
 
 def _mask_roi(mask, image_width: int, image_height: int) -> RoiBox:
