@@ -1376,3 +1376,47 @@ Validation:
 - `pytest tests/test_image_proposal.py` passed.
 - Targeted `compileall` passed.
 - Ruff passed on the modified image-proposal and test files.
+
+## Iteration 25: Edge-Aware Tightening Attempt
+
+Date: 2026-05-03
+
+Goal:
+
+- Further reduce the `batting_1` image proposal after the left-lower nearby Dodgers player still appeared inside the mask.
+- Try to use image-processing evidence, not pose skeletons, to separate the central hitter from adjacent people.
+
+Implementation:
+
+- Replaced the fixed center support band with an asymmetric body envelope:
+  - wider in the upper body to preserve the bat and hands,
+  - narrower on the lower-left side where the nearby seated player leaks into the mask.
+- Estimated the envelope center from pixels overlapping the center guide band instead of the full connected component box.
+- Added a regression test for a lower-left attached fake person.
+- Added a second GrabCut refinement pass inside the body envelope:
+  - center vertical body pixels seed foreground,
+  - the rest of the envelope starts as probable background,
+  - a lighter post-GrabCut cleanup avoids re-expanding the refined mask.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_1 --max-frames 180
+```
+
+Outputs:
+
+- Regenerated `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__proposal_overlay.mp4`
+- Regenerated `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__masked_frame.mp4`
+
+Validation:
+
+- `pytest tests/test_image_proposal.py` passed.
+- Targeted `compileall` passed.
+- Ruff passed on modified image-proposal files.
+
+Observation:
+
+- The mask is narrower and less rectangular than Iteration 24.
+- The left-lower teammate is still partially retained in sampled frames around 60 and 100. Pure image segmentation struggles here because the adjacent player wears similar colors and overlaps the hitter's lower-body region. The next likely step is a stronger project-specific subject prior, such as a pose-assisted exclusion zone, manual negative mask, or a person detector / tracker, rather than only tuning OpenCV contrast and morphology.
