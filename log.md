@@ -1494,3 +1494,27 @@ Validation:
 - The full `batting_1` run completed with 997 frames.
 - The pose CSV contains 12961 pose records.
 - The command required full local permissions because MediaPipe Tasks still needs macOS OpenGL context creation.
+
+## Iteration 28: Full Batting 1 Image-Proposal Intermediate Videos
+
+Date: 2026-05-03
+
+Goal:
+
+- Generate the full-video intermediate ROI/mask debug videos for `batting_1`, matching the full image-proposal pose run.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_1
+```
+
+Outputs:
+
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__proposal_overlay.mp4`
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__masked_frame.mp4`
+
+Validation:
+
+- The command completed for all 997 `batting_1` frames.
