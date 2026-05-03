@@ -25,6 +25,7 @@ from baseball_pose.pose.mediapipe_pose import MediaPipePoseEstimator
 from baseball_pose.pose.schema import PoseRecord
 from baseball_pose.preprocessing.body_mask import create_body_prior_masked_crop
 from baseball_pose.preprocessing.image_proposal import (
+    ImageProposalTracker,
     apply_image_proposal_mask,
     create_center_motion_grabcut_proposal,
 )
@@ -671,6 +672,8 @@ def run_image_proposal_roi_clip(
     overlay_dir.mkdir(parents=True, exist_ok=True)
     previous_image = None
     previous_mask = None
+    initial_center_x = float(roi_config.get("center_x", 0.5))
+    tracker = ImageProposalTracker(initial_center_x=initial_center_x, center_x=initial_center_x)
 
     try:
         for frame in frames:
@@ -680,7 +683,7 @@ def run_image_proposal_roi_clip(
                 previous_image=previous_image,
                 previous_mask=previous_mask,
                 background_subtractor=background_subtractor,
-                center_x=float(roi_config.get("center_x", 0.5)),
+                center_x=tracker.center_x,
                 center_width_ratio=float(roi_config.get("center_width_ratio", 0.54)),
                 min_area_ratio=float(roi_config.get("min_area_ratio", 0.006)),
                 grabcut_iterations=int(roi_config.get("grabcut_iterations", 1)),
@@ -707,6 +710,7 @@ def run_image_proposal_roi_clip(
             overlay_path = overlay_dir / frame.frame_path.name
             _write_image(overlay_path, overlay)
             overlay_paths.append(overlay_path)
+            tracker.update(proposal)
             previous_image = image
             previous_mask = proposal.mask
     finally:
