@@ -1168,3 +1168,80 @@ Validation:
 - Full test suite passed: 18 tests.
 - `python -m compileall src tests` passed after removing macOS `._*` metadata files.
 - Ruff passed on the modified ROI, pipeline, CLI, and ROI test files.
+
+## Iteration 21: Body-Prior Irregular Mask Inference
+
+Date: 2026-05-03
+
+Goal:
+
+- Reduce remaining wrong-person switches when a nearby player or spectator is still inside the centered rectangular crop.
+- Use an irregular subject proposal instead of another rectangle.
+
+Implementation:
+
+- Added `body_prior_mask_roi`, which uses `center_prior_roi_smooth` as the prior body track.
+- For each frame, the pipeline:
+  - reads the prior subject skeleton,
+  - builds a dynamic body ROI around prior landmarks,
+  - draws a skeleton-shaped mask from torso, limb connections, and joint circles,
+  - blacks out pixels outside that irregular mask,
+  - runs MediaPipe on the masked crop,
+  - remaps landmarks back to full-frame coordinates.
+- Added smoothed condition:
+  - `body_prior_mask_roi_smooth`
+- Added CLI command:
+  - `run-body-prior-mask-roi`
+- Updated default figure and overlay selection to prefer `body_prior_mask_roi_smooth`.
+
+Commands run:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-body-prior-mask-roi
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses --condition body_prior_mask_roi
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-overlays --condition body_prior_mask_roi_smooth
+```
+
+Outputs:
+
+- `data_full/processed/poses/<clip_id>/body_prior_mask_roi.csv`
+- `data_full/processed/poses/<clip_id>/body_prior_mask_roi_smooth.csv`
+- `data_full/processed/features/<clip_id>/body_prior_mask_roi_smooth.csv`
+- `outputs_full/overlays/<clip_id>__body_prior_mask_roi_smooth.mp4`
+- Updated default report figures under `outputs_full/figures/`.
+
+Metric notes:
+
+| clip_id | metric | center_prior_roi_smooth | body_prior_mask_roi_smooth |
+| --- | --- | ---: | ---: |
+| batting_1 | left wrist jitter | 0.0029 | 0.0019 |
+| batting_1 | runtime ms/frame | 27.60 | 15.74 |
+| batting_2 | completeness | 0.9591 | 0.9550 |
+| batting_2 | left wrist jitter | 0.0079 | 0.0067 |
+| pitching_1 | right wrist jitter | 0.0044 | 0.0039 |
+| pitching_1 | runtime ms/frame | 27.50 | 16.22 |
+| pitching_2 | completeness | 0.9991 | 1.0000 |
+| pitching_2 | runtime ms/frame | 27.70 | 15.57 |
+
+Interpretation:
+
+- The body-prior mask is more aggressive than the centered rectangle. It can sacrifice a small amount of completeness when prior limbs are too tight, but it removes more non-subject pixels before inference.
+- The main value is qualitative subject isolation: nearby bodies inside the center crop are mostly blacked out unless they overlap the prior subject skeleton region.
+- Runtime also improved because the dynamic crop is tighter than the full centered crop.
+
+Validation:
+
+- Full test suite passed: 20 tests.
+- `python -m compileall src tests` passed after removing macOS `._*` metadata files.
+- Ruff passed on the modified body-mask, pipeline, CLI, and body-mask-test files.
