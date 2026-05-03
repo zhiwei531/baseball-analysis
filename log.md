@@ -1245,3 +1245,44 @@ Validation:
 - Full test suite passed: 20 tests.
 - `python -m compileall src tests` passed after removing macOS `._*` metadata files.
 - Ruff passed on the modified body-mask, pipeline, CLI, and body-mask-test files.
+
+## Iteration 22: Body-Mask Intermediate Debug Outputs
+
+Date: 2026-05-03
+
+Goal:
+
+- Export the intermediate irregular proposal results for reporting and inspection.
+- Make the body-prior mask visible before final MediaPipe inference.
+
+Implementation:
+
+- Added `render-body-mask-debug`.
+- Added two intermediate debug videos per clip:
+  - `proposal_overlay`: original frame with the dynamic ROI rectangle and green irregular body mask overlaid.
+  - `masked_frame`: full-frame black canvas containing only the pixels retained by the body-prior mask.
+- Added output path helpers under `outputs_full/body_mask_debug/`.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-body-mask-debug --condition body_prior_mask_roi
+```
+
+Outputs:
+
+- `outputs_full/body_mask_debug/batting_1__body_prior_mask_roi__proposal_overlay.mp4`
+- `outputs_full/body_mask_debug/batting_1__body_prior_mask_roi__masked_frame.mp4`
+- `outputs_full/body_mask_debug/batting_2__body_prior_mask_roi__proposal_overlay.mp4`
+- `outputs_full/body_mask_debug/batting_2__body_prior_mask_roi__masked_frame.mp4`
+- `outputs_full/body_mask_debug/pitching_1__body_prior_mask_roi__proposal_overlay.mp4`
+- `outputs_full/body_mask_debug/pitching_1__body_prior_mask_roi__masked_frame.mp4`
+- `outputs_full/body_mask_debug/pitching_2__body_prior_mask_roi__proposal_overlay.mp4`
+- `outputs_full/body_mask_debug/pitching_2__body_prior_mask_roi__masked_frame.mp4`
+
+Validation:
+
+- `python -m pytest tests/test_body_mask.py` passed.
+- Targeted `compileall` passed.
+- Ruff passed on modified body-mask, debug pipeline, path, CLI, and body-mask-test files.

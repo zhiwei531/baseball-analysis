@@ -125,6 +125,10 @@ XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
 XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 .venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-overlays
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-body-mask-debug --condition body_prior_mask_roi
 ```
 
 Full-video outputs are written under:
@@ -142,6 +146,8 @@ data_full/processed/features/<clip_id>/<condition_id>.csv
 outputs_full/figures/<clip_id>__wrist_trajectories.png
 outputs_full/figures/<clip_id>__posture_analysis.png
 outputs_full/overlays/<clip_id>__<condition_id>_smooth.mp4
+outputs_full/body_mask_debug/<clip_id>__body_prior_mask_roi__proposal_overlay.mp4
+outputs_full/body_mask_debug/<clip_id>__body_prior_mask_roi__masked_frame.mp4
 ```
 
 The current optimization path prioritizes the best readable output over baseline comparison:
