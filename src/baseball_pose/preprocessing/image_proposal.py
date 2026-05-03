@@ -12,6 +12,43 @@ class ImageProposal:
     mask: object
     roi: RoiBox
     candidate_count: int
+    center_x: float = 0.5
+    center_width_ratio: float = 0.54
+
+
+@dataclass
+class ImageProposalTracker:
+    """Track the subject-centered proposal prior across frames."""
+
+    initial_center_x: float = 0.5
+    center_x: float = 0.5
+    max_offset: float = 0.18
+    max_step: float = 0.02
+    smoothing: float = 0.45
+    previous_area_ratio: float | None = None
+
+    def update(self, proposal: ImageProposal) -> None:
+        cv2 = _require_cv2()
+        height, width = proposal.mask.shape[:2]
+        area_ratio = cv2.countNonZero(proposal.mask) / max(width * height, 1)
+        if area_ratio <= 0:
+            return
+        if self.previous_area_ratio is not None:
+            area_change = area_ratio / max(self.previous_area_ratio, 1e-6)
+            if area_change > 2.8 or area_change < 0.35:
+                return
+
+        measured_center = _estimate_tracking_center_x(
+            proposal.mask,
+            current_center_x=self.center_x,
+            fallback_center_x=proposal.center_x,
+        )
+        max_left = self.initial_center_x - self.max_offset
+        max_right = self.initial_center_x + self.max_offset
+        measured_center = max(max_left, min(max_right, measured_center))
+        delta = max(-self.max_step, min(self.max_step, measured_center - self.center_x))
+        self.center_x = max(max_left, min(max_right, self.center_x + delta * self.smoothing))
+        self.previous_area_ratio = area_ratio
 
 
 def create_center_motion_grabcut_proposal(
@@ -72,7 +109,13 @@ def create_center_motion_grabcut_proposal(
             small_proposal.roi.width / processing_scale,
             small_proposal.roi.height / processing_scale,
         ).clamped(image.shape[1], image.shape[0])
-        return ImageProposal(mask=mask, roi=roi, candidate_count=small_proposal.candidate_count)
+        return ImageProposal(
+            mask=mask,
+            roi=roi,
+            candidate_count=small_proposal.candidate_count,
+            center_x=center_x,
+            center_width_ratio=center_width_ratio,
+        )
 
     enhanced = _enhance_subject_contrast(image)
     previous_enhanced = None if previous_image is None else _enhance_subject_contrast(previous_image)
@@ -136,7 +179,13 @@ def create_center_motion_grabcut_proposal(
         roi = RoiBox(width * center_x - roi_width / 2, 0, roi_width, height).clamped(width, height)
     else:
         roi = _mask_roi(selected, width, height)
-    return ImageProposal(mask=selected, roi=roi, candidate_count=candidate_count)
+    return ImageProposal(
+        mask=selected,
+        roi=roi,
+        candidate_count=candidate_count,
+        center_x=center_x,
+        center_width_ratio=center_width_ratio,
+    )
 
 
 def draw_image_proposal_overlay(image, proposal: ImageProposal):
@@ -322,6 +371,28 @@ def _select_subject_component(
     selected = np.zeros(mask.shape, dtype=np.uint8)
     cv2.drawContours(selected, [best_contour], -1, 255, -1)
     return selected, _mask_roi(selected, image_width, image_height), len(scored)
+
+
+def _estimate_tracking_center_x(mask, current_center_x: float, fallback_center_x: float) -> float:
+    cv2 = _require_cv2()
+
+    height, width = mask.shape[:2]
+    if cv2.countNonZero(mask) == 0:
+        return fallback_center_x
+
+    tracking_band = _center_band_mask(height, width, current_center_x, 0.42)
+    tracked_pixels = cv2.bitwise_and(mask, tracking_band)
+    if cv2.countNonZero(tracked_pixels) == 0:
+        tracked_pixels = mask
+
+    vertical_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (max(3, round(width * 0.025)), max(15, round(height * 0.16))),
+    )
+    vertical_core = cv2.morphologyEx(tracked_pixels, cv2.MORPH_OPEN, vertical_kernel)
+    if cv2.countNonZero(vertical_core) > 0:
+        return _mask_center_x(vertical_core) / width
+    return _mask_center_x(tracked_pixels) / width
 
 
 def _keep_center_vertical_body_region(

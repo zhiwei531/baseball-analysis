@@ -1,6 +1,11 @@
 import numpy as np
 
-from baseball_pose.preprocessing.image_proposal import create_center_motion_grabcut_proposal
+from baseball_pose.preprocessing.image_proposal import (
+    ImageProposal,
+    ImageProposalTracker,
+    create_center_motion_grabcut_proposal,
+)
+from baseball_pose.preprocessing.roi import RoiBox
 
 
 def test_image_proposal_selects_center_foreground_blob():
@@ -66,3 +71,34 @@ def test_image_proposal_tightens_lower_left_attached_person():
 
     assert proposal.mask[25:75, 76:96].sum() > 0
     assert proposal.mask[105:150, :82].sum() == 0
+
+
+def test_image_proposal_tracker_follows_gradual_right_shift():
+    tracker = ImageProposalTracker(max_step=0.04, smoothing=1.0)
+
+    for center in [0.50, 0.52, 0.55, 0.58]:
+        mask = np.zeros((120, 200), dtype=np.uint8)
+        x = round(center * 200)
+        mask[20:110, x - 12 : x + 12] = 255
+        proposal = ImageProposal(
+            mask=mask,
+            roi=RoiBox(x - 20, 0, 40, 120),
+            candidate_count=1,
+            center_x=tracker.center_x,
+        )
+        tracker.update(proposal)
+
+    assert tracker.center_x > 0.55
+
+    jump_mask = np.zeros((120, 200), dtype=np.uint8)
+    jump_mask[20:110, 170:194] = 255
+    tracker.update(
+        ImageProposal(
+            mask=jump_mask,
+            roi=RoiBox(160, 0, 40, 120),
+            candidate_count=1,
+            center_x=tracker.center_x,
+        )
+    )
+
+    assert tracker.center_x < 0.63
