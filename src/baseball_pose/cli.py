@@ -270,7 +270,11 @@ def main() -> None:
 
     if args.command == "render-image-proposal-debug":
         clip_ids = args.clip_id if args.clip_id else ["batting_1"]
-        results = render_image_proposal_debug_videos(clip_ids=clip_ids, config=config)
+        results = render_image_proposal_debug_videos(
+            clip_ids=clip_ids,
+            config=config,
+            max_frames=args.max_frames,
+        )
         for result in results:
             print(
                 f"{result.clip_id}/{result.condition_id}: "

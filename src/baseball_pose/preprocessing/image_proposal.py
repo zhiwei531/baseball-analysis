@@ -22,11 +22,48 @@ def create_center_motion_grabcut_proposal(
     center_width_ratio: float = 0.54,
     min_area_ratio: float = 0.006,
     grabcut_iterations: int = 2,
+    processing_scale: float = 1.0,
 ) -> ImageProposal:
     """Create a subject mask from image evidence, center prior, and foreground segmentation."""
 
     cv2 = _require_cv2()
     import numpy as np
+
+    if not 0 < processing_scale <= 1:
+        raise ValueError("processing_scale must be in (0, 1].")
+    if processing_scale < 1:
+        small_size = (
+            max(1, round(image.shape[1] * processing_scale)),
+            max(1, round(image.shape[0] * processing_scale)),
+        )
+        small_image = cv2.resize(image, small_size, interpolation=cv2.INTER_AREA)
+        small_previous = (
+            None
+            if previous_image is None
+            else cv2.resize(previous_image, small_size, interpolation=cv2.INTER_AREA)
+        )
+        small_proposal = create_center_motion_grabcut_proposal(
+            image=small_image,
+            previous_image=small_previous,
+            background_subtractor=background_subtractor,
+            center_x=center_x,
+            center_width_ratio=center_width_ratio,
+            min_area_ratio=min_area_ratio,
+            grabcut_iterations=grabcut_iterations,
+            processing_scale=1.0,
+        )
+        mask = cv2.resize(
+            small_proposal.mask,
+            (image.shape[1], image.shape[0]),
+            interpolation=cv2.INTER_NEAREST,
+        )
+        roi = RoiBox(
+            small_proposal.roi.x / processing_scale,
+            small_proposal.roi.y / processing_scale,
+            small_proposal.roi.width / processing_scale,
+            small_proposal.roi.height / processing_scale,
+        ).clamped(image.shape[1], image.shape[0])
+        return ImageProposal(mask=mask, roi=roi, candidate_count=small_proposal.candidate_count)
 
     height, width = image.shape[:2]
     center_mask = _center_band_mask(height, width, center_x, center_width_ratio)

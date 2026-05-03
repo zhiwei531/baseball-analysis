@@ -37,7 +37,9 @@ def render_image_proposal_debug_videos(
     center_x: float = 0.5,
     center_width_ratio: float = 0.54,
     min_area_ratio: float = 0.006,
-    grabcut_iterations: int = 2,
+    grabcut_iterations: int = 1,
+    processing_scale: float = 0.45,
+    max_frames: int | None = None,
 ) -> list[ImageProposalDebugResult]:
     cv2 = _require_cv2()
     results: list[ImageProposalDebugResult] = []
@@ -47,6 +49,8 @@ def render_image_proposal_debug_videos(
         if not frames_csv.exists():
             continue
         frames = read_frame_records(frames_csv)
+        if max_frames is not None:
+            frames = frames[:max_frames]
         if not frames:
             continue
 
@@ -83,6 +87,7 @@ def render_image_proposal_debug_videos(
                 center_width_ratio=center_width_ratio,
                 min_area_ratio=min_area_ratio,
                 grabcut_iterations=grabcut_iterations,
+                processing_scale=processing_scale,
             )
             proposal_path = proposal_dir / frame.frame_path.name.replace(
                 source_condition,
