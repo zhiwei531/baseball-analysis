@@ -368,10 +368,8 @@ def _keep_center_vertical_body_region(
 
     seed = np.zeros(mask.shape, dtype=np.uint8)
     cv2.drawContours(seed, [best_contour], -1, 255, -1)
-    support_width = max(guide_width, round(image_width * min(0.34, body_width_ratio * 1.55)))
-    x, _, width, _ = cv2.boundingRect(seed)
-    seed_center = (x + width / 2) / image_width
-    support_band = _center_band_mask(image_height, image_width, seed_center, support_width / image_width)
+    seed_center = _mask_center_x(seed[:, guide_left:guide_right], offset_x=guide_left) / image_width
+    support_band = _body_envelope_mask(image_height, image_width, seed_center, body_width_ratio)
     seed = cv2.bitwise_and(seed, support_band)
 
     grown = seed.copy()
@@ -387,6 +385,47 @@ def _keep_center_vertical_body_region(
     if cv2.countNonZero(grown) == 0:
         return cv2.bitwise_and(mask, support_band)
     return grown
+
+
+def _mask_center_x(mask, offset_x: int = 0) -> float:
+    cv2 = _require_cv2()
+
+    if cv2.countNonZero(mask) == 0:
+        x, _, width, _ = cv2.boundingRect(mask)
+        return offset_x + x + width / 2
+    moments = cv2.moments(mask, binaryImage=True)
+    if moments["m00"] == 0:
+        x, _, width, _ = cv2.boundingRect(mask)
+        return offset_x + x + width / 2
+    return offset_x + moments["m10"] / moments["m00"]
+
+
+def _body_envelope_mask(height: int, width: int, center_x: float, body_width_ratio: float):
+    import numpy as np
+
+    envelope = np.zeros((height, width), dtype=np.uint8)
+    center_px = width * center_x
+    upper_left = width * max(0.13, body_width_ratio * 0.72)
+    upper_right = width * max(0.16, body_width_ratio * 0.82)
+    lower_left = width * max(0.075, body_width_ratio * 0.42)
+    lower_right = width * max(0.14, body_width_ratio * 0.70)
+    transition_start = height * 0.34
+    transition_end = height * 0.58
+
+    for y in range(height):
+        if y <= transition_start:
+            weight = 0.0
+        elif y >= transition_end:
+            weight = 1.0
+        else:
+            weight = (y - transition_start) / max(transition_end - transition_start, 1)
+        left_extent = upper_left * (1 - weight) + lower_left * weight
+        right_extent = upper_right * (1 - weight) + lower_right * weight
+        left = max(0, round(center_px - left_extent))
+        right = min(width, round(center_px + right_extent))
+        envelope[y, left:right] = 255
+
+    return envelope
 
 
 def _smooth_subject_shape(mask):

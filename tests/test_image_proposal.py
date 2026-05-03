@@ -44,3 +44,25 @@ def test_image_proposal_trims_people_attached_to_center_body():
     assert proposal.mask[:, :65].sum() == 0
     assert proposal.mask[:, 135:].sum() == 0
     assert proposal.roi.width < 90
+
+
+def test_image_proposal_tightens_lower_left_attached_person():
+    image = np.zeros((180, 220, 3), dtype=np.uint8)
+    image[20:150, 96:122] = 255
+    image[25:75, 70:100] = 255
+    image[85:160, 50:90] = 255
+    image[100:112, 50:122] = 255
+    previous = np.zeros_like(image)
+
+    proposal = create_center_motion_grabcut_proposal(
+        image=image,
+        previous_image=previous,
+        background_subtractor=None,
+        center_width_ratio=0.7,
+        min_area_ratio=0.001,
+        grabcut_iterations=1,
+        vertical_body_width_ratio=0.2,
+    )
+
+    assert proposal.mask[25:75, 76:96].sum() > 0
+    assert proposal.mask[105:150, :82].sum() == 0
