@@ -74,7 +74,15 @@ def test_image_proposal_tightens_lower_left_attached_person():
 
 
 def test_image_proposal_tracker_follows_gradual_right_shift():
-    tracker = ImageProposalTracker(max_step=0.04, smoothing=1.0)
+    tracker = ImageProposalTracker(
+        initial_width_ratio=0.56,
+        center_width_ratio=0.56,
+        max_center_step=0.04,
+        center_smoothing=1.0,
+        max_width_step=0.04,
+        width_smoothing=1.0,
+        warmup_frames=0,
+    )
 
     for center in [0.50, 0.52, 0.55, 0.58]:
         mask = np.zeros((120, 200), dtype=np.uint8)
@@ -102,3 +110,4 @@ def test_image_proposal_tracker_follows_gradual_right_shift():
     )
 
     assert tracker.center_x < 0.63
+    assert tracker.center_width_ratio >= 0.56

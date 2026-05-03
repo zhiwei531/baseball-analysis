@@ -673,7 +673,21 @@ def run_image_proposal_roi_clip(
     previous_image = None
     previous_mask = None
     initial_center_x = float(roi_config.get("center_x", 0.5))
-    tracker = ImageProposalTracker(initial_center_x=initial_center_x, center_x=initial_center_x)
+    initial_width_ratio = float(roi_config.get("center_width_ratio", 0.62))
+    tracker = ImageProposalTracker(
+        initial_center_x=initial_center_x,
+        initial_width_ratio=initial_width_ratio,
+        center_x=initial_center_x,
+        center_width_ratio=initial_width_ratio,
+        max_offset=float(roi_config.get("tracker_max_offset", 0.12)),
+        max_center_step=float(roi_config.get("tracker_max_center_step", 0.015)),
+        max_width_step=float(roi_config.get("tracker_max_width_step", 0.025)),
+        center_smoothing=float(roi_config.get("tracker_center_smoothing", 0.55)),
+        width_smoothing=float(roi_config.get("tracker_width_smoothing", 0.45)),
+        min_width_ratio=float(roi_config.get("tracker_min_width_ratio", 0.56)),
+        max_width_ratio=float(roi_config.get("tracker_max_width_ratio", 0.72)),
+        warmup_frames=int(roi_config.get("tracker_warmup_frames", 90)),
+    )
 
     try:
         for frame in frames:
@@ -684,7 +698,7 @@ def run_image_proposal_roi_clip(
                 previous_mask=previous_mask,
                 background_subtractor=background_subtractor,
                 center_x=tracker.center_x,
-                center_width_ratio=float(roi_config.get("center_width_ratio", 0.54)),
+                center_width_ratio=tracker.center_width_ratio,
                 min_area_ratio=float(roi_config.get("min_area_ratio", 0.006)),
                 grabcut_iterations=int(roi_config.get("grabcut_iterations", 1)),
                 processing_scale=float(roi_config.get("processing_scale", 0.45)),

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from baseball_pose.preprocessing.roi import RoiBox
 
@@ -21,11 +21,21 @@ class ImageProposalTracker:
     """Track the subject-centered proposal prior across frames."""
 
     initial_center_x: float = 0.5
+    initial_width_ratio: float = 0.62
     center_x: float = 0.5
-    max_offset: float = 0.10
-    max_step: float = 0.012
-    smoothing: float = 0.35
+    center_width_ratio: float = 0.62
+    max_offset: float = 0.12
+    max_center_step: float = 0.015
+    max_width_step: float = 0.025
+    center_smoothing: float = 0.55
+    width_smoothing: float = 0.45
+    min_width_ratio: float = 0.56
+    max_width_ratio: float = 0.72
+    warmup_frames: int = 90
+    frame_count: int = 0
     previous_area_ratio: float | None = None
+    warmup_center_samples: list[float] = field(default_factory=list)
+    warmup_width_samples: list[float] = field(default_factory=list)
 
     def update(self, proposal: ImageProposal) -> None:
         cv2 = _require_cv2()
@@ -33,21 +43,48 @@ class ImageProposalTracker:
         area_ratio = cv2.countNonZero(proposal.mask) / max(width * height, 1)
         if area_ratio <= 0:
             return
+        measured_center = _proposal_roi_center_x(proposal.roi, width)
+        measured_width_ratio = _proposal_search_width_ratio(
+            proposal.roi.width / max(width, 1),
+            min_width_ratio=self.min_width_ratio,
+            max_width_ratio=self.max_width_ratio,
+        )
+
+        if self.frame_count < self.warmup_frames:
+            self.warmup_center_samples.append(measured_center)
+            self.warmup_width_samples.append(measured_width_ratio)
+            self.frame_count += 1
+            self.previous_area_ratio = area_ratio
+            if self.frame_count == self.warmup_frames:
+                self.center_x = _median(self.warmup_center_samples)
+                self.center_width_ratio = _median(self.warmup_width_samples)
+            return
+
         if self.previous_area_ratio is not None:
             area_change = area_ratio / max(self.previous_area_ratio, 1e-6)
             if area_change > 2.8 or area_change < 0.35:
                 return
 
-        measured_center = _estimate_tracking_center_x(
-            proposal.mask,
-            current_center_x=self.center_x,
-            fallback_center_x=proposal.center_x,
-        )
         max_left = self.initial_center_x - self.max_offset
         max_right = self.initial_center_x + self.max_offset
         measured_center = max(max_left, min(max_right, measured_center))
-        delta = max(-self.max_step, min(self.max_step, measured_center - self.center_x))
-        self.center_x = max(max_left, min(max_right, self.center_x + delta * self.smoothing))
+        center_delta = max(-self.max_center_step, min(self.max_center_step, measured_center - self.center_x))
+        self.center_x = max(
+            max_left,
+            min(max_right, self.center_x + center_delta * self.center_smoothing),
+        )
+        width_delta = max(
+            -self.max_width_step,
+            min(self.max_width_step, measured_width_ratio - self.center_width_ratio),
+        )
+        self.center_width_ratio = max(
+            self.min_width_ratio,
+            min(
+                self.max_width_ratio,
+                self.center_width_ratio + width_delta * self.width_smoothing,
+            ),
+        )
+        self.frame_count += 1
         self.previous_area_ratio = area_ratio
 
 
@@ -209,7 +246,11 @@ def draw_image_proposal_overlay(image, proposal: ImageProposal):
     cv2.rectangle(overlay, (x, y), (x + width, y + height), (40, 40, 255), 2)
     cv2.putText(
         overlay,
-        f"image proposal components: {proposal.candidate_count} center_x={proposal.center_x:.3f}",
+        (
+            "image proposal components: "
+            f"{proposal.candidate_count} center_x={proposal.center_x:.3f} "
+            f"width={proposal.center_width_ratio:.3f}"
+        ),
         (x + 8, max(24, y + 24)),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
@@ -380,26 +421,27 @@ def _select_subject_component(
     return selected, _mask_roi(selected, image_width, image_height), len(scored)
 
 
-def _estimate_tracking_center_x(mask, current_center_x: float, fallback_center_x: float) -> float:
-    cv2 = _require_cv2()
+def _proposal_roi_center_x(roi: RoiBox, image_width: int) -> float:
+    return (roi.x + roi.width / 2) / max(image_width, 1)
 
-    height, width = mask.shape[:2]
-    if cv2.countNonZero(mask) == 0:
-        return fallback_center_x
 
-    tracking_band = _center_band_mask(height, width, current_center_x, 0.42)
-    tracked_pixels = cv2.bitwise_and(mask, tracking_band)
-    if cv2.countNonZero(tracked_pixels) == 0:
-        tracked_pixels = mask
+def _proposal_search_width_ratio(
+    roi_width_ratio: float,
+    min_width_ratio: float,
+    max_width_ratio: float,
+) -> float:
+    target = roi_width_ratio * 1.35 + 0.12
+    return max(min_width_ratio, min(max_width_ratio, target))
 
-    vertical_kernel = cv2.getStructuringElement(
-        cv2.MORPH_RECT,
-        (max(3, round(width * 0.025)), max(15, round(height * 0.16))),
-    )
-    vertical_core = cv2.morphologyEx(tracked_pixels, cv2.MORPH_OPEN, vertical_kernel)
-    if cv2.countNonZero(vertical_core) > 0:
-        return _mask_center_x(vertical_core) / width
-    return _mask_center_x(tracked_pixels) / width
+
+def _median(values: list[float]) -> float:
+    if not values:
+        raise ValueError("values cannot be empty.")
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2 == 1:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
 
 
 def _keep_center_vertical_body_region(

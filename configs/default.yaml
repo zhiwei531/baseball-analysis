@@ -112,11 +112,19 @@ conditions:
       enabled: true
       mode: image_center_motion_grabcut
       center_x: 0.5
-      center_width_ratio: 0.54
+      center_width_ratio: 0.62
       min_area_ratio: 0.006
       grabcut_iterations: 1
       processing_scale: 0.45
       vertical_body_width_ratio: 0.22
+      tracker_warmup_frames: 90
+      tracker_max_offset: 0.12
+      tracker_max_center_step: 0.015
+      tracker_max_width_step: 0.025
+      tracker_center_smoothing: 0.55
+      tracker_width_smoothing: 0.45
+      tracker_min_width_ratio: 0.56
+      tracker_max_width_ratio: 0.72
     preprocessing: []
     postprocess:
       enabled: false
