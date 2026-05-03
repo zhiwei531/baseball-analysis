@@ -123,6 +123,13 @@ def create_center_motion_grabcut_proposal(
         image_height=height,
         body_width_ratio=vertical_body_width_ratio,
     )
+    selected = _grabcut_refine_center_body(
+        enhanced,
+        selected,
+        center_x=center_x,
+        body_width_ratio=vertical_body_width_ratio,
+        iterations=grabcut_iterations,
+    )
     selected = _temporal_stabilize_mask(selected, previous_mask)
     if np.count_nonzero(selected) == 0:
         roi_width = width * center_width_ratio
@@ -426,6 +433,77 @@ def _body_envelope_mask(height: int, width: int, center_x: float, body_width_rat
         envelope[y, left:right] = 255
 
     return envelope
+
+
+def _grabcut_refine_center_body(
+    image,
+    mask,
+    center_x: float,
+    body_width_ratio: float,
+    iterations: int,
+):
+    cv2 = _require_cv2()
+    import numpy as np
+
+    if cv2.countNonZero(mask) == 0:
+        return mask
+
+    height, width = mask.shape[:2]
+    guide = _center_band_mask(height, width, center_x, max(0.08, body_width_ratio * 0.55))
+    guide_pixels = cv2.bitwise_and(mask, guide)
+    if cv2.countNonZero(guide_pixels) == 0:
+        return mask
+
+    seed_center = _mask_center_x(guide_pixels) / width
+    seed_envelope = _body_envelope_mask(height, width, seed_center, body_width_ratio * 0.72)
+    foreground_seed = cv2.bitwise_and(mask, seed_envelope)
+    foreground_seed = cv2.morphologyEx(
+        foreground_seed,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 17)),
+    )
+    if cv2.countNonZero(foreground_seed) == 0:
+        return mask
+
+    grabcut_labels = np.full((height, width), cv2.GC_BGD, dtype=np.uint8)
+    grabcut_labels[mask > 0] = cv2.GC_PR_BGD
+    probable_foreground = cv2.dilate(
+        foreground_seed,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 31)),
+        iterations=1,
+    )
+    grabcut_labels[cv2.bitwise_and(probable_foreground, mask) > 0] = cv2.GC_PR_FGD
+    sure_foreground = cv2.erode(
+        foreground_seed,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 11)),
+        iterations=1,
+    )
+    grabcut_labels[sure_foreground > 0] = cv2.GC_FGD
+
+    bgd_model = np.zeros((1, 65), np.float64)
+    fgd_model = np.zeros((1, 65), np.float64)
+    try:
+        cv2.grabCut(
+            image,
+            grabcut_labels,
+            None,
+            bgd_model,
+            fgd_model,
+            max(1, iterations),
+            cv2.GC_INIT_WITH_MASK,
+        )
+    except cv2.error:
+        return mask
+
+    refined = np.where(
+        (grabcut_labels == cv2.GC_FGD) | (grabcut_labels == cv2.GC_PR_FGD),
+        255,
+        0,
+    ).astype("uint8")
+    refined = cv2.bitwise_and(refined, mask)
+    if cv2.countNonZero(refined) < cv2.countNonZero(foreground_seed) * 0.85:
+        return mask
+    return _clean_mask(refined)
 
 
 def _smooth_subject_shape(mask):
