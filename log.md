@@ -1339,3 +1339,40 @@ Revision:
   - score connected components by overlap with the previous mask,
   - blend the current mask with the previous mask and constrain it to current support.
 - Regenerated the `batting_1` 180-frame image proposal debug videos after the stability update.
+
+## Iteration 24: Center-Vertical Body Proposal Constraint
+
+Date: 2026-05-03
+
+Goal:
+
+- Make the skeleton-free `batting_1` image proposal narrower after visual review showed the box/mask still retained nearby people beside the central hitter.
+- Add a hard rule that keeps only the inner part of the centered, vertically oriented main human region.
+
+Implementation:
+
+- Added a center-vertical body-region filter to `create_center_motion_grabcut_proposal`.
+- The filter:
+  - extracts a vertical core from the selected mask,
+  - scores candidate cores by overlap with the center guide band, vertical extent, and center distance,
+  - grows only from the selected center core inside a constrained support band,
+  - applies the constraint before and after shape smoothing so side people are not reintroduced by morphology.
+- Added a regression test with a central body connected to left/right fake people by a horizontal bridge.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_1 --max-frames 180
+```
+
+Outputs:
+
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__proposal_overlay.mp4`
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__masked_frame.mp4`
+
+Validation:
+
+- `pytest tests/test_image_proposal.py` passed.
+- Targeted `compileall` passed.
+- Ruff passed on the modified image-proposal and test files.
