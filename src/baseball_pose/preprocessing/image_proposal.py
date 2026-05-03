@@ -37,18 +37,28 @@ class ImageProposalTracker:
     previous_area_ratio: float | None = None
     warmup_center_samples: list[float] = field(default_factory=list)
     warmup_width_samples: list[float] = field(default_factory=list)
+    previous_gray: object | None = field(default=None, repr=False)
+    tracking_points: object | None = field(default=None, repr=False)
+    min_tracking_points: int = 12
+    feature_band_width_ratio: float = 0.24
 
-    def update(self, proposal: ImageProposal) -> None:
+    def update(self, proposal: ImageProposal, image=None) -> None:
         cv2 = _require_cv2()
         height, width = proposal.mask.shape[:2]
         area_ratio = cv2.countNonZero(proposal.mask) / max(width * height, 1)
         if area_ratio <= 0:
             return
         measured_center = (
-            proposal.subject_center_x
-            if proposal.subject_center_x is not None
-            else _estimate_subject_core_center_x(proposal.mask, self.center_x)
+            self._track_feature_center_x(image, proposal)
+            if image is not None
+            else None
         )
+        if measured_center is None:
+            measured_center = (
+                proposal.subject_center_x
+                if proposal.subject_center_x is not None
+                else _estimate_subject_core_center_x(proposal.mask, self.center_x)
+            )
         measured_width_ratio = _proposal_search_width_ratio(
             proposal.roi.width / max(width, 1),
             min_width_ratio=self.min_width_ratio,
@@ -60,8 +70,6 @@ class ImageProposalTracker:
             self.warmup_width_samples.append(measured_width_ratio)
             self.frame_count += 1
             self.previous_area_ratio = area_ratio
-            if self.frame_count == self.warmup_frames:
-                self._move_toward(_median(self.warmup_center_samples), _median(self.warmup_width_samples))
             return
 
         if self.previous_area_ratio is not None:
@@ -93,6 +101,43 @@ class ImageProposalTracker:
                 self.center_width_ratio + width_delta * self.width_smoothing,
             ),
         )
+
+    def _track_feature_center_x(self, image, proposal: ImageProposal) -> float | None:
+        cv2 = _require_cv2()
+        import numpy as np
+
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        height, width = gray.shape[:2]
+        measured_center = None
+        if self.previous_gray is not None and self.tracking_points is not None:
+            next_points, status, _ = cv2.calcOpticalFlowPyrLK(
+                self.previous_gray,
+                gray,
+                self.tracking_points,
+                None,
+                winSize=(21, 21),
+                maxLevel=3,
+                criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.03),
+            )
+            if next_points is not None and status is not None:
+                good_points = next_points[status.reshape(-1) == 1]
+                if len(good_points) >= self.min_tracking_points:
+                    xs = good_points[:, 0, 0]
+                    measured_center = float(np.median(xs) / max(width, 1))
+                    self.tracking_points = good_points.reshape(-1, 1, 2)
+                else:
+                    self.tracking_points = None
+
+        if self.tracking_points is None or len(self.tracking_points) < self.min_tracking_points:
+            self.tracking_points = _good_features_in_subject_core(
+                gray,
+                proposal.mask,
+                center_x=measured_center if measured_center is not None else self.center_x,
+                width_ratio=self.feature_band_width_ratio,
+            )
+
+        self.previous_gray = gray
+        return measured_center
 
 
 def create_center_motion_grabcut_proposal(
@@ -482,6 +527,28 @@ def _estimate_subject_core_center_x(mask, previous_center_x: float) -> float:
     component = np.zeros(mask.shape, dtype=np.uint8)
     cv2.drawContours(component, [best_contour], -1, 255, -1)
     return _mask_center_x(component) / width
+
+
+def _good_features_in_subject_core(gray, mask, center_x: float, width_ratio: float):
+    cv2 = _require_cv2()
+
+    height, width = mask.shape[:2]
+    feature_mask = cv2.bitwise_and(mask, _center_band_mask(height, width, center_x, width_ratio))
+    feature_mask = cv2.erode(
+        feature_mask,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)),
+        iterations=1,
+    )
+    if cv2.countNonZero(feature_mask) == 0:
+        return None
+    return cv2.goodFeaturesToTrack(
+        gray,
+        maxCorners=80,
+        qualityLevel=0.01,
+        minDistance=7,
+        mask=feature_mask,
+        blockSize=7,
+    )
 
 
 def _proposal_search_width_ratio(

@@ -724,7 +724,7 @@ def run_image_proposal_roi_clip(
             overlay_path = overlay_dir / frame.frame_path.name
             _write_image(overlay_path, overlay)
             overlay_paths.append(overlay_path)
-            tracker.update(proposal)
+            tracker.update(proposal, image=image)
             previous_image = image
             previous_mask = proposal.mask
     finally:

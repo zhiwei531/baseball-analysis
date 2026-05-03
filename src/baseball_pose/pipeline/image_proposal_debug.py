@@ -133,7 +133,7 @@ def render_image_proposal_debug_videos(
             _write_image(masked_path, apply_image_proposal_mask(image, proposal))
             proposal_paths.append(proposal_path)
             masked_paths.append(masked_path)
-            tracker.update(proposal)
+            tracker.update(proposal, image=image)
             previous_image = image
             previous_mask = proposal.mask
 
