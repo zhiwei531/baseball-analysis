@@ -79,6 +79,13 @@ def _select_figure_feature_paths(
     }
     if not smoothed:
         return feature_paths
+    body_mask_smoothed = {
+        condition_id: path
+        for condition_id, path in smoothed.items()
+        if condition_id.startswith("body_prior_mask_roi")
+    }
+    if body_mask_smoothed:
+        return body_mask_smoothed
     center_smoothed = {
         condition_id: path
         for condition_id, path in smoothed.items()

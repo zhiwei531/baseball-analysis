@@ -23,6 +23,7 @@ from baseball_pose.io.pose_csv import read_pose_records, write_pose_records
 from baseball_pose.io.video import read_frame, sample_video_frames, write_video_from_frames
 from baseball_pose.pose.mediapipe_pose import MediaPipePoseEstimator
 from baseball_pose.pose.schema import PoseRecord
+from baseball_pose.preprocessing.body_mask import create_body_prior_masked_crop
 from baseball_pose.preprocessing.roi import (
     crop_to_roi,
     estimate_clip_auto_roi,
@@ -498,6 +499,135 @@ def run_center_prior_roi_clip(
         frame_count=len(frames),
         pose_record_count=len(all_pose_records),
     )
+
+
+def run_body_prior_mask_roi_clip(
+    clip: ClipMetadata,
+    config: RuntimeConfig,
+    condition_id: str = "body_prior_mask_roi",
+    max_frames: int | None = None,
+) -> AutoRoiRunResult:
+    """Run MediaPipe on an irregular body-prior masked ROI."""
+
+    if condition_id != "body_prior_mask_roi":
+        raise ValueError("run_body_prior_mask_roi_clip currently supports only body_prior_mask_roi.")
+
+    condition_config = config.raw["conditions"][condition_id]
+    roi_config = condition_config.get("roi", {})
+    source_condition = roi_config.get("source_condition", "center_prior_roi_smooth")
+    source_pose_path = pose_path(config.data_dir, clip.clip_id, source_condition)
+    if not source_pose_path.exists():
+        raise FileNotFoundError(
+            f"Body-prior mask ROI requires existing source pose CSV: {source_pose_path}"
+        )
+
+    frame_output_dir = frame_dir(config.data_dir, clip.clip_id, condition_id)
+    frames = sample_video_frames(
+        video_path=clip.source_path,
+        clip_id=clip.clip_id,
+        output_dir=frame_output_dir,
+        target_fps=config.target_fps,
+        resize_longest_side=config.resize_longest_side,
+        condition_id=condition_id,
+        max_frames=max_frames if max_frames is not None else config.max_frames_per_clip,
+    )
+    frames_csv = frame_manifest_path(config.data_dir, clip.clip_id, condition_id)
+    write_frame_records(frames_csv, frames)
+
+    first_frame = read_frame(frames[0].frame_path)
+    image_height, image_width = first_frame.shape[:2]
+    fallback_roi_result = estimate_center_prior_roi(
+        clip_id=clip.clip_id,
+        image_width=image_width,
+        image_height=image_height,
+        condition_id=condition_id,
+        center_x=float(roi_config.get("fallback_center_x", 0.5)),
+        center_y=float(roi_config.get("fallback_center_y", 0.5)),
+        width_ratio=float(roi_config.get("fallback_width_ratio", 0.62)),
+        height_ratio=float(roi_config.get("fallback_height_ratio", 1.0)),
+    )
+    roi_csv = auto_roi_path(config.data_dir, clip.clip_id, condition_id)
+    write_auto_roi_csv(roi_csv, fallback_roi_result)
+
+    prior_records_by_frame = _records_by_frame(read_pose_records(source_pose_path))
+    debug_video = roi_debug_video_path(config.output_dir, clip.clip_id, condition_id)
+    write_roi_debug_video(frames, fallback_roi_result.roi, debug_video, fps=config.target_fps)
+
+    estimator = MediaPipePoseEstimator(
+        model_asset_path=config.raw["pose"].get(
+            "model_asset_path",
+            "models/pose_landmarker_lite.task",
+        ),
+        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
+        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
+    )
+    all_pose_records: list[PoseRecord] = []
+    overlay_paths: list[Path] = []
+    tracks: dict[str, list[tuple[int, int]]] = {"left_wrist": [], "right_wrist": []}
+    overlay_dir = overlay_frame_dir(config.output_dir, clip.clip_id, condition_id)
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        for frame in frames:
+            image = read_frame(frame.frame_path)
+            masked_crop = create_body_prior_masked_crop(
+                image=image,
+                prior_records=prior_records_by_frame.get(frame.frame_index, []),
+                image_width=frame.width or image.shape[1],
+                image_height=frame.height or image.shape[0],
+                fallback_roi=fallback_roi_result.roi,
+                confidence_threshold=float(roi_config.get("confidence_threshold", 0.5)),
+                padding_ratio=float(roi_config.get("padding_ratio", 0.55)),
+                min_width_ratio=float(roi_config.get("min_width_ratio", 0.28)),
+                min_height_ratio=float(roi_config.get("min_height_ratio", 0.50)),
+                limb_thickness_ratio=float(roi_config.get("limb_thickness_ratio", 0.045)),
+                joint_radius_ratio=float(roi_config.get("joint_radius_ratio", 0.035)),
+            )
+            crop_records = estimator.estimate_frame(masked_crop.image, frame, condition_id)
+            records = remap_pose_records_to_full_frame(
+                crop_records,
+                roi=masked_crop.roi,
+                image_width=frame.width or image.shape[1],
+                image_height=frame.height or image.shape[0],
+            )
+            all_pose_records.extend(records)
+            _update_tracks(tracks, records, frame.width, frame.height)
+            overlay = draw_pose_overlay(
+                image,
+                records,
+                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                tracks=tracks,
+            )
+            overlay_path = overlay_dir / frame.frame_path.name
+            _write_image(overlay_path, overlay)
+            overlay_paths.append(overlay_path)
+    finally:
+        estimator.close()
+
+    poses_csv = pose_path(config.data_dir, clip.clip_id, condition_id)
+    write_pose_records(poses_csv, all_pose_records)
+
+    video_path = overlay_video_path(config.output_dir, clip.clip_id, condition_id)
+    write_video_from_frames(overlay_paths, video_path, fps=config.target_fps)
+
+    return AutoRoiRunResult(
+        clip_id=clip.clip_id,
+        condition_id=condition_id,
+        frames_csv=frames_csv,
+        roi_csv=roi_csv,
+        roi_debug_video=debug_video,
+        poses_csv=poses_csv,
+        overlay_video=video_path,
+        frame_count=len(frames),
+        pose_record_count=len(all_pose_records),
+    )
+
+
+def _records_by_frame(records: list[PoseRecord]) -> dict[int, list[PoseRecord]]:
+    by_frame: dict[int, list[PoseRecord]] = {}
+    for record in records:
+        by_frame.setdefault(record.frame_index, []).append(record)
+    return by_frame
 
 
 def _update_tracks(

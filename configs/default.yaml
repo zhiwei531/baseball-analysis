@@ -89,6 +89,24 @@ conditions:
     preprocessing: []
     postprocess:
       enabled: false
+  body_prior_mask_roi:
+    roi:
+      enabled: true
+      mode: body_prior_mask
+      source_condition: center_prior_roi_smooth
+      confidence_threshold: 0.5
+      padding_ratio: 0.55
+      min_width_ratio: 0.28
+      min_height_ratio: 0.50
+      limb_thickness_ratio: 0.045
+      joint_radius_ratio: 0.035
+      fallback_center_x: 0.5
+      fallback_center_y: 0.5
+      fallback_width_ratio: 0.62
+      fallback_height_ratio: 1.0
+    preprocessing: []
+    postprocess:
+      enabled: false
   baseline_raw_smooth:
     roi:
       enabled: false
@@ -116,6 +134,14 @@ conditions:
       center_y: 0.5
       width_ratio: 0.62
       height_ratio: 1.0
+    preprocessing: []
+    postprocess:
+      enabled: true
+  body_prior_mask_roi_smooth:
+    roi:
+      enabled: true
+      mode: body_prior_mask
+      source_condition: body_prior_mask_roi
     preprocessing: []
     postprocess:
       enabled: true

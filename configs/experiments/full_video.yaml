@@ -26,6 +26,8 @@ experiments:
     - baseline_raw
     - auto_roi_pose_prior
     - center_prior_roi
+    - body_prior_mask_roi
     - baseline_raw_smooth
     - auto_roi_pose_prior_smooth
     - center_prior_roi_smooth
+    - body_prior_mask_roi_smooth

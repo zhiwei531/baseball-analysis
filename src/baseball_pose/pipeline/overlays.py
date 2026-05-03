@@ -82,6 +82,13 @@ def render_pose_overlays(
 
 
 def _preferred_overlay_conditions(condition_ids: list[str]) -> list[str]:
+    body_mask_smoothed = [
+        condition_id
+        for condition_id in condition_ids
+        if condition_id.startswith("body_prior_mask_roi") and condition_id.endswith("_smooth")
+    ]
+    if body_mask_smoothed:
+        return body_mask_smoothed
     center_smoothed = [
         condition_id
         for condition_id in condition_ids
