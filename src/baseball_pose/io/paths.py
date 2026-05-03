@@ -65,3 +65,21 @@ def body_mask_debug_video_path(
     debug_type: str,
 ) -> Path:
     return Path(output_dir) / "body_mask_debug" / f"{clip_id}__{condition_id}__{debug_type}.mp4"
+
+
+def image_proposal_debug_frame_dir(
+    output_dir: str | Path,
+    clip_id: str,
+    condition_id: str,
+    debug_type: str,
+) -> Path:
+    return Path(output_dir) / "image_proposal_debug" / "frames" / clip_id / condition_id / debug_type
+
+
+def image_proposal_debug_video_path(
+    output_dir: str | Path,
+    clip_id: str,
+    condition_id: str,
+    debug_type: str,
+) -> Path:
+    return Path(output_dir) / "image_proposal_debug" / f"{clip_id}__{condition_id}__{debug_type}.mp4"

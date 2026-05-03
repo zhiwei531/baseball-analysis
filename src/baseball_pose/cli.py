@@ -18,6 +18,7 @@ from baseball_pose.pipeline.run_experiment import (
 )
 from baseball_pose.pipeline.features import extract_feature_files
 from baseball_pose.pipeline.figures import make_report_figures
+from baseball_pose.pipeline.image_proposal_debug import render_image_proposal_debug_videos
 from baseball_pose.pipeline.overlays import render_pose_overlays
 from baseball_pose.pipeline.postprocess import smooth_pose_files
 
@@ -45,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
             "make-figures",
             "render-overlays",
             "render-body-mask-debug",
+            "render-image-proposal-debug",
             "summarize-roi-ablation",
         ],
         help="Command to run.",
@@ -261,6 +263,18 @@ def main() -> None:
             print(
                 f"{result.clip_id}/{result.condition_id}: "
                 f"{result.frame_count} body-mask debug frames"
+            )
+            print(f"  proposal: {result.proposal_video}")
+            print(f"  masked: {result.masked_video}")
+        return
+
+    if args.command == "render-image-proposal-debug":
+        clip_ids = args.clip_id if args.clip_id else ["batting_1"]
+        results = render_image_proposal_debug_videos(clip_ids=clip_ids, config=config)
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.condition_id}: "
+                f"{result.frame_count} image-proposal debug frames"
             )
             print(f"  proposal: {result.proposal_video}")
             print(f"  masked: {result.masked_video}")
