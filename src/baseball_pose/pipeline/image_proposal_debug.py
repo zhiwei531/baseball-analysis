@@ -19,6 +19,7 @@ from baseball_pose.preprocessing.image_proposal import (
     create_center_motion_grabcut_proposal,
     draw_image_proposal_overlay,
 )
+from baseball_pose.preprocessing.image_proposal_config import image_proposal_roi_config
 
 
 @dataclass(frozen=True)
@@ -45,21 +46,26 @@ def render_image_proposal_debug_videos(
 ) -> list[ImageProposalDebugResult]:
     cv2 = _require_cv2()
     results: list[ImageProposalDebugResult] = []
-    proposal_config = (
-        config.raw.get("conditions", {})
-        .get("image_center_motion_grabcut_pose", {})
-        .get("roi", {})
-    )
-    center_x = float(proposal_config.get("center_x", center_x))
-    center_width_ratio = float(proposal_config.get("center_width_ratio", center_width_ratio))
-    min_area_ratio = float(proposal_config.get("min_area_ratio", min_area_ratio))
-    grabcut_iterations = int(proposal_config.get("grabcut_iterations", grabcut_iterations))
-    processing_scale = float(proposal_config.get("processing_scale", processing_scale))
-    vertical_body_width_ratio = float(
-        proposal_config.get("vertical_body_width_ratio", vertical_body_width_ratio)
-    )
-
     for clip_id in clip_ids:
+        proposal_config = image_proposal_roi_config(
+            config.raw,
+            clip_id,
+            "image_center_motion_grabcut_pose",
+        )
+        clip_center_x = float(proposal_config.get("center_x", center_x))
+        clip_center_width_ratio = float(
+            proposal_config.get("center_width_ratio", center_width_ratio)
+        )
+        clip_min_area_ratio = float(proposal_config.get("min_area_ratio", min_area_ratio))
+        clip_grabcut_iterations = int(
+            proposal_config.get("grabcut_iterations", grabcut_iterations)
+        )
+        clip_processing_scale = float(
+            proposal_config.get("processing_scale", processing_scale)
+        )
+        clip_vertical_body_width_ratio = float(
+            proposal_config.get("vertical_body_width_ratio", vertical_body_width_ratio)
+        )
         frames_csv = frame_manifest_path(config.data_dir, clip_id, source_condition)
         if not frames_csv.exists():
             continue
@@ -94,10 +100,10 @@ def render_image_proposal_debug_videos(
         previous_image = None
         previous_mask = None
         tracker = ImageProposalTracker(
-            initial_center_x=center_x,
-            initial_width_ratio=center_width_ratio,
-            center_x=center_x,
-            center_width_ratio=center_width_ratio,
+            initial_center_x=clip_center_x,
+            initial_width_ratio=clip_center_width_ratio,
+            center_x=clip_center_x,
+            center_width_ratio=clip_center_width_ratio,
             max_offset=float(proposal_config.get("tracker_max_offset", 0.12)),
             max_center_step=float(proposal_config.get("tracker_max_center_step", 0.015)),
             max_width_step=float(proposal_config.get("tracker_max_width_step", 0.025)),
@@ -116,10 +122,10 @@ def render_image_proposal_debug_videos(
                 background_subtractor=background_subtractor,
                 center_x=tracker.center_x,
                 center_width_ratio=tracker.center_width_ratio,
-                min_area_ratio=min_area_ratio,
-                grabcut_iterations=grabcut_iterations,
-                processing_scale=processing_scale,
-                vertical_body_width_ratio=vertical_body_width_ratio,
+                min_area_ratio=clip_min_area_ratio,
+                grabcut_iterations=clip_grabcut_iterations,
+                processing_scale=clip_processing_scale,
+                vertical_body_width_ratio=clip_vertical_body_width_ratio,
             )
             proposal_path = proposal_dir / frame.frame_path.name.replace(
                 source_condition,

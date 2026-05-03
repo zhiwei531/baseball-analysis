@@ -5,6 +5,7 @@ from baseball_pose.preprocessing.image_proposal import (
     ImageProposalTracker,
     create_center_motion_grabcut_proposal,
 )
+from baseball_pose.preprocessing.image_proposal_config import image_proposal_roi_config
 from baseball_pose.preprocessing.roi import RoiBox
 
 
@@ -135,3 +136,32 @@ def test_image_proposal_tracker_ignores_roi_center_pulled_by_background():
     tracker.update(proposal)
 
     assert tracker.center_x < 0.53
+
+
+def test_image_proposal_roi_config_applies_clip_override():
+    config = {
+        "conditions": {
+            "image_center_motion_grabcut_pose": {
+                "roi": {
+                    "center_x": 0.5,
+                    "center_width_ratio": 0.62,
+                    "tracker_max_offset": 0.12,
+                    "clip_overrides": {
+                        "pitching_2": {
+                            "center_x": 0.42,
+                            "center_width_ratio": 0.76,
+                        }
+                    },
+                }
+            }
+        }
+    }
+
+    batting_config = image_proposal_roi_config(config, "batting_1")
+    pitching_config = image_proposal_roi_config(config, "pitching_2")
+
+    assert "clip_overrides" not in pitching_config
+    assert batting_config["center_x"] == 0.5
+    assert pitching_config["center_x"] == 0.42
+    assert pitching_config["center_width_ratio"] == 0.76
+    assert pitching_config["tracker_max_offset"] == 0.12

@@ -29,6 +29,7 @@ from baseball_pose.preprocessing.image_proposal import (
     apply_image_proposal_mask,
     create_center_motion_grabcut_proposal,
 )
+from baseball_pose.preprocessing.image_proposal_config import image_proposal_roi_config
 from baseball_pose.preprocessing.roi import (
     crop_to_roi,
     estimate_clip_auto_roi,
@@ -636,8 +637,7 @@ def run_image_proposal_roi_clip(
 ) -> ClipRunResult:
     """Run MediaPipe on dynamic crops from the skeleton-free image proposal."""
 
-    condition_config = config.raw["conditions"].get(condition_id, {})
-    roi_config = condition_config.get("roi", {})
+    roi_config = image_proposal_roi_config(config.raw, clip.clip_id, condition_id)
     frame_output_dir = frame_dir(config.data_dir, clip.clip_id, condition_id)
     frames = sample_video_frames(
         video_path=clip.source_path,

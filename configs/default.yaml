@@ -125,6 +125,23 @@ conditions:
       tracker_width_smoothing: 0.45
       tracker_min_width_ratio: 0.56
       tracker_max_width_ratio: 0.72
+      clip_overrides:
+        pitching_1:
+          center_width_ratio: 0.78
+          vertical_body_width_ratio: 0.34
+          tracker_min_width_ratio: 0.72
+          tracker_max_width_ratio: 0.90
+          tracker_max_width_step: 0.04
+        pitching_2:
+          center_x: 0.42
+          center_width_ratio: 0.76
+          vertical_body_width_ratio: 0.32
+          tracker_warmup_frames: 0
+          tracker_max_offset: 0.22
+          tracker_min_width_ratio: 0.70
+          tracker_max_width_ratio: 0.88
+          tracker_max_center_step: 0.025
+          tracker_max_width_step: 0.04
     preprocessing: []
     postprocess:
       enabled: false
