@@ -1286,3 +1286,45 @@ Validation:
 - `python -m pytest tests/test_body_mask.py` passed.
 - Targeted `compileall` passed.
 - Ruff passed on modified body-mask, debug pipeline, path, CLI, and body-mask-test files.
+
+## Iteration 23: Skeleton-Free Image Proposal Debug for Batting 1
+
+Date: 2026-05-03
+
+Goal:
+
+- Avoid using a potentially wrong skeleton as the proposal source.
+- Test a pure image-processing ROI/mask proposal on `batting_1` only for faster iteration.
+
+Implementation:
+
+- Added `render-image-proposal-debug`.
+- Added an image-processing proposal that combines:
+  - center prior,
+  - previous-frame difference,
+  - MOG2 foreground extraction,
+  - GrabCut initialized from image evidence,
+  - connected-component scoring by center distance, area, and vertical extent.
+- Added downsampled processing and `--max-frames` support so debugging is bounded and usable.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_1 --max-frames 180
+```
+
+Outputs:
+
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__proposal_overlay.mp4`
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__masked_frame.mp4`
+
+Validation:
+
+- `python -m pytest tests/test_image_proposal.py` passed.
+- Targeted `compileall` passed.
+- Ruff passed on image-proposal, image-proposal-debug, CLI, path, and image-proposal-test files.
+
+Note:
+
+- This is intentionally not wired into MediaPipe inference yet. The next decision should be based on visual inspection of the proposal overlay and masked-frame videos.
