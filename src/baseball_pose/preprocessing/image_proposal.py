@@ -503,7 +503,16 @@ def _grabcut_refine_center_body(
     refined = cv2.bitwise_and(refined, mask)
     if cv2.countNonZero(refined) < cv2.countNonZero(foreground_seed) * 0.85:
         return mask
-    return _clean_mask(refined)
+    return _clean_refined_body_mask(refined)
+
+
+def _clean_refined_body_mask(mask):
+    cv2 = _require_cv2()
+
+    small_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    body_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 13))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, small_kernel)
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, body_kernel)
 
 
 def _smooth_subject_shape(mask):
