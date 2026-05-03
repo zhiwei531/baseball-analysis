@@ -1328,3 +1328,14 @@ Validation:
 Note:
 
 - This is intentionally not wired into MediaPipe inference yet. The next decision should be based on visual inspection of the proposal overlay and masked-frame videos.
+
+Revision:
+
+- The first image proposal version flickered heavily because it segmented each frame mostly independently.
+- Revised the proposal to:
+  - apply LAB CLAHE and unsharp masking before segmentation,
+  - lower the motion threshold after contrast enhancement,
+  - seed GrabCut from the previous accepted mask,
+  - score connected components by overlap with the previous mask,
+  - blend the current mask with the previous mask and constrain it to current support.
+- Regenerated the `batting_1` 180-frame image proposal debug videos after the stability update.
