@@ -24,6 +24,10 @@ from baseball_pose.io.video import read_frame, sample_video_frames, write_video_
 from baseball_pose.pose.mediapipe_pose import MediaPipePoseEstimator
 from baseball_pose.pose.schema import PoseRecord
 from baseball_pose.preprocessing.body_mask import create_body_prior_masked_crop
+from baseball_pose.preprocessing.image_proposal import (
+    apply_image_proposal_mask,
+    create_center_motion_grabcut_proposal,
+)
 from baseball_pose.preprocessing.roi import (
     crop_to_roi,
     estimate_clip_auto_roi,
@@ -623,6 +627,108 @@ def run_body_prior_mask_roi_clip(
     )
 
 
+def run_image_proposal_roi_clip(
+    clip: ClipMetadata,
+    config: RuntimeConfig,
+    condition_id: str = "image_center_motion_grabcut_pose",
+    max_frames: int | None = None,
+) -> ClipRunResult:
+    """Run MediaPipe on dynamic crops from the skeleton-free image proposal."""
+
+    condition_config = config.raw["conditions"].get(condition_id, {})
+    roi_config = condition_config.get("roi", {})
+    frame_output_dir = frame_dir(config.data_dir, clip.clip_id, condition_id)
+    frames = sample_video_frames(
+        video_path=clip.source_path,
+        clip_id=clip.clip_id,
+        output_dir=frame_output_dir,
+        target_fps=config.target_fps,
+        resize_longest_side=config.resize_longest_side,
+        condition_id=condition_id,
+        max_frames=max_frames if max_frames is not None else config.max_frames_per_clip,
+    )
+    frames_csv = frame_manifest_path(config.data_dir, clip.clip_id, condition_id)
+    write_frame_records(frames_csv, frames)
+
+    estimator = MediaPipePoseEstimator(
+        model_asset_path=config.raw["pose"].get(
+            "model_asset_path",
+            "models/pose_landmarker_lite.task",
+        ),
+        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
+        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
+    )
+    cv2 = _require_cv2()
+    background_subtractor = cv2.createBackgroundSubtractorMOG2(
+        history=80,
+        varThreshold=24,
+        detectShadows=False,
+    )
+    all_pose_records: list[PoseRecord] = []
+    overlay_paths: list[Path] = []
+    tracks: dict[str, list[tuple[int, int]]] = {"left_wrist": [], "right_wrist": []}
+    overlay_dir = overlay_frame_dir(config.output_dir, clip.clip_id, condition_id)
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+    previous_image = None
+    previous_mask = None
+
+    try:
+        for frame in frames:
+            image = read_frame(frame.frame_path)
+            proposal = create_center_motion_grabcut_proposal(
+                image=image,
+                previous_image=previous_image,
+                previous_mask=previous_mask,
+                background_subtractor=background_subtractor,
+                center_x=float(roi_config.get("center_x", 0.5)),
+                center_width_ratio=float(roi_config.get("center_width_ratio", 0.54)),
+                min_area_ratio=float(roi_config.get("min_area_ratio", 0.006)),
+                grabcut_iterations=int(roi_config.get("grabcut_iterations", 1)),
+                processing_scale=float(roi_config.get("processing_scale", 0.45)),
+                vertical_body_width_ratio=float(roi_config.get("vertical_body_width_ratio", 0.22)),
+            )
+            masked_image = apply_image_proposal_mask(image, proposal)
+            crop = crop_to_roi(masked_image, proposal.roi)
+            crop_records = estimator.estimate_frame(crop, frame, condition_id)
+            records = remap_pose_records_to_full_frame(
+                crop_records,
+                roi=proposal.roi,
+                image_width=frame.width or image.shape[1],
+                image_height=frame.height or image.shape[0],
+            )
+            all_pose_records.extend(records)
+            _update_tracks(tracks, records, frame.width, frame.height)
+            overlay = draw_pose_overlay(
+                image,
+                records,
+                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                tracks=tracks,
+            )
+            overlay_path = overlay_dir / frame.frame_path.name
+            _write_image(overlay_path, overlay)
+            overlay_paths.append(overlay_path)
+            previous_image = image
+            previous_mask = proposal.mask
+    finally:
+        estimator.close()
+
+    poses_csv = pose_path(config.data_dir, clip.clip_id, condition_id)
+    write_pose_records(poses_csv, all_pose_records)
+
+    video_path = overlay_video_path(config.output_dir, clip.clip_id, condition_id)
+    write_video_from_frames(overlay_paths, video_path, fps=config.target_fps)
+
+    return ClipRunResult(
+        clip_id=clip.clip_id,
+        condition_id=condition_id,
+        frames_csv=frames_csv,
+        poses_csv=poses_csv,
+        overlay_video=video_path,
+        frame_count=len(frames),
+        pose_record_count=len(all_pose_records),
+    )
+
+
 def _records_by_frame(records: list[PoseRecord]) -> dict[int, list[PoseRecord]]:
     by_frame: dict[int, list[PoseRecord]] = {}
     for record in records:
@@ -658,3 +764,14 @@ def _write_image(path: Path, image) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not cv2.imwrite(str(path), image):
         raise RuntimeError(f"Could not write image: {path}")
+
+
+def _require_cv2():
+    try:
+        import cv2
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "OpenCV is required for image proposal ROI inference. Install dependencies first."
+        ) from exc
+
+    return cv2

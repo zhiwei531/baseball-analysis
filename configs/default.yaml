@@ -107,6 +107,19 @@ conditions:
     preprocessing: []
     postprocess:
       enabled: false
+  image_center_motion_grabcut_pose:
+    roi:
+      enabled: true
+      mode: image_center_motion_grabcut
+      center_x: 0.5
+      center_width_ratio: 0.54
+      min_area_ratio: 0.006
+      grabcut_iterations: 1
+      processing_scale: 0.45
+      vertical_body_width_ratio: 0.22
+    preprocessing: []
+    postprocess:
+      enabled: false
   baseline_raw_smooth:
     roi:
       enabled: false
