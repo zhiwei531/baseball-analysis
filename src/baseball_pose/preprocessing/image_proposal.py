@@ -22,9 +22,9 @@ class ImageProposalTracker:
 
     initial_center_x: float = 0.5
     center_x: float = 0.5
-    max_offset: float = 0.18
-    max_step: float = 0.02
-    smoothing: float = 0.45
+    max_offset: float = 0.10
+    max_step: float = 0.012
+    smoothing: float = 0.35
     previous_area_ratio: float | None = None
 
     def update(self, proposal: ImageProposal) -> None:
