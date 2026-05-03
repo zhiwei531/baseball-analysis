@@ -1581,3 +1581,53 @@ Remaining limitation:
 
 - The mask still includes some background around the hitter because the proposal is intentionally broad enough to preserve limbs and bat motion.
 - Wrist trails in the overlay remain visually cluttered and should be handled separately from ROI tracking.
+
+## Iteration 30: Full Batting 1 Image-Proposal Smoothing
+
+Date: 2026-05-03
+
+Goal:
+
+- Use the effective image-processing ROI that avoids wrong-person detection.
+- Rerun the full `batting_1` result with smoothing and regenerate report outputs.
+
+Commands:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses --clip-id batting_1 --condition image_center_motion_grabcut_pose
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features --clip-id batting_1 --condition image_center_motion_grabcut_pose --condition image_center_motion_grabcut_pose_smooth
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures --clip-id batting_1 --condition image_center_motion_grabcut_pose_smooth
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-overlays --clip-id batting_1 --condition image_center_motion_grabcut_pose_smooth
+```
+
+Outputs:
+
+- `data_full/processed/poses/batting_1/image_center_motion_grabcut_pose_smooth.csv`
+- `data_full/processed/features/batting_1/image_center_motion_grabcut_pose_smooth.csv`
+- `outputs_full/figures/batting_1__wrist_trajectories.png`
+- `outputs_full/figures/batting_1__posture_analysis.png`
+- `outputs_full/overlays/batting_1__image_center_motion_grabcut_pose_smooth.mp4`
+
+Metric changes:
+
+| metric | image_center_motion_grabcut_pose | image_center_motion_grabcut_pose_smooth |
+| --- | ---: | ---: |
+| keypoint completeness | 0.8816 | 0.9303 |
+| upper-body completeness | 0.8816 | 0.9328 |
+| left wrist jitter | 0.0308 | 0.0032 |
+| right wrist jitter | 0.0162 | 0.0018 |
+| left wrist smoothness | 0.0531 | 0.0012 |
+| right wrist smoothness | 0.0286 | 0.0007 |
+
+Validation:
+
+- Full `batting_1` smooth pose CSV contains 12961 pose records.
+- Full `batting_1` feature CSV contains 997 rows.
+- Smoothed overlay was rendered for all 997 frames.
