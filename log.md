@@ -1420,3 +1420,50 @@ Observation:
 
 - The mask is narrower and less rectangular than Iteration 24.
 - The left-lower teammate is still partially retained in sampled frames around 60 and 100. Pure image segmentation struggles here because the adjacent player wears similar colors and overlaps the hitter's lower-body region. The next likely step is a stronger project-specific subject prior, such as a pose-assisted exclusion zone, manual negative mask, or a person detector / tracker, rather than only tuning OpenCV contrast and morphology.
+
+## Iteration 26: MediaPipe on Image-Proposal Crops
+
+Date: 2026-05-03
+
+Goal:
+
+- Test whether the current skeleton-free image proposal is useful when actually fed into MediaPipe, rather than only inspecting proposal masks.
+- Run only `batting_1` for fast visual feedback.
+
+Implementation:
+
+- Added CLI command:
+  - `run-image-proposal-roi`
+- Added condition:
+  - `image_center_motion_grabcut_pose`
+- The command samples frames, builds the current per-frame image proposal, applies the proposal mask, crops to the proposal ROI, runs MediaPipe on that masked crop, remaps landmarks back to full-frame coordinates, and renders an overlay video.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-image-proposal-roi --clip-id batting_1 --max-frames 180
+```
+
+Outputs:
+
+- `data_full/interim/frames/batting_1/image_center_motion_grabcut_pose.csv`
+- `data_full/processed/poses/batting_1/image_center_motion_grabcut_pose.csv`
+- `outputs_full/overlays/batting_1__image_center_motion_grabcut_pose.mp4`
+
+Validation:
+
+- Targeted `compileall` passed for the modified pipeline and CLI files.
+- Ruff passed for the modified pipeline and CLI files.
+- The 180-frame run produced 2340 pose records.
+
+Runtime note:
+
+- The first run failed under the sandbox with the recurring MediaPipe Tasks macOS OpenGL initialization error:
+  - `Could not create an NSOpenGLPixelFormat`
+- Rerunning the same command with full local permissions succeeded.
+
+Observation:
+
+- Sampled overlay frames around 60, 100, and 140 show the detected skeleton mostly locked onto the central hitter's torso and legs.
+- The wrist/upper-body track is still visually cluttered, partly because the overlay draws accumulated wrist trails and partly because bat/hand regions remain difficult.
