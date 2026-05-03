@@ -126,6 +126,11 @@ conditions:
       tracker_min_width_ratio: 0.56
       tracker_max_width_ratio: 0.72
       clip_overrides:
+        batting_1:
+          lower_body_left_width_ratio: 0.22
+          lower_body_right_width_ratio: 0.36
+        batting_2:
+          lower_body_width_ratio: 0.30
         pitching_1:
           center_width_ratio: 0.78
           vertical_body_width_ratio: 0.34
