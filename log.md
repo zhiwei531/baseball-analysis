@@ -1901,3 +1901,93 @@ Validation:
 - Directly importing `tests/test_image_proposal.py` and running every `test_*` function passed.
 - `python -m compileall src tests` passed after removing macOS `._*` metadata files.
 - The unprivileged MediaPipe run still hits the macOS OpenGL initialization issue; elevated execution completed the full `pitching_1` and `pitching_2` pose rerun.
+
+## Iteration 35: Batting Lower-Leg Envelope Patch
+
+Date: 2026-05-04
+
+Goal:
+
+- Fix remaining `batting_2` lower-leg under-coverage.
+- Fix `batting_1` right-side shin/foot clipping without increasing the left-lower proposal area, because that side is close to background people.
+
+Implementation:
+
+- Added asymmetric lower-body envelope controls:
+  - `lower_body_left_width_ratio`
+  - `lower_body_right_width_ratio`
+- Passed those controls through both:
+  - `run-image-proposal-roi`
+  - `render-image-proposal-debug`
+- Added batting clip overrides:
+  - `batting_1.lower_body_left_width_ratio: 0.22`
+  - `batting_1.lower_body_right_width_ratio: 0.36`
+  - `batting_2.lower_body_width_ratio: 0.30`
+- Left pitching overrides unchanged.
+
+Commands:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_1 --clip-id batting_2 --max-frames 560
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_1 --clip-id batting_2
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-image-proposal-roi --clip-id batting_1 --clip-id batting_2
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses --clip-id batting_1 --clip-id batting_2 --condition image_center_motion_grabcut_pose
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features --clip-id batting_1 --clip-id batting_2 --condition image_center_motion_grabcut_pose --condition image_center_motion_grabcut_pose_smooth
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures --clip-id batting_1 --clip-id batting_2 --condition image_center_motion_grabcut_pose_smooth
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-overlays --clip-id batting_1 --clip-id batting_2 --condition image_center_motion_grabcut_pose_smooth
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml summarize-roi-ablation --condition image_center_motion_grabcut_pose --condition image_center_motion_grabcut_pose_smooth
+```
+
+Outputs regenerated:
+
+- `outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__proposal_overlay.mp4`
+- `outputs_full/image_proposal_debug/batting_2__image_center_motion_grabcut__proposal_overlay.mp4`
+- `data_full/processed/features/batting_1/image_center_motion_grabcut_pose.csv`
+- `data_full/processed/features/batting_1/image_center_motion_grabcut_pose_smooth.csv`
+- `data_full/processed/features/batting_2/image_center_motion_grabcut_pose.csv`
+- `data_full/processed/features/batting_2/image_center_motion_grabcut_pose_smooth.csv`
+- `outputs_full/figures/batting_1__wrist_trajectories.png`
+- `outputs_full/figures/batting_1__posture_analysis.png`
+- `outputs_full/figures/batting_2__wrist_trajectories.png`
+- `outputs_full/figures/batting_2__posture_analysis.png`
+- `outputs_full/overlays/batting_1__image_center_motion_grabcut_pose_smooth.mp4`
+- `outputs_full/overlays/batting_2__image_center_motion_grabcut_pose_smooth.mp4`
+
+Metric snapshot after batting lower-leg patch:
+
+| clip_id | metric | value |
+| --- | --- | ---: |
+| `batting_1` | smooth keypoint completeness | 0.9367 |
+| `batting_1` | left wrist jitter | 0.0035 |
+| `batting_1` | right wrist jitter | 0.0017 |
+| `batting_2` | smooth keypoint completeness | 0.8752 |
+| `batting_2` | left wrist jitter | 0.0053 |
+| `batting_2` | right wrist jitter | 0.0051 |
+
+Validation:
+
+- Short 560-frame intermediate debug run showed `batting_1` frame 500 preserving the right shin/foot while not widening the left-lower side through the new asymmetric setting.
+- Short 560-frame intermediate debug run showed `batting_2` frame 300 preserving the lower-leg endpoints with modest symmetric lower-body widening.
+- Full `batting_1` and `batting_2` intermediate proposal videos were regenerated.
+- Full `batting_1` and `batting_2` pose, smoothed pose, feature CSV, posture figure, wrist trajectory figure, and smoothed overlay outputs were regenerated.
+- Smoothed overlay spot checks:
+  - `batting_1` frame 500 keeps the right shin/foot.
+  - `batting_2` frame 300 keeps the lower-leg endpoints.
+- Directly importing `tests/test_image_proposal.py` and running every `test_*` function passed.
+- `python -m compileall src tests` passed after removing macOS `._*` metadata files.
+- The unprivileged MediaPipe run still hits the macOS OpenGL initialization issue; elevated execution completed the full `batting_1` and `batting_2` pose rerun.

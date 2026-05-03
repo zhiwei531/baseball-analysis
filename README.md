@@ -20,7 +20,8 @@ raw video
 The image proposal is intentionally project-specific. It uses center priors, contrast enhancement, frame difference, MOG2 foreground, GrabCut, connected-component scoring, optical-flow center tracking, and temporal mask stabilization. For the current videos, clip-specific hardcoded overrides are enabled when a shared prior is too strict:
 
 ```text
-batting_1 / batting_2: shared image proposal prior
+batting_1: shared prior plus right-only lower-body widening
+batting_2: shared prior plus modest symmetric lower-body widening
 pitching_1: wider action envelope plus wider lower-body envelope
 pitching_2: left-shifted start prior plus wider lower-body envelope
 ```
@@ -183,7 +184,7 @@ image_center_motion_grabcut_pose CSV
 
 The center-prior and body-prior-mask ROI conditions are retained as ablation history. The center-prior ROI assumes the athlete is centered in the raw videos; the body-prior mask uses an earlier smoothed skeleton to black out pixels outside the subject. These were useful stepping stones, but the current final path avoids using a potentially wrong skeleton as the proposal source.
 
-For debugging proposals without trusting any skeleton, `render-image-proposal-debug` writes the pure OpenCV proposal videos. This proposal is wired into `run-image-proposal-roi`; the current best full-video outputs for all four clips are `image_center_motion_grabcut_pose_smooth`. The image proposal supports clip-specific hardcoded overrides under `conditions.image_center_motion_grabcut_pose.roi.clip_overrides`; `pitching_1` uses a wider action envelope for the pitching arm and leg-lift window, while `pitching_2` starts with a left-shifted, wider prior because the pitcher is not centered at the beginning of the clip. Pitching clips also use `lower_body_width_ratio` to widen the lower-body envelope separately from the upper body so extended legs and feet are not cropped.
+For debugging proposals without trusting any skeleton, `render-image-proposal-debug` writes the pure OpenCV proposal videos. This proposal is wired into `run-image-proposal-roi`; the current best full-video outputs for all four clips are `image_center_motion_grabcut_pose_smooth`. The image proposal supports clip-specific hardcoded overrides under `conditions.image_center_motion_grabcut_pose.roi.clip_overrides`; `pitching_1` uses a wider action envelope for the pitching arm and leg-lift window, while `pitching_2` starts with a left-shifted, wider prior because the pitcher is not centered at the beginning of the clip. Pitching clips use `lower_body_width_ratio` to widen the lower-body envelope separately from the upper body so extended legs and feet are not cropped. Batting clips can also override the lower-body envelope: `batting_1` widens only the right lower side to preserve the right shin/foot without admitting more left-lower background people, while `batting_2` uses a modest symmetric lower-body widening.
 
 The feature CSV includes report-oriented 2D posture proxies that can be computed from the current skeleton-only data:
 
