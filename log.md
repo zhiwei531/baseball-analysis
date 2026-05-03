@@ -1467,3 +1467,30 @@ Observation:
 
 - Sampled overlay frames around 60, 100, and 140 show the detected skeleton mostly locked onto the central hitter's torso and legs.
 - The wrist/upper-body track is still visually cluttered, partly because the overlay draws accumulated wrist trails and partly because bat/hand regions remain difficult.
+
+## Iteration 27: Full Batting 1 Image-Proposal Pose Run
+
+Date: 2026-05-03
+
+Goal:
+
+- Run the image-proposal MediaPipe condition on the full `batting_1` clip after the 180-frame smoke test looked usable.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-image-proposal-roi --clip-id batting_1
+```
+
+Outputs:
+
+- `data_full/interim/frames/batting_1/image_center_motion_grabcut_pose.csv`
+- `data_full/processed/poses/batting_1/image_center_motion_grabcut_pose.csv`
+- `outputs_full/overlays/batting_1__image_center_motion_grabcut_pose.mp4`
+
+Validation:
+
+- The full `batting_1` run completed with 997 frames.
+- The pose CSV contains 12961 pose records.
+- The command required full local permissions because MediaPipe Tasks still needs macOS OpenGL context creation.
