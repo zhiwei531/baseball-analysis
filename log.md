@@ -1694,3 +1694,31 @@ Validation:
 - Directly importing `tests/test_image_proposal.py` and `tests/test_smoothing.py` and running every `test_*` function passed.
 - `pytest tests/test_image_proposal.py tests/test_smoothing.py` could not be used in this environment because pytest segfaulted during its capture setup before collecting tests.
 - The first unprivileged MediaPipe run hit the macOS OpenGL initialization issue; rerunning with approved elevated execution completed successfully.
+
+## Iteration 32: Full Image-Proposal Intermediate Videos
+
+Date: 2026-05-03
+
+Goal:
+
+- Generate the intermediate image-proposal debug videos for the three clips added in Iteration 31.
+- Provide visual audit outputs for the irregular ROI proposal before MediaPipe pose estimation.
+
+Command:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-image-proposal-debug --clip-id batting_2 --clip-id pitching_1 --clip-id pitching_2
+```
+
+Outputs:
+
+| clip_id | debug frames | proposal overlay | masked frame |
+| --- | ---: | --- | --- |
+| `batting_2` | 758 | `outputs_full/image_proposal_debug/batting_2__image_center_motion_grabcut__proposal_overlay.mp4` | `outputs_full/image_proposal_debug/batting_2__image_center_motion_grabcut__masked_frame.mp4` |
+| `pitching_1` | 624 | `outputs_full/image_proposal_debug/pitching_1__image_center_motion_grabcut__proposal_overlay.mp4` | `outputs_full/image_proposal_debug/pitching_1__image_center_motion_grabcut__masked_frame.mp4` |
+| `pitching_2` | 424 | `outputs_full/image_proposal_debug/pitching_2__image_center_motion_grabcut__proposal_overlay.mp4` | `outputs_full/image_proposal_debug/pitching_2__image_center_motion_grabcut__masked_frame.mp4` |
+
+Validation:
+
+- All six intermediate videos were written and verified as non-empty files.
