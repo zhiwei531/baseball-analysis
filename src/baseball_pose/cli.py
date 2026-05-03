@@ -7,6 +7,7 @@ import argparse
 from baseball_pose.config import load_config
 from baseball_pose.evaluation.roi_ablation import summarize_roi_ablation
 from baseball_pose.io.metadata import load_clips
+from baseball_pose.pipeline.body_mask_debug import render_body_mask_debug_videos
 from baseball_pose.pipeline.run_experiment import (
     run_auto_roi_experiment,
     run_baseline_experiment,
@@ -43,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
             "extract-features",
             "make-figures",
             "render-overlays",
+            "render-body-mask-debug",
             "summarize-roi-ablation",
         ],
         help="Command to run.",
@@ -246,6 +248,22 @@ def main() -> None:
                 f"{result.frame_count} overlay frames"
             )
             print(f"  overlay: {result.overlay_video}")
+        return
+
+    if args.command == "render-body-mask-debug":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = render_body_mask_debug_videos(
+            clip_ids=clip_ids,
+            config=config,
+            conditions=args.condition,
+        )
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.condition_id}: "
+                f"{result.frame_count} body-mask debug frames"
+            )
+            print(f"  proposal: {result.proposal_video}")
+            print(f"  masked: {result.masked_video}")
         return
 
     if args.command == "summarize-roi-ablation":

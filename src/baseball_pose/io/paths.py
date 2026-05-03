@@ -47,3 +47,21 @@ def auto_roi_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path
 
 def roi_debug_video_path(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
     return Path(output_dir) / "roi_debug" / f"{clip_id}__{condition_id}.mp4"
+
+
+def body_mask_debug_frame_dir(
+    output_dir: str | Path,
+    clip_id: str,
+    condition_id: str,
+    debug_type: str,
+) -> Path:
+    return Path(output_dir) / "body_mask_debug" / "frames" / clip_id / condition_id / debug_type
+
+
+def body_mask_debug_video_path(
+    output_dir: str | Path,
+    clip_id: str,
+    condition_id: str,
+    debug_type: str,
+) -> Path:
+    return Path(output_dir) / "body_mask_debug" / f"{clip_id}__{condition_id}__{debug_type}.mp4"

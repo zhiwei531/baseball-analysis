@@ -13,6 +13,7 @@ class MaskedBodyCrop:
     image: object
     roi: RoiBox
     prior_joint_count: int
+    mask: object | None = None
 
 
 def create_body_prior_masked_crop(
@@ -35,7 +36,7 @@ def create_body_prior_masked_crop(
     if len(points) < 4:
         roi = fallback_roi
         crop = crop_to_roi(image, roi)
-        return MaskedBodyCrop(image=crop, roi=roi, prior_joint_count=len(points))
+        return MaskedBodyCrop(image=crop, roi=roi, prior_joint_count=len(points), mask=None)
 
     roi = _body_roi_from_points(
         points,
@@ -53,7 +54,7 @@ def create_body_prior_masked_crop(
         if x0 <= x <= x0 + width and y0 <= y <= y0 + height
     }
     if len(crop_points) < 4:
-        return MaskedBodyCrop(image=crop, roi=roi, prior_joint_count=len(points))
+        return MaskedBodyCrop(image=crop, roi=roi, prior_joint_count=len(points), mask=None)
 
     mask = _body_mask(
         crop.shape[:2],
@@ -62,7 +63,40 @@ def create_body_prior_masked_crop(
         joint_radius=max(8, round(min(width, height) * joint_radius_ratio)),
     )
     masked = cv2.bitwise_and(crop, crop, mask=mask)
-    return MaskedBodyCrop(image=masked, roi=roi, prior_joint_count=len(points))
+    return MaskedBodyCrop(image=masked, roi=roi, prior_joint_count=len(points), mask=mask)
+
+
+def draw_body_prior_debug_overlay(image, masked_crop: MaskedBodyCrop):
+    """Draw the irregular body mask and dynamic ROI on the original frame."""
+
+    cv2 = _require_cv2()
+    output = image.copy()
+    x, y, width, height = masked_crop.roi.as_int_tuple()
+    if masked_crop.mask is not None:
+        mask_color = _zeros_color(output.shape[0], output.shape[1])
+        mask_color[y : y + height, x : x + width, 1] = masked_crop.mask
+        output = cv2.addWeighted(output, 1.0, mask_color, 0.45, 0)
+    cv2.rectangle(output, (x, y), (x + width, y + height), (40, 40, 255), 2)
+    cv2.putText(
+        output,
+        f"prior joints: {masked_crop.prior_joint_count}",
+        (x + 8, max(24, y + 24)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (40, 40, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    return output
+
+
+def paste_masked_crop_on_full_frame(image, masked_crop: MaskedBodyCrop):
+    """Return a full-frame black canvas containing the masked body crop."""
+
+    output = _zeros_color(image.shape[0], image.shape[1])
+    x, y, width, height = masked_crop.roi.as_int_tuple()
+    output[y : y + height, x : x + width] = masked_crop.image
+    return output
 
 
 def _confident_points(
@@ -143,6 +177,12 @@ def _zeros_mask(height: int, width: int):
     import numpy as np
 
     return np.zeros((height, width), dtype=np.uint8)
+
+
+def _zeros_color(height: int, width: int):
+    import numpy as np
+
+    return np.zeros((height, width, 3), dtype=np.uint8)
 
 
 def _as_int32_array(points: list[tuple[int, int]]):
