@@ -14,6 +14,7 @@ from baseball_pose.io.paths import (
 )
 from baseball_pose.io.video import read_frame, write_video_from_frames
 from baseball_pose.preprocessing.image_proposal import (
+    ImageProposalTracker,
     apply_image_proposal_mask,
     create_center_motion_grabcut_proposal,
     draw_image_proposal_overlay,
@@ -39,6 +40,7 @@ def render_image_proposal_debug_videos(
     min_area_ratio: float = 0.006,
     grabcut_iterations: int = 1,
     processing_scale: float = 0.45,
+    vertical_body_width_ratio: float = 0.22,
     max_frames: int | None = None,
 ) -> list[ImageProposalDebugResult]:
     cv2 = _require_cv2()
@@ -78,6 +80,7 @@ def render_image_proposal_debug_videos(
 
         previous_image = None
         previous_mask = None
+        tracker = ImageProposalTracker(initial_center_x=center_x, center_x=center_x)
         for frame in frames:
             image = read_frame(frame.frame_path)
             proposal = create_center_motion_grabcut_proposal(
@@ -85,11 +88,12 @@ def render_image_proposal_debug_videos(
                 previous_image=previous_image,
                 previous_mask=previous_mask,
                 background_subtractor=background_subtractor,
-                center_x=center_x,
+                center_x=tracker.center_x,
                 center_width_ratio=center_width_ratio,
                 min_area_ratio=min_area_ratio,
                 grabcut_iterations=grabcut_iterations,
                 processing_scale=processing_scale,
+                vertical_body_width_ratio=vertical_body_width_ratio,
             )
             proposal_path = proposal_dir / frame.frame_path.name.replace(
                 source_condition,
@@ -103,6 +107,7 @@ def render_image_proposal_debug_videos(
             _write_image(masked_path, apply_image_proposal_mask(image, proposal))
             proposal_paths.append(proposal_path)
             masked_paths.append(masked_path)
+            tracker.update(proposal)
             previous_image = image
             previous_mask = proposal.mask
 

@@ -198,11 +198,18 @@ def draw_image_proposal_overlay(image, proposal: ImageProposal):
     overlay = cv2.addWeighted(overlay, 1.0, color_mask, 0.45, 0)
     contours, _ = cv2.findContours(proposal.mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(overlay, contours, -1, (0, 255, 255), 2, cv2.LINE_AA)
+    center_px = round(image.shape[1] * proposal.center_x)
+    band_width = round(image.shape[1] * proposal.center_width_ratio)
+    band_left = max(0, center_px - band_width // 2)
+    band_right = min(image.shape[1] - 1, center_px + band_width // 2)
+    cv2.line(overlay, (center_px, 0), (center_px, image.shape[0] - 1), (255, 255, 0), 2, cv2.LINE_AA)
+    cv2.line(overlay, (band_left, 0), (band_left, image.shape[0] - 1), (255, 180, 0), 1, cv2.LINE_AA)
+    cv2.line(overlay, (band_right, 0), (band_right, image.shape[0] - 1), (255, 180, 0), 1, cv2.LINE_AA)
     x, y, width, height = proposal.roi.as_int_tuple()
     cv2.rectangle(overlay, (x, y), (x + width, y + height), (40, 40, 255), 2)
     cv2.putText(
         overlay,
-        f"image proposal components: {proposal.candidate_count}",
+        f"image proposal components: {proposal.candidate_count} center_x={proposal.center_x:.3f}",
         (x + 8, max(24, y + 24)),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
