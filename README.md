@@ -140,7 +140,7 @@ XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
 XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
-.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses --clip-id batting_1 --condition image_center_motion_grabcut_pose
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses --condition image_center_motion_grabcut_pose
 ```
 
 Full-video outputs are written under:
@@ -160,17 +160,17 @@ outputs_full/figures/<clip_id>__posture_analysis.png
 outputs_full/overlays/<clip_id>__<condition_id>_smooth.mp4
 outputs_full/body_mask_debug/<clip_id>__body_prior_mask_roi__proposal_overlay.mp4
 outputs_full/body_mask_debug/<clip_id>__body_prior_mask_roi__masked_frame.mp4
-outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__proposal_overlay.mp4
-outputs_full/image_proposal_debug/batting_1__image_center_motion_grabcut__masked_frame.mp4
-data_full/processed/poses/batting_1/image_center_motion_grabcut_pose.csv
-data_full/processed/poses/batting_1/image_center_motion_grabcut_pose_smooth.csv
-outputs_full/overlays/batting_1__image_center_motion_grabcut_pose_smooth.mp4
+outputs_full/image_proposal_debug/<clip_id>__image_center_motion_grabcut__proposal_overlay.mp4
+outputs_full/image_proposal_debug/<clip_id>__image_center_motion_grabcut__masked_frame.mp4
+data_full/processed/poses/<clip_id>/image_center_motion_grabcut_pose.csv
+data_full/processed/poses/<clip_id>/image_center_motion_grabcut_pose_smooth.csv
+outputs_full/overlays/<clip_id>__image_center_motion_grabcut_pose_smooth.mp4
 ```
 
 The current optimization path prioritizes the best readable output over baseline comparison:
 
 ```text
-body_prior_mask_roi pose CSV
+image_center_motion_grabcut_pose CSV
   -> torso-continuity gate
   -> short-gap interpolation
   -> median filter
@@ -181,7 +181,7 @@ body_prior_mask_roi pose CSV
 
 The center-prior ROI is a hard project-specific assumption: the athlete is centered in the raw videos, so MediaPipe is run only on the central crop (`width_ratio: 0.62`, full height by default). The body-prior mask is stricter: it uses `center_prior_roi_smooth` to draw a per-frame skeleton-shaped mask, blacking out pixels outside the subject's torso/limb proposal before running MediaPipe again. Default report figures and overlay rendering prefer `body_prior_mask_roi_smooth` when it exists. Raw and baseline conditions can still be plotted explicitly with repeated `--condition` arguments.
 
-For debugging proposals without trusting any skeleton, `render-image-proposal-debug` creates a pure OpenCV proposal from center prior, contrast enhancement, frame difference, MOG2 foreground, GrabCut, connected-component scoring, optical-flow center tracking, and temporal mask stabilization. This proposal is now wired into `run-image-proposal-roi` for `batting_1`; the current best full-video `batting_1` output is `image_center_motion_grabcut_pose_smooth`.
+For debugging proposals without trusting any skeleton, `render-image-proposal-debug` creates a pure OpenCV proposal from center prior, contrast enhancement, frame difference, MOG2 foreground, GrabCut, connected-component scoring, optical-flow center tracking, and temporal mask stabilization. This proposal is wired into `run-image-proposal-roi`; the current best full-video outputs for all four clips are `image_center_motion_grabcut_pose_smooth`.
 
 The feature CSV includes report-oriented 2D posture proxies that can be computed from the current skeleton-only data:
 

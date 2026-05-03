@@ -1631,3 +1631,66 @@ Validation:
 - Full `batting_1` smooth pose CSV contains 12961 pose records.
 - Full `batting_1` feature CSV contains 997 rows.
 - Smoothed overlay was rendered for all 997 frames.
+
+## Iteration 31: Full Image-Proposal Smoothing for Remaining Clips
+
+Date: 2026-05-03
+
+Goal:
+
+- Run the effective skeleton-independent image proposal ROI on the other three full videos.
+- Generate the same smooth pose CSVs, feature CSVs, posture figures, and smoothed overlays already produced for `batting_1`.
+
+Commands:
+
+```bash
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-image-proposal-roi --clip-id batting_2 --clip-id pitching_1 --clip-id pitching_2
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml smooth-poses --clip-id batting_2 --clip-id pitching_1 --clip-id pitching_2 --condition image_center_motion_grabcut_pose
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml extract-features --clip-id batting_2 --clip-id pitching_1 --clip-id pitching_2 --condition image_center_motion_grabcut_pose --condition image_center_motion_grabcut_pose_smooth
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml make-figures --clip-id batting_2 --clip-id pitching_1 --clip-id pitching_2 --condition image_center_motion_grabcut_pose_smooth
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml render-overlays --clip-id batting_2 --clip-id pitching_1 --clip-id pitching_2 --condition image_center_motion_grabcut_pose_smooth
+
+MPLCONFIGDIR=/tmp/baseball_mpl_cache XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml summarize-roi-ablation --condition image_center_motion_grabcut_pose --condition image_center_motion_grabcut_pose_smooth
+```
+
+Outputs:
+
+| clip_id | frames | raw pose records | smooth pose records | smooth overlay |
+| --- | ---: | ---: | ---: | --- |
+| `batting_2` | 758 | 9854 | 9854 | `outputs_full/overlays/batting_2__image_center_motion_grabcut_pose_smooth.mp4` |
+| `pitching_1` | 624 | 8112 | 8112 | `outputs_full/overlays/pitching_1__image_center_motion_grabcut_pose_smooth.mp4` |
+| `pitching_2` | 424 | 5512 | 5512 | `outputs_full/overlays/pitching_2__image_center_motion_grabcut_pose_smooth.mp4` |
+
+Metric changes:
+
+| clip_id | metric | raw image proposal | smooth image proposal |
+| --- | --- | ---: | ---: |
+| `batting_2` | keypoint completeness | 0.7068 | 0.8784 |
+| `batting_2` | left wrist jitter | 0.0344 | 0.0071 |
+| `batting_2` | right wrist jitter | 0.0283 | 0.0061 |
+| `pitching_1` | keypoint completeness | 0.9418 | 0.9977 |
+| `pitching_1` | left wrist jitter | 0.0181 | 0.0034 |
+| `pitching_1` | right wrist jitter | 0.0219 | 0.0043 |
+| `pitching_2` | keypoint completeness | 0.5655 | 0.8042 |
+| `pitching_2` | left wrist jitter | 0.0220 | 0.0049 |
+| `pitching_2` | right wrist jitter | 0.0259 | 0.0063 |
+
+Validation:
+
+- `batting_2`, `pitching_1`, and `pitching_2` raw image-proposal pose inference completed on full videos.
+- Smooth pose CSVs, feature CSVs, wrist trajectory figures, posture analysis figures, and smooth overlays were regenerated for the three clips.
+- ROI ablation summary was regenerated at `data_full/processed/metrics/roi_ablation_summary.csv`.
+- `python -m compileall src tests` passed.
+- Directly importing `tests/test_image_proposal.py` and `tests/test_smoothing.py` and running every `test_*` function passed.
+- `pytest tests/test_image_proposal.py tests/test_smoothing.py` could not be used in this environment because pytest segfaulted during its capture setup before collecting tests.
+- The first unprivileged MediaPipe run hit the macOS OpenGL initialization issue; rerunning with approved elevated execution completed successfully.
