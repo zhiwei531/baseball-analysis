@@ -93,6 +93,7 @@ def test_image_proposal_tracker_follows_gradual_right_shift():
             roi=RoiBox(x - 20, 0, 40, 120),
             candidate_count=1,
             center_x=tracker.center_x,
+            subject_center_x=center,
         )
         tracker.update(proposal)
 
@@ -106,8 +107,31 @@ def test_image_proposal_tracker_follows_gradual_right_shift():
             roi=RoiBox(160, 0, 40, 120),
             candidate_count=1,
             center_x=tracker.center_x,
+            subject_center_x=0.91,
         )
     )
 
     assert tracker.center_x < 0.63
     assert tracker.center_width_ratio >= 0.56
+
+
+def test_image_proposal_tracker_ignores_roi_center_pulled_by_background():
+    tracker = ImageProposalTracker(
+        max_center_step=0.04,
+        center_smoothing=1.0,
+        warmup_frames=0,
+    )
+    mask = np.zeros((120, 220), dtype=np.uint8)
+    mask[20:110, 85:115] = 255
+    mask[0:120, 120:210] = 255
+
+    proposal = ImageProposal(
+        mask=mask,
+        roi=RoiBox(85, 0, 125, 120),
+        candidate_count=1,
+        center_x=0.5,
+        subject_center_x=0.5,
+    )
+    tracker.update(proposal)
+
+    assert tracker.center_x < 0.53

@@ -14,6 +14,7 @@ class ImageProposal:
     candidate_count: int
     center_x: float = 0.5
     center_width_ratio: float = 0.54
+    subject_center_x: float | None = None
 
 
 @dataclass
@@ -43,7 +44,11 @@ class ImageProposalTracker:
         area_ratio = cv2.countNonZero(proposal.mask) / max(width * height, 1)
         if area_ratio <= 0:
             return
-        measured_center = _proposal_roi_center_x(proposal.roi, width)
+        measured_center = (
+            proposal.subject_center_x
+            if proposal.subject_center_x is not None
+            else _estimate_subject_core_center_x(proposal.mask, self.center_x)
+        )
         measured_width_ratio = _proposal_search_width_ratio(
             proposal.roi.width / max(width, 1),
             min_width_ratio=self.min_width_ratio,
@@ -56,8 +61,7 @@ class ImageProposalTracker:
             self.frame_count += 1
             self.previous_area_ratio = area_ratio
             if self.frame_count == self.warmup_frames:
-                self.center_x = _median(self.warmup_center_samples)
-                self.center_width_ratio = _median(self.warmup_width_samples)
+                self._move_toward(_median(self.warmup_center_samples), _median(self.warmup_width_samples))
             return
 
         if self.previous_area_ratio is not None:
@@ -65,6 +69,11 @@ class ImageProposalTracker:
             if area_change > 2.8 or area_change < 0.35:
                 return
 
+        self._move_toward(measured_center, measured_width_ratio)
+        self.frame_count += 1
+        self.previous_area_ratio = area_ratio
+
+    def _move_toward(self, measured_center: float, measured_width_ratio: float) -> None:
         max_left = self.initial_center_x - self.max_offset
         max_right = self.initial_center_x + self.max_offset
         measured_center = max(max_left, min(max_right, measured_center))
@@ -84,8 +93,6 @@ class ImageProposalTracker:
                 self.center_width_ratio + width_delta * self.width_smoothing,
             ),
         )
-        self.frame_count += 1
-        self.previous_area_ratio = area_ratio
 
 
 def create_center_motion_grabcut_proposal(
@@ -146,12 +153,14 @@ def create_center_motion_grabcut_proposal(
             small_proposal.roi.width / processing_scale,
             small_proposal.roi.height / processing_scale,
         ).clamped(image.shape[1], image.shape[0])
+        subject_center_x = _estimate_subject_core_center_x(mask, center_x)
         return ImageProposal(
             mask=mask,
             roi=roi,
             candidate_count=small_proposal.candidate_count,
             center_x=center_x,
             center_width_ratio=center_width_ratio,
+            subject_center_x=subject_center_x,
         )
 
     enhanced = _enhance_subject_contrast(image)
@@ -214,14 +223,17 @@ def create_center_motion_grabcut_proposal(
     if np.count_nonzero(selected) == 0:
         roi_width = width * center_width_ratio
         roi = RoiBox(width * center_x - roi_width / 2, 0, roi_width, height).clamped(width, height)
+        subject_center_x = center_x
     else:
         roi = _mask_roi(selected, width, height)
+        subject_center_x = _estimate_subject_core_center_x(selected, center_x)
     return ImageProposal(
         mask=selected,
         roi=roi,
         candidate_count=candidate_count,
         center_x=center_x,
         center_width_ratio=center_width_ratio,
+        subject_center_x=subject_center_x,
     )
 
 
@@ -249,7 +261,8 @@ def draw_image_proposal_overlay(image, proposal: ImageProposal):
         (
             "image proposal components: "
             f"{proposal.candidate_count} center_x={proposal.center_x:.3f} "
-            f"width={proposal.center_width_ratio:.3f}"
+            f"width={proposal.center_width_ratio:.3f} "
+            f"subject_x={(proposal.subject_center_x if proposal.subject_center_x is not None else proposal.center_x):.3f}"
         ),
         (x + 8, max(24, y + 24)),
         cv2.FONT_HERSHEY_SIMPLEX,
@@ -423,6 +436,52 @@ def _select_subject_component(
 
 def _proposal_roi_center_x(roi: RoiBox, image_width: int) -> float:
     return (roi.x + roi.width / 2) / max(image_width, 1)
+
+
+def _estimate_subject_core_center_x(mask, previous_center_x: float) -> float:
+    cv2 = _require_cv2()
+    import numpy as np
+
+    height, width = mask.shape[:2]
+    if cv2.countNonZero(mask) == 0:
+        return previous_center_x
+
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (max(3, round(width * 0.018)), max(17, round(height * 0.18))),
+    )
+    vertical_core = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    if cv2.countNonZero(vertical_core) == 0:
+        vertical_core = mask
+
+    contours, _ = cv2.findContours(vertical_core, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return _mask_center_x(mask) / width
+
+    best_contour = None
+    best_score = -1.0
+    for contour in contours:
+        x, y, contour_width, contour_height = cv2.boundingRect(contour)
+        if contour_height < height * 0.18:
+            continue
+        component = np.zeros(mask.shape, dtype=np.uint8)
+        cv2.drawContours(component, [contour], -1, 255, -1)
+        area = cv2.countNonZero(component)
+        center = (x + contour_width / 2) / width
+        center_distance = abs(center - previous_center_x)
+        vertical_extent = contour_height / height
+        compactness = contour_height / max(contour_width, 1)
+        score = area * (1 + vertical_extent) * min(compactness, 6.0) / (1 + 12 * center_distance)
+        if score > best_score:
+            best_score = score
+            best_contour = contour
+
+    if best_contour is None:
+        return _mask_center_x(mask) / width
+
+    component = np.zeros(mask.shape, dtype=np.uint8)
+    cv2.drawContours(component, [best_contour], -1, 255, -1)
+    return _mask_center_x(component) / width
 
 
 def _proposal_search_width_ratio(
