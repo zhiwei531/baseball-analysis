@@ -1,29 +1,31 @@
 # baseball-analysis
 
-Reproducible 2D baseball pose-analysis pipeline for comparing raw video pose estimation against lightweight ROI and image-processing conditions.
+Reproducible 2D baseball pose-analysis pipeline for generating readable full-video baseball posture analysis from local batting and pitching clips.
 
 ## Current Scope
 
-The MVP follows this pipeline:
+The current best full-video pipeline follows this path:
 
 ```text
-raw video -> frame sampling -> optional ROI -> CLAHE -> MediaPipe Pose
-  -> temporal post-processing -> motion features -> evaluation -> visualization
-```
-
-Current next ROI direction:
-
-```text
-sampled frames
-  -> frame-difference motion mask
-  -> Canny/Sobel edge mask
-  -> connected components / contour boxes
-  -> clip-level fixed auto ROI
-  -> MediaPipe Pose on cropped ROI
+raw video
+  -> frame sampling
+  -> skeleton-free image proposal ROI/mask
+  -> MediaPipe Pose on the masked crop
   -> remap keypoints to full-frame coordinates
+  -> temporal smoothing
+  -> posture feature CSVs
+  -> posture/wrist figures and overlay videos
 ```
 
-The planned condition name is `auto_roi_raw`, followed by `auto_roi_clahe` after the ROI-only effect is inspected. Manual ROI remains a fallback and comparison point when automatic ROI follows another person or background structure.
+The image proposal is intentionally project-specific. It uses center priors, contrast enhancement, frame difference, MOG2 foreground, GrabCut, connected-component scoring, optical-flow center tracking, and temporal mask stabilization. For the current videos, clip-specific hardcoded overrides are enabled when a shared prior is too strict:
+
+```text
+batting_1 / batting_2: shared image proposal prior
+pitching_1: wider action envelope plus wider lower-body envelope
+pitching_2: left-shifted start prior plus wider lower-body envelope
+```
+
+The current report condition is `image_center_motion_grabcut_pose_smooth`. Earlier baseline, pose-prior, center-prior, and body-mask conditions remain in the repo as ablation history and fallback comparisons, but they are not the final report path.
 
 The first experiment uses four local raw videos:
 
@@ -136,7 +138,7 @@ XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
 
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
 XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
-.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-image-proposal-roi --clip-id batting_1
+.venv312/bin/python -m baseball_pose.cli --config configs/experiments/full_video.yaml run-image-proposal-roi
 
 MPLCONFIGDIR=/tmp/baseball_mpl_cache \
 XDG_CACHE_HOME=/tmp/baseball_xdg_cache \
@@ -179,9 +181,9 @@ image_center_motion_grabcut_pose CSV
   -> smoothed feature CSVs, figures, and overlay videos
 ```
 
-The center-prior ROI is a hard project-specific assumption: the athlete is centered in the raw videos, so MediaPipe is run only on the central crop (`width_ratio: 0.62`, full height by default). The body-prior mask is stricter: it uses `center_prior_roi_smooth` to draw a per-frame skeleton-shaped mask, blacking out pixels outside the subject's torso/limb proposal before running MediaPipe again. Default report figures and overlay rendering prefer `body_prior_mask_roi_smooth` when it exists. Raw and baseline conditions can still be plotted explicitly with repeated `--condition` arguments.
+The center-prior and body-prior-mask ROI conditions are retained as ablation history. The center-prior ROI assumes the athlete is centered in the raw videos; the body-prior mask uses an earlier smoothed skeleton to black out pixels outside the subject. These were useful stepping stones, but the current final path avoids using a potentially wrong skeleton as the proposal source.
 
-For debugging proposals without trusting any skeleton, `render-image-proposal-debug` creates a pure OpenCV proposal from center prior, contrast enhancement, frame difference, MOG2 foreground, GrabCut, connected-component scoring, optical-flow center tracking, and temporal mask stabilization. This proposal is wired into `run-image-proposal-roi`; the current best full-video outputs for all four clips are `image_center_motion_grabcut_pose_smooth`. The image proposal supports clip-specific hardcoded overrides under `conditions.image_center_motion_grabcut_pose.roi.clip_overrides`; `pitching_1` uses a wider action envelope for the pitching arm and leg-lift window, while `pitching_2` starts with a left-shifted, wider prior because the pitcher is not centered at the beginning of the clip.
+For debugging proposals without trusting any skeleton, `render-image-proposal-debug` writes the pure OpenCV proposal videos. This proposal is wired into `run-image-proposal-roi`; the current best full-video outputs for all four clips are `image_center_motion_grabcut_pose_smooth`. The image proposal supports clip-specific hardcoded overrides under `conditions.image_center_motion_grabcut_pose.roi.clip_overrides`; `pitching_1` uses a wider action envelope for the pitching arm and leg-lift window, while `pitching_2` starts with a left-shifted, wider prior because the pitcher is not centered at the beginning of the clip. Pitching clips also use `lower_body_width_ratio` to widen the lower-body envelope separately from the upper body so extended legs and feet are not cropped.
 
 The feature CSV includes report-oriented 2D posture proxies that can be computed from the current skeleton-only data:
 
@@ -238,10 +240,22 @@ outputs/roi_debug/<clip_id>__auto_roi_pose_prior.mp4
 outputs/overlays/<clip_id>__auto_roi_pose_prior.mp4
 ```
 
-## MVP Conditions
+## Conditions
+
+Current final report condition:
+
+- `image_center_motion_grabcut_pose_smooth`
+
+Important ablation and historical conditions:
 
 - `baseline_raw`
-- `roi_clahe`
-- `roi_clahe_smooth`
+- `baseline_raw_smooth`
+- `auto_roi_pose_prior`
+- `auto_roi_pose_prior_smooth`
+- `center_prior_roi`
+- `center_prior_roi_smooth`
+- `body_prior_mask_roi`
+- `body_prior_mask_roi_smooth`
+- `image_center_motion_grabcut_pose`
 
 Implementation should keep all outputs tagged by `clip_id` and `condition_id` so processed and baseline results remain comparable.
