@@ -129,6 +129,7 @@ conditions:
         pitching_1:
           center_width_ratio: 0.78
           vertical_body_width_ratio: 0.34
+          lower_body_width_ratio: 0.58
           tracker_min_width_ratio: 0.72
           tracker_max_width_ratio: 0.90
           tracker_max_width_step: 0.04
@@ -136,6 +137,7 @@ conditions:
           center_x: 0.42
           center_width_ratio: 0.76
           vertical_body_width_ratio: 0.32
+          lower_body_width_ratio: 0.56
           tracker_warmup_frames: 0
           tracker_max_offset: 0.22
           tracker_min_width_ratio: 0.70

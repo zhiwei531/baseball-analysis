@@ -703,6 +703,11 @@ def run_image_proposal_roi_clip(
                 grabcut_iterations=int(roi_config.get("grabcut_iterations", 1)),
                 processing_scale=float(roi_config.get("processing_scale", 0.45)),
                 vertical_body_width_ratio=float(roi_config.get("vertical_body_width_ratio", 0.22)),
+                lower_body_width_ratio=(
+                    None
+                    if roi_config.get("lower_body_width_ratio") is None
+                    else float(roi_config["lower_body_width_ratio"])
+                ),
             )
             masked_image = apply_image_proposal_mask(image, proposal)
             crop = crop_to_roi(masked_image, proposal.roi)

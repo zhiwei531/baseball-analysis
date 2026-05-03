@@ -151,6 +151,7 @@ def create_center_motion_grabcut_proposal(
     grabcut_iterations: int = 2,
     processing_scale: float = 1.0,
     vertical_body_width_ratio: float = 0.22,
+    lower_body_width_ratio: float | None = None,
 ) -> ImageProposal:
     """Create a subject mask from image evidence, center prior, and foreground segmentation."""
 
@@ -186,6 +187,7 @@ def create_center_motion_grabcut_proposal(
             grabcut_iterations=grabcut_iterations,
             processing_scale=1.0,
             vertical_body_width_ratio=vertical_body_width_ratio,
+            lower_body_width_ratio=lower_body_width_ratio,
         )
         mask = cv2.resize(
             small_proposal.mask,
@@ -248,6 +250,7 @@ def create_center_motion_grabcut_proposal(
         image_width=width,
         image_height=height,
         body_width_ratio=vertical_body_width_ratio,
+        lower_body_width_ratio=lower_body_width_ratio,
     )
     selected = _smooth_subject_shape(selected)
     selected = _keep_center_vertical_body_region(
@@ -256,12 +259,14 @@ def create_center_motion_grabcut_proposal(
         image_width=width,
         image_height=height,
         body_width_ratio=vertical_body_width_ratio,
+        lower_body_width_ratio=lower_body_width_ratio,
     )
     selected = _grabcut_refine_center_body(
         enhanced,
         selected,
         center_x=center_x,
         body_width_ratio=vertical_body_width_ratio,
+        lower_body_width_ratio=lower_body_width_ratio,
         iterations=grabcut_iterations,
     )
     selected = _temporal_stabilize_mask(selected, previous_mask)
@@ -576,6 +581,7 @@ def _keep_center_vertical_body_region(
     image_width: int,
     image_height: int,
     body_width_ratio: float,
+    lower_body_width_ratio: float | None = None,
 ):
     cv2 = _require_cv2()
     import numpy as np
@@ -622,7 +628,13 @@ def _keep_center_vertical_body_region(
     seed = np.zeros(mask.shape, dtype=np.uint8)
     cv2.drawContours(seed, [best_contour], -1, 255, -1)
     seed_center = _mask_center_x(seed[:, guide_left:guide_right], offset_x=guide_left) / image_width
-    support_band = _body_envelope_mask(image_height, image_width, seed_center, body_width_ratio)
+    support_band = _body_envelope_mask(
+        image_height,
+        image_width,
+        seed_center,
+        body_width_ratio,
+        lower_body_width_ratio=lower_body_width_ratio,
+    )
     seed = cv2.bitwise_and(seed, support_band)
 
     grown = seed.copy()
@@ -653,15 +665,22 @@ def _mask_center_x(mask, offset_x: int = 0) -> float:
     return offset_x + moments["m10"] / moments["m00"]
 
 
-def _body_envelope_mask(height: int, width: int, center_x: float, body_width_ratio: float):
+def _body_envelope_mask(
+    height: int,
+    width: int,
+    center_x: float,
+    body_width_ratio: float,
+    lower_body_width_ratio: float | None = None,
+):
     import numpy as np
 
     envelope = np.zeros((height, width), dtype=np.uint8)
     center_px = width * center_x
+    lower_ratio = body_width_ratio if lower_body_width_ratio is None else lower_body_width_ratio
     upper_left = width * max(0.13, body_width_ratio * 0.72)
     upper_right = width * max(0.16, body_width_ratio * 0.82)
-    lower_left = width * max(0.075, body_width_ratio * 0.42)
-    lower_right = width * max(0.14, body_width_ratio * 0.70)
+    lower_left = width * max(0.075, lower_ratio * 0.48)
+    lower_right = width * max(0.14, lower_ratio * 0.82)
     transition_start = height * 0.34
     transition_end = height * 0.58
 
@@ -686,6 +705,7 @@ def _grabcut_refine_center_body(
     mask,
     center_x: float,
     body_width_ratio: float,
+    lower_body_width_ratio: float | None,
     iterations: int,
 ):
     cv2 = _require_cv2()
@@ -701,7 +721,17 @@ def _grabcut_refine_center_body(
         return mask
 
     seed_center = _mask_center_x(guide_pixels) / width
-    seed_envelope = _body_envelope_mask(height, width, seed_center, body_width_ratio * 0.72)
+    seed_envelope = _body_envelope_mask(
+        height,
+        width,
+        seed_center,
+        body_width_ratio * 0.72,
+        lower_body_width_ratio=(
+            None
+            if lower_body_width_ratio is None
+            else lower_body_width_ratio * 0.86
+        ),
+    )
     foreground_seed = cv2.bitwise_and(mask, seed_envelope)
     foreground_seed = cv2.morphologyEx(
         foreground_seed,

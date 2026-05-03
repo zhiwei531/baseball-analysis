@@ -150,6 +150,7 @@ def test_image_proposal_roi_config_applies_clip_override():
                         "pitching_2": {
                             "center_x": 0.42,
                             "center_width_ratio": 0.76,
+                            "lower_body_width_ratio": 0.56,
                         }
                     },
                 }
@@ -164,4 +165,5 @@ def test_image_proposal_roi_config_applies_clip_override():
     assert batting_config["center_x"] == 0.5
     assert pitching_config["center_x"] == 0.42
     assert pitching_config["center_width_ratio"] == 0.76
+    assert pitching_config["lower_body_width_ratio"] == 0.56
     assert pitching_config["tracker_max_offset"] == 0.12

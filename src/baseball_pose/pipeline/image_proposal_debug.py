@@ -66,6 +66,11 @@ def render_image_proposal_debug_videos(
         clip_vertical_body_width_ratio = float(
             proposal_config.get("vertical_body_width_ratio", vertical_body_width_ratio)
         )
+        clip_lower_body_width_ratio = (
+            None
+            if proposal_config.get("lower_body_width_ratio") is None
+            else float(proposal_config["lower_body_width_ratio"])
+        )
         frames_csv = frame_manifest_path(config.data_dir, clip_id, source_condition)
         if not frames_csv.exists():
             continue
@@ -126,6 +131,7 @@ def render_image_proposal_debug_videos(
                 grabcut_iterations=clip_grabcut_iterations,
                 processing_scale=clip_processing_scale,
                 vertical_body_width_ratio=clip_vertical_body_width_ratio,
+                lower_body_width_ratio=clip_lower_body_width_ratio,
             )
             proposal_path = proposal_dir / frame.frame_path.name.replace(
                 source_condition,
