@@ -71,11 +71,7 @@ def plot_wrist_trajectories(
     for axis in axes[1]:
         axis.set_xlabel("time (s)")
 
-    if legend_handles:
-        fig.legend(legend_handles, legend_labels, loc="upper center", ncol=min(4, len(legend_labels)), frameon=False)
-
-    fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    _place_figure_header(fig, title, legend_handles, legend_labels)
     fig.savefig(target, dpi=180)
     plt.close(fig)
 
@@ -181,13 +177,31 @@ def plot_posture_analysis(
     for axis in axes[0]:
         axis.set_xlabel("time (s)")
 
-    if legend_handles:
-        fig.legend(legend_handles, legend_labels, loc="upper center", ncol=min(4, len(legend_labels)), frameon=False)
-
-    fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    _place_figure_header(fig, title, legend_handles, legend_labels)
     fig.savefig(target, dpi=180)
     plt.close(fig)
+
+
+def _place_figure_header(
+    fig,
+    title: str,
+    legend_handles: list[object],
+    legend_labels: list[str],
+) -> None:
+    """Reserve separate vertical space for the legend, title, and subplots."""
+
+    if legend_handles:
+        fig.legend(
+            legend_handles,
+            legend_labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.99),
+            ncol=min(4, len(legend_labels)),
+            frameon=False,
+        )
+
+    fig.suptitle(title, y=0.94)
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
 
 
 def _plot_time_series(
