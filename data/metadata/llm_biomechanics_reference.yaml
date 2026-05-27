@@ -1,0 +1,489 @@
+version: "2026-05-25"
+purpose: >
+  LLM-readable biomechanics reference for baseball posture reporting.
+  Split clinical passive ROM references from video-derived kinematic references.
+  Use this file as a knowledge base for prompt construction, rule-based flagging,
+  and plain-language report generation.
+
+usage_notes:
+  - Do not treat 2D video pose angles as direct clinical passive ROM measurements.
+  - Use clinical_rom metrics only when the input comes from goniometer, physical exam, or validated 3D/markerless ROM measurement.
+  - Use video_kinematics metrics for event-based pitching interpretation from pose/video pipelines.
+  - When no explicit injury threshold exists in the literature, describe values as "lower/higher than common reference" rather than "abnormal" or "pathologic".
+  - Prefer age-matched references over professional references for youth and high-school athletes.
+
+source_index:
+  hiramoto_2019:
+    short_name: "Hiramoto 2019"
+    citation: >
+      Hiramoto M, Morihara T, Kida Y, et al. Hip, Trunk, and Shoulder Rotational
+      Range of Motion in Healthy Japanese Youth and High-school Baseball Pitchers.
+      Progress in Rehabilitation Medicine. 2019;4:20190009.
+    source_type: "journal_article"
+    focus: "youth and high-school passive ROM baselines"
+    urls:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC7365248/"
+      - "https://www.jstage.jst.go.jp/article/prm/4/0/4_20190009/_pdf/-char/en"
+    local_note_path: "/Users/lizhiwei/Documents/Obsidian Vault/literature/notes/Progress in Rehabilitation Medicine-Hip, Trunk, and Shoulder Rotational Range of Motion in Healthy Japanese Youth and High-school Baseball Pitchers.md"
+  paul_2025:
+    short_name: "Paul 2025"
+    citation: >
+      Paul RW, Sirch FR, Vata A, et al. Chronic Adaptations of the Shoulder in
+      Baseball Pitchers: A Systematic Review. The American Journal of Sports Medicine.
+      2025.
+    source_type: "systematic_review"
+    focus: "professional shoulder adaptation summary"
+    urls:
+      - "https://pubmed.ncbi.nlm.nih.gov/40029165/"
+    local_note_path: "/Users/lizhiwei/Documents/Obsidian Vault/literature/notes/The American Journal of Sports Medicine-Chronic Adaptations of the Shoulder in Baseball Pitchers A Systematic Review.md"
+  wilk_2011:
+    short_name: "Wilk 2011"
+    citation: >
+      Wilk KE, Macrina LC, Fleisig GS, et al. Correlation of Glenohumeral Internal
+      Rotation Deficit and Total Rotational Motion to Shoulder Injuries in Professional
+      Baseball Pitchers. The American Journal of Sports Medicine. 2011.
+    source_type: "prospective_screening"
+    focus: "shoulder side-to-side injury-related thresholds"
+    urls:
+      - "https://pubmed.ncbi.nlm.nih.gov/21131681/"
+    local_note_path: "/Users/lizhiwei/Documents/Obsidian Vault/literature/notes/The American Journal of Sports Medicine-Correlation of Glenohumeral Internal Rotation Deficit and Total Rotational Motion to Shoulder Injuries in Professional Baseball Pitchers.md"
+  wright_2006:
+    short_name: "Wright 2006"
+    citation: >
+      Wright RW, Steger-May K, Wasserlauf BL, et al. Elbow Range of Motion in
+      Professional Baseball Pitchers. The American Journal of Sports Medicine. 2006.
+    source_type: "cross_sectional_study"
+    focus: "professional elbow ROM side-to-side baseline"
+    urls:
+      - "https://pubmed.ncbi.nlm.nih.gov/16219942/"
+    local_note_path: "/Users/lizhiwei/Documents/Obsidian Vault/literature/notes/The American Journal of Sports Medicine-Elbow Range of Motion in Professional Baseball Pitchers.md"
+  robb_2010:
+    short_name: "Robb 2010"
+    citation: >
+      Robb AJ, Fleisig G, Wilk K, et al. Passive Ranges of Motion of the Hips and
+      Their Relationship with Pitching Biomechanics and Ball Velocity in Professional
+      Baseball Pitchers. The American Journal of Sports Medicine. 2010.
+    source_type: "correlation_study"
+    focus: "professional hip ROM and pitching mechanics"
+    urls:
+      - "https://journals.sagepub.com/doi/10.1177/0363546510375535"
+    local_note_path: "/Users/lizhiwei/Documents/Obsidian Vault/literature/notes/The American Journal of Sports Medicine-Passive Ranges of Motion of the Hips and Their Relationship with Pitching Biomechanics and Ball Velocity in Professional Baseball Pitchers.md"
+  hamano_2020:
+    short_name: "Hamano 2020"
+    citation: >
+      Hamano N, Shitara H, Tajika T, et al. Relationship between Tightness of the
+      Hip Joint and Shoulder/Elbow Injury in High School Baseball Pitchers:
+      A Prospective Study. Scientific Reports. 2020.
+    source_type: "prospective_study"
+    focus: "plant-side hip ER limitation and injury risk"
+    urls:
+      - "https://pubmed.ncbi.nlm.nih.gov/33203930/"
+    local_note_path: "/Users/lizhiwei/Documents/Obsidian Vault/literature/notes/Scientific Reports-Relationship between tightness of the hip joint and shoulderelbow injury in high school baseball pitchers a prospective study.md"
+  diffendaffer_2023:
+    short_name: "Diffendaffer 2023"
+    citation: >
+      Diffendaffer AZ, Bagwell MS, Fleisig GS, et al. The Clinician's Guide to
+      Baseball Pitching Biomechanics. Sports Health. 2023.
+    source_type: "clinical_review"
+    focus: "interpretable event-level pitching kinematics"
+    urls:
+      - "https://pubmed.ncbi.nlm.nih.gov/35465789/"
+      - "https://journals.sagepub.com/doi/10.1177/19417381221078537"
+    local_note_path: "/Users/lizhiwei/Documents/Obsidian Vault/literature/notes/Sports Health-The Clinician’s Guide to Baseball Pitching Biomechanics.md"
+  orishimo_2023:
+    short_name: "Orishimo 2023"
+    citation: >
+      Orishimo KF, Kremenic IJ, Mullaney MJ, et al. Role of Pelvis and Trunk
+      Biomechanics in Generating Ball Velocity in Baseball Pitching.
+      Journal of Strength and Conditioning Research. 2023.
+    source_type: "motion_analysis"
+    focus: "pelvis/trunk velocity and hip-shoulder separation"
+    urls:
+      - "https://pubmed.ncbi.nlm.nih.gov/35836313/"
+    local_note_path: "/Users/lizhiwei/Documents/Obsidian Vault/literature/notes/Journal of Strength & Conditioning Research-Role of Pelvis and Trunk Biomechanics in Generating Ball Velocity in Baseball Pitching.md"
+
+cohort_aliases:
+  youth_pitcher:
+    age_band_years: "9-14"
+    preferred_reference_source: "hiramoto_2019"
+  high_school_pitcher:
+    age_band_years: "15-17"
+    preferred_reference_source: "hiramoto_2019"
+  professional_pitcher:
+    age_band_years: "adult professional"
+    preferred_reference_sources:
+      - "paul_2025"
+      - "wilk_2011"
+      - "wright_2006"
+      - "robb_2010"
+
+metrics:
+  clinical_rom:
+    shoulder_external_rotation_90_deg:
+      measurement_type: "passive_rom"
+      body_region: "shoulder"
+      plane: "rotation"
+      unit: "deg"
+      measurement_protocol: >
+        Supine, scapula stabilized, shoulder abducted to 90 degrees, elbow flexed
+        to 90 degrees.
+      cohorts:
+        youth_pitcher:
+          dominant_mean_sd: [125.5, 14.4]
+          nondominant_mean_sd: [120.4, 13.2]
+        high_school_pitcher:
+          dominant_mean_sd: [125.4, 9.5]
+          nondominant_mean_sd: [118.5, 11.0]
+      source_ids: ["hiramoto_2019"]
+
+    shoulder_internal_rotation_90_deg:
+      measurement_type: "passive_rom"
+      body_region: "shoulder"
+      plane: "rotation"
+      unit: "deg"
+      measurement_protocol: >
+        Supine, scapula stabilized, shoulder abducted to 90 degrees, elbow flexed
+        to 90 degrees.
+      cohorts:
+        youth_pitcher:
+          dominant_mean_sd: [35.4, 14.4]
+          nondominant_mean_sd: [47.3, 13.6]
+        high_school_pitcher:
+          dominant_mean_sd: [36.7, 10.1]
+          nondominant_mean_sd: [50.1, 10.9]
+      source_ids: ["hiramoto_2019"]
+
+    shoulder_total_arc_deg:
+      measurement_type: "derived_rom"
+      body_region: "shoulder"
+      formula: "shoulder_external_rotation_90_deg + shoulder_internal_rotation_90_deg"
+      unit: "deg"
+      cohorts:
+        youth_pitcher:
+          dominant_mean: 160.9
+          nondominant_mean: 167.7
+        high_school_pitcher:
+          dominant_mean: 162.1
+          nondominant_mean: 168.6
+      source_ids: ["hiramoto_2019"]
+
+    shoulder_clinical_gird_deg:
+      measurement_type: "derived_rom"
+      body_region: "shoulder"
+      formula: "nondominant_shoulder_internal_rotation_90_deg - dominant_shoulder_internal_rotation_90_deg"
+      unit: "deg"
+      interpretation:
+        professional_common_adaptation_mean: 10.0
+        risk_threshold_rule:
+          operator: ">="
+          value: 15.0
+          requires_joint_condition: "shoulder_total_arc_deficit_deg >= 10.0"
+      source_ids: ["paul_2025", "wilk_2011"]
+
+    shoulder_external_rotation_gain_deg:
+      measurement_type: "derived_rom"
+      body_region: "shoulder"
+      formula: "dominant_shoulder_external_rotation_90_deg - nondominant_shoulder_external_rotation_90_deg"
+      unit: "deg"
+      interpretation:
+        professional_common_adaptation_mean: 6.5
+      source_ids: ["paul_2025"]
+
+    shoulder_total_arc_deficit_deg:
+      measurement_type: "derived_rom"
+      body_region: "shoulder"
+      formula: "nondominant_shoulder_total_arc_deg - dominant_shoulder_total_arc_deg"
+      unit: "deg"
+      interpretation:
+        professional_common_adaptation_mean: 3.5
+        risk_threshold_rule:
+          operator: ">="
+          value: 10.0
+          note: "Use with GIRD rather than as a standalone injury diagnosis."
+      source_ids: ["paul_2025", "wilk_2011"]
+
+    shoulder_total_rotational_motion_deficit_deg:
+      measurement_type: "derived_rom"
+      body_region: "shoulder"
+      formula: "nondominant_shoulder_total_arc_deg - dominant_shoulder_total_arc_deg"
+      unit: "deg"
+      interpretation:
+        elevated_flag_rule:
+          operator: ">"
+          value: 5.0
+          note: "Literature-based injury-related reference, not a diagnosis."
+      source_ids: ["wilk_2011"]
+
+    elbow_extension_side_difference_deg:
+      measurement_type: "side_to_side_difference"
+      body_region: "elbow"
+      definition: "dominant_extension - nondominant_extension"
+      unit: "deg"
+      expected_professional_mean_sd: [-7.9, 7.4]
+      plain_language: "Dominant elbow typically shows less extension than the non-dominant side."
+      source_ids: ["wright_2006"]
+
+    elbow_flexion_side_difference_deg:
+      measurement_type: "side_to_side_difference"
+      body_region: "elbow"
+      definition: "dominant_flexion - nondominant_flexion"
+      unit: "deg"
+      expected_professional_mean_sd: [-5.5, 7.8]
+      plain_language: "Dominant elbow typically shows slightly less flexion than the non-dominant side."
+      source_ids: ["wright_2006"]
+
+    elbow_flexion_extension_arc_side_difference_deg:
+      measurement_type: "side_to_side_difference"
+      body_region: "elbow"
+      definition: "dominant_elbow_arc - nondominant_elbow_arc"
+      unit: "deg"
+      expected_professional_mean_sd: [-13.3, 13.7]
+      plain_language: "Dominant elbow total flexion-extension arc is often smaller in professional pitchers."
+      source_ids: ["wright_2006"]
+
+    hip_external_rotation_90_flexed_deg:
+      measurement_type: "passive_rom"
+      body_region: "hip"
+      plane: "rotation"
+      unit: "deg"
+      measurement_protocol: "Supine with hip and knee flexed to 90 degrees."
+      cohorts:
+        youth_pitcher:
+          dominant_mean_sd: [61.2, 12.2]
+          nondominant_mean_sd: [60.6, 12.8]
+        high_school_pitcher:
+          dominant_mean_sd: [58.2, 10.1]
+          nondominant_mean_sd: [58.0, 9.1]
+      source_ids: ["hiramoto_2019"]
+
+    hip_internal_rotation_90_flexed_deg:
+      measurement_type: "passive_rom"
+      body_region: "hip"
+      plane: "rotation"
+      unit: "deg"
+      measurement_protocol: "Supine with hip and knee flexed to 90 degrees."
+      cohorts:
+        youth_pitcher:
+          dominant_mean_sd: [42.0, 13.4]
+          nondominant_mean_sd: [44.5, 15.1]
+        high_school_pitcher:
+          dominant_mean_sd: [36.9, 12.1]
+          nondominant_mean_sd: [37.0, 12.3]
+      source_ids: ["hiramoto_2019"]
+
+    hip_total_rotation_arc_deg:
+      measurement_type: "derived_rom"
+      body_region: "hip"
+      formula: "hip_external_rotation_90_flexed_deg + hip_internal_rotation_90_flexed_deg"
+      unit: "deg"
+      cohorts:
+        youth_pitcher:
+          dominant_mean: 103.2
+          nondominant_mean: 105.1
+        high_school_pitcher:
+          dominant_mean: 95.1
+          nondominant_mean: 95.0
+      source_ids: ["hiramoto_2019"]
+
+    trunk_rotation_deg:
+      measurement_type: "passive_rom"
+      body_region: "trunk"
+      plane: "rotation"
+      unit: "deg"
+      measurement_protocol: "Sitting with pelvis fixed."
+      cohorts:
+        youth_pitcher:
+          dominant_mean_sd: [49.7, 12.6]
+          nondominant_mean_sd: [47.2, 12.4]
+        high_school_pitcher:
+          dominant_mean_sd: [55.2, 10.0]
+          nondominant_mean_sd: [55.7, 9.5]
+      source_ids: ["hiramoto_2019"]
+
+    plant_side_hip_er_90_flexed_injury_note:
+      measurement_type: "qualitative_risk_reference"
+      body_region: "hip"
+      rule: >
+        Limited plant-side hip external rotation at 90 degrees flexion has been
+        associated with shoulder/elbow injury risk in high-school pitchers, but
+        no single universal cutoff is established in this file.
+      source_ids: ["hamano_2020"]
+
+  video_kinematics_pitching:
+    stride_length_pct_height:
+      measurement_type: "event_kinematic"
+      unit: "pct_height"
+      event: "lead_foot_contact"
+      target_reference:
+        mean: 85.0
+        tolerance_style: "interpret_as_target_not_cutoff"
+      plain_language: "Stride length is commonly described as about 85 percent of pitcher height."
+      source_ids: ["diffendaffer_2023"]
+
+    lead_knee_flexion_foot_contact_deg:
+      measurement_type: "event_kinematic"
+      body_region: "lead_knee"
+      unit: "deg"
+      event: "lead_foot_contact"
+      target_reference:
+        mean: 45.0
+        tolerance_style: "interpret_as_target_not_cutoff"
+      source_ids: ["diffendaffer_2023"]
+
+    lead_knee_flexion_ball_release_deg:
+      measurement_type: "event_kinematic"
+      body_region: "lead_knee"
+      unit: "deg"
+      event: "ball_release"
+      target_reference:
+        mean: 30.0
+        tolerance_style: "interpret_as_target_not_cutoff"
+      source_ids: ["diffendaffer_2023"]
+
+    elbow_flexion_foot_contact_deg:
+      measurement_type: "event_kinematic"
+      body_region: "elbow"
+      unit: "deg"
+      event: "lead_foot_contact"
+      target_reference:
+        mean: 90.0
+      source_ids: ["diffendaffer_2023"]
+
+    shoulder_abduction_foot_contact_deg:
+      measurement_type: "event_kinematic"
+      body_region: "shoulder"
+      unit: "deg"
+      event: "lead_foot_contact"
+      target_reference:
+        mean: 90.0
+      source_ids: ["diffendaffer_2023"]
+
+    shoulder_horizontal_abduction_foot_contact_deg:
+      measurement_type: "event_kinematic"
+      body_region: "shoulder"
+      unit: "deg"
+      event: "lead_foot_contact"
+      target_reference:
+        mean: 20.0
+      source_ids: ["diffendaffer_2023"]
+
+    shoulder_external_rotation_foot_contact_deg:
+      measurement_type: "event_kinematic"
+      body_region: "shoulder"
+      unit: "deg"
+      event: "lead_foot_contact"
+      target_reference:
+        mean: 45.0
+      source_ids: ["diffendaffer_2023"]
+
+    max_shoulder_external_rotation_deg:
+      measurement_type: "event_kinematic"
+      body_region: "shoulder"
+      unit: "deg"
+      event: "maximum_external_rotation"
+      target_reference:
+        mean: 170.0
+        tolerance_style: "interpret_as_target_not_cutoff"
+      source_ids: ["diffendaffer_2023"]
+
+    hip_shoulder_separation_foot_contact_deg:
+      measurement_type: "event_kinematic"
+      body_region: "pelvis_trunk"
+      unit: "deg"
+      event: "lead_foot_contact"
+      cohort_reference:
+        mixed_high_school_college_pitchers:
+          mean_sd: [50.0, 12.0]
+      plain_language: "This is a common proxy for trunk-pelvis separation at foot contact."
+      source_ids: ["orishimo_2023"]
+
+    peak_pelvis_rotation_velocity_deg_s:
+      measurement_type: "time_series_peak"
+      body_region: "pelvis"
+      unit: "deg_per_s"
+      event_window: "stride_foot_contact_to_ball_release"
+      cohort_reference:
+        mixed_high_school_college_pitchers:
+          mean_sd: [596.0, 88.0]
+      source_ids: ["orishimo_2023"]
+
+    peak_trunk_rotation_velocity_deg_s:
+      measurement_type: "time_series_peak"
+      body_region: "trunk"
+      unit: "deg_per_s"
+      event_window: "stride_foot_contact_to_ball_release"
+      cohort_reference:
+        mixed_high_school_college_pitchers:
+          mean_sd: [959.0, 120.0]
+      source_ids: ["orishimo_2023"]
+
+    peak_pelvis_velocity_timing_pct_fc_to_br:
+      measurement_type: "timing"
+      body_region: "pelvis"
+      unit: "pct_window"
+      event_window: "stride_foot_contact_to_ball_release"
+      cohort_reference:
+        mixed_high_school_college_pitchers:
+          mean_sd: [12.0, 11.0]
+      source_ids: ["orishimo_2023"]
+
+    peak_trunk_velocity_timing_pct_fc_to_br:
+      measurement_type: "timing"
+      body_region: "trunk"
+      unit: "pct_window"
+      event_window: "stride_foot_contact_to_ball_release"
+      cohort_reference:
+        mixed_high_school_college_pitchers:
+          mean_sd: [36.0, 11.0]
+      source_ids: ["orishimo_2023"]
+
+interpretation_rules:
+  side_to_side_logic:
+    shoulder:
+      gird_formula: "nondominant_IR - dominant_IR"
+      erg_formula: "dominant_ER - nondominant_ER"
+      total_arc_deficit_formula: "nondominant_total_arc - dominant_total_arc"
+    elbow:
+      note: "Professional pitchers often have a smaller dominant-side flexion-extension arc."
+    hip:
+      note: "Interpret plant-side vs drive-side with the task context; do not over-medicalize small asymmetries."
+
+  traffic_light_flags:
+    green:
+      rule: >
+        Use when the value falls within the age-matched mean plus/minus one SD,
+        or matches a commonly reported event target without large deviation.
+    yellow:
+      rule: >
+        Use when the value is outside the age-matched mean plus/minus one SD
+        but does not cross a literature-based risk threshold.
+    red:
+      rule: >
+        Reserve for literature-based elevated flags such as GIRD at or above
+        15 degrees with total arc deficit at or above 10 degrees, total
+        rotational motion deficit greater than 5 degrees, or clearly large
+        deviations from event-level pitching references.
+
+  forbidden_claims:
+    - "Do not claim diagnosis, pathology, or injury prediction from pose-only data."
+    - "Do not call a youth athlete abnormal only because they differ from professional references."
+    - "Do not interpret batting separation or rotational variability as medical injury evidence."
+
+  preferred_phrasing:
+    - "lower than common age-matched reference"
+    - "higher than common age-matched reference"
+    - "shows a common throwing-side adaptation"
+    - "side-to-side difference is larger than commonly reported reference"
+    - "may reflect technique stage, mobility profile, or coordination pattern"
+
+prompt_pack:
+  required_input_groups:
+    - athlete_group
+    - measurement_source
+    - clinical_rom
+    - video_kinematics
+  output_style_requirements:
+    - "Explain findings for non-expert parents or students."
+    - "Separate mobility findings from video movement findings."
+    - "State uncertainty when a metric comes from 2D pose rather than clinical ROM testing."
+    - "Prefer coaching or monitoring suggestions over medical conclusions."
