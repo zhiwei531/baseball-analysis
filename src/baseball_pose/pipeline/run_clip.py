@@ -135,6 +135,7 @@ def run_baseline_clip(
                 image,
                 records,
                 confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -267,6 +268,7 @@ def run_auto_roi_clip(
                 image,
                 records,
                 confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -378,6 +380,7 @@ def run_pose_prior_roi_clip(
                 image,
                 records,
                 confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -480,6 +483,7 @@ def run_center_prior_roi_clip(
                 image,
                 records,
                 confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -602,6 +606,7 @@ def run_body_prior_mask_roi_clip(
                 image,
                 records,
                 confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -734,6 +739,7 @@ def run_image_proposal_roi_clip(
                 image,
                 records,
                 confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
+                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name

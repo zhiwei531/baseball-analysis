@@ -29,7 +29,17 @@ pose:
 
 postprocess:
   confidence_threshold: 0.5
+  confidence_thresholds:
+    default: 0.5
+    torso: 0.45
+    mid_limb: 0.6
+    distal: 0.65
   interpolate_max_gap_frames: 12
+  interpolate_max_gap_by_group:
+    default: 12
+    torso: 12
+    mid_limb: 6
+    distal: 3
   smoothing:
     enabled: true
     method: savgol
@@ -38,9 +48,34 @@ postprocess:
     median_window_length: 5
     refine_window_length: 9
     jump_threshold_multiplier: 4.0
+    joint_jump_thresholds:
+      default: 4.0
+      torso: 6.0
+      mid_limb: 3.5
+      distal: 3.0
     torso_gate_enabled: true
     torso_jump_threshold_multiplier: 6.0
     min_torso_jump_distance: 0.06
+    limb_length_tolerance_ratio: 0.28
+  clip_overrides:
+    test_mp4:
+      confidence_thresholds:
+        default: 0.5
+        torso: 0.45
+        mid_limb: 0.57
+        distal: 0.60
+      interpolate_max_gap_by_group:
+        default: 12
+        torso: 12
+        mid_limb: 7
+        distal: 4
+      smoothing:
+        joint_jump_thresholds:
+          default: 4.0
+          torso: 6.0
+          mid_limb: 3.7
+          distal: 3.2
+        limb_length_tolerance_ratio: 0.32
 
 experiments:
   default_conditions:
@@ -131,6 +166,16 @@ conditions:
           lower_body_right_width_ratio: 0.36
         batting_2:
           lower_body_width_ratio: 0.30
+        test_mp4:
+          center_width_ratio: 0.72
+          vertical_body_width_ratio: 0.28
+          lower_body_width_ratio: 0.40
+          tracker_warmup_frames: 30
+          tracker_max_offset: 0.18
+          tracker_min_width_ratio: 0.66
+          tracker_max_width_ratio: 0.84
+          tracker_max_center_step: 0.022
+          tracker_max_width_step: 0.035
         pitching_1:
           center_width_ratio: 0.78
           vertical_body_width_ratio: 0.34

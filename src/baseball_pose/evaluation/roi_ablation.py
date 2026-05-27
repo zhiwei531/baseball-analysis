@@ -11,7 +11,7 @@ from baseball_pose.evaluation.runtime import mean_inference_time_ms
 from baseball_pose.evaluation.smoothness import second_difference_smoothness
 from baseball_pose.io.paths import metric_path, pose_path
 from baseball_pose.io.pose_csv import read_pose_records
-from baseball_pose.pose.schema import CANONICAL_JOINTS, PoseRecord
+from baseball_pose.pose.schema import CANONICAL_JOINTS, PoseRecord, pose_score
 
 
 ROI_ABLATION_CONDITIONS = ("baseline_raw", "auto_roi_raw", "auto_roi_pose_prior")
@@ -302,5 +302,5 @@ def _has_confident_coordinate(record: PoseRecord, confidence_threshold: float) -
 
 
 def _is_confident(record: PoseRecord, confidence_threshold: float) -> bool:
-    score = record.confidence if record.confidence is not None else record.visibility
+    score = pose_score(record)
     return score is None or score >= confidence_threshold

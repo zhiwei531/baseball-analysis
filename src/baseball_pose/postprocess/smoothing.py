@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 import statistics
+from collections import defaultdict
 
 import numpy as np
 from scipy.signal import savgol_filter
 
+from baseball_pose.pose.quality import LIMB_SEGMENTS, gap_for_joint, multiplier_for_joint, threshold_for_joint
 from baseball_pose.pose.schema import CANONICAL_JOINTS
-from baseball_pose.pose.schema import PoseRecord
+from baseball_pose.pose.schema import PoseRecord, pose_score
 
 
 def smooth_pose_records(
@@ -20,11 +22,15 @@ def smooth_pose_records(
     median_window_length: int = 1,
     refine_window_length: int = 1,
     confidence_threshold: float = 0.5,
+    threshold_config: dict[str, object] | None = None,
     max_gap_frames: int = 3,
+    max_gap_config: dict[str, object] | None = None,
     jump_threshold_multiplier: float = 6.0,
+    joint_jump_config: dict[str, object] | None = None,
     torso_gate_enabled: bool = True,
     torso_jump_threshold_multiplier: float = 8.0,
     min_torso_jump_distance: float = 0.08,
+    limb_length_tolerance_ratio: float = 0.28,
 ) -> list[PoseRecord]:
     """Smooth each joint trajectory while preserving the common pose schema.
 
@@ -53,6 +59,8 @@ def smooth_pose_records(
         raise ValueError("torso_jump_threshold_multiplier must be positive.")
     if min_torso_jump_distance <= 0:
         raise ValueError("min_torso_jump_distance must be positive.")
+    if limb_length_tolerance_ratio <= 0:
+        raise ValueError("limb_length_tolerance_ratio must be positive.")
 
     gated_records = (
         _apply_torso_continuity_gate(
@@ -64,6 +72,12 @@ def smooth_pose_records(
         if torso_gate_enabled
         else records
     )
+    gated_records = _apply_limb_length_consistency_gate(
+        gated_records,
+        confidence_threshold=confidence_threshold,
+        threshold_config=threshold_config,
+        tolerance_ratio=limb_length_tolerance_ratio,
+    )
     by_key = _records_by_key(gated_records)
     smoothed_by_identity: dict[tuple[int, str], PoseRecord] = {}
     for key_records in by_key.values():
@@ -74,8 +88,11 @@ def smooth_pose_records(
             median_window_length=median_window_length,
             refine_window_length=refine_window_length,
             confidence_threshold=confidence_threshold,
+            threshold_config=threshold_config,
             max_gap_frames=max_gap_frames,
+            max_gap_config=max_gap_config,
             jump_threshold_multiplier=jump_threshold_multiplier,
+            joint_jump_config=joint_jump_config,
         )
         for record in smoothed:
             smoothed_by_identity[(record.frame_index, record.joint_name)] = record
@@ -104,17 +121,33 @@ def _smooth_joint_records(
     median_window_length: int,
     refine_window_length: int,
     confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
     max_gap_frames: int,
+    max_gap_config: dict[str, object] | None,
     jump_threshold_multiplier: float,
+    joint_jump_config: dict[str, object] | None,
 ) -> list[PoseRecord]:
     if not records:
         return []
 
-    x_values = np.array([_confident_value(record, "x", confidence_threshold) for record in records], dtype=float)
-    y_values = np.array([_confident_value(record, "y", confidence_threshold) for record in records], dtype=float)
-    x_values, y_values = _remove_jump_outliers(x_values, y_values, jump_threshold_multiplier)
-    x_values = _interpolate_short_gaps(x_values, max_gap_frames)
-    y_values = _interpolate_short_gaps(y_values, max_gap_frames)
+    joint_name = records[0].joint_name
+    x_values = np.array(
+        [_confident_value(record, "x", confidence_threshold, threshold_config) for record in records],
+        dtype=float,
+    )
+    y_values = np.array(
+        [_confident_value(record, "y", confidence_threshold, threshold_config) for record in records],
+        dtype=float,
+    )
+    joint_jump_threshold = multiplier_for_joint(
+        joint_name,
+        jump_threshold_multiplier,
+        joint_jump_config if isinstance(joint_jump_config, dict) else None,
+    )
+    x_values, y_values = _remove_jump_outliers(x_values, y_values, joint_jump_threshold)
+    joint_gap = gap_for_joint(joint_name, max_gap_frames, max_gap_config if isinstance(max_gap_config, dict) else None)
+    x_values = _interpolate_short_gaps(x_values, joint_gap)
+    y_values = _interpolate_short_gaps(y_values, joint_gap)
     x_values = _median_valid_segments(x_values, median_window_length)
     y_values = _median_valid_segments(y_values, median_window_length)
     x_values = _savgol_valid_segments(x_values, window_length, polyorder)
@@ -134,10 +167,16 @@ def _smooth_joint_records(
     return output
 
 
-def _confident_value(record: PoseRecord, axis: str, confidence_threshold: float) -> float:
-    score = record.confidence if record.confidence is not None else record.visibility
+def _confident_value(
+    record: PoseRecord,
+    axis: str,
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+) -> float:
+    score = pose_score(record)
+    joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
     value = getattr(record, axis)
-    if value is None or (score is not None and score < confidence_threshold):
+    if value is None or (score is not None and score < joint_threshold):
         return np.nan
     return float(value)
 
@@ -210,7 +249,7 @@ def _torso_center(
     for record in records:
         if record.joint_name not in torso_joints:
             continue
-        score = record.confidence if record.confidence is not None else record.visibility
+        score = pose_score(record)
         if record.x is None or record.y is None or (score is not None and score < confidence_threshold):
             continue
         points[record.joint_name] = (record.x, record.y)
@@ -230,6 +269,77 @@ def _torso_center(
             sum(point[1] for point in points.values()) / len(points),
         )
     return None
+
+
+def _apply_limb_length_consistency_gate(
+    records: list[PoseRecord],
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+    tolerance_ratio: float,
+) -> list[PoseRecord]:
+    by_frame: dict[int, list[PoseRecord]] = defaultdict(list)
+    for record in records:
+        by_frame[record.frame_index].append(record)
+
+    baseline_lengths: dict[tuple[str, str], float] = {}
+    for proximal, distal, _ in LIMB_SEGMENTS:
+        lengths: list[float] = []
+        for frame_records in by_frame.values():
+            points = _confident_points(
+                frame_records,
+                confidence_threshold=confidence_threshold,
+                threshold_config=threshold_config,
+            )
+            if proximal not in points or distal not in points:
+                continue
+            lengths.append(float(np.hypot(points[distal][0] - points[proximal][0], points[distal][1] - points[proximal][1])))
+        if lengths:
+            baseline_lengths[(proximal, distal)] = statistics.median(lengths)
+
+    if not baseline_lengths:
+        return records
+
+    rejected: set[tuple[int, str]] = set()
+    for frame_index, frame_records in by_frame.items():
+        points = _confident_points(
+            frame_records,
+            confidence_threshold=confidence_threshold,
+            threshold_config=threshold_config,
+        )
+        for proximal, distal, reject_joint in LIMB_SEGMENTS:
+            baseline = baseline_lengths.get((proximal, distal))
+            if baseline is None or baseline <= 0:
+                continue
+            if proximal not in points or distal not in points:
+                continue
+            length = float(np.hypot(points[distal][0] - points[proximal][0], points[distal][1] - points[proximal][1]))
+            if abs(length - baseline) / baseline > tolerance_ratio:
+                rejected.add((frame_index, reject_joint))
+
+    if not rejected:
+        return records
+
+    return [
+        replace(record, x=None, y=None)
+        if (record.frame_index, record.joint_name) in rejected
+        else record
+        for record in records
+    ]
+
+
+def _confident_points(
+    records: list[PoseRecord],
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+) -> dict[str, tuple[float, float]]:
+    points: dict[str, tuple[float, float]] = {}
+    for record in records:
+        score = pose_score(record)
+        joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
+        if record.x is None or record.y is None or (score is not None and score < joint_threshold):
+            continue
+        points[record.joint_name] = (record.x, record.y)
+    return points
 
 
 def _remove_jump_outliers(

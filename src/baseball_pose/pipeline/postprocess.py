@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from baseball_pose.config import RuntimeConfig
+from baseball_pose.config import RuntimeConfig, resolve_postprocess_config
 from baseball_pose.io.paths import pose_path
 from baseball_pose.io.pose_csv import read_pose_records, write_pose_records
 from baseball_pose.postprocess.smoothing import smooth_pose_records
@@ -28,12 +28,15 @@ def smooth_pose_files(
 ) -> list[SmoothPoseResult]:
     condition_ids = source_conditions if source_conditions is not None else config.condition_ids
     condition_ids = [condition_id for condition_id in condition_ids if not condition_id.endswith(output_suffix)]
-    smoothing_config = config.raw.get("postprocess", {}).get("smoothing", {})
-    confidence_threshold = float(config.raw["postprocess"].get("confidence_threshold", 0.5))
-    max_gap_frames = int(config.raw["postprocess"].get("interpolate_max_gap_frames", 3))
     results: list[SmoothPoseResult] = []
 
     for clip_id in clip_ids:
+        postprocess_config = resolve_postprocess_config(config.raw, clip_id)
+        smoothing_config = postprocess_config.get("smoothing", {})
+        confidence_threshold = float(postprocess_config.get("confidence_threshold", 0.5))
+        threshold_config = postprocess_config.get("confidence_thresholds", {})
+        max_gap_frames = int(postprocess_config.get("interpolate_max_gap_frames", 3))
+        max_gap_config = postprocess_config.get("interpolate_max_gap_by_group", {})
         for source_condition_id in condition_ids:
             source_path = pose_path(config.data_dir, clip_id, source_condition_id)
             if not source_path.exists():
@@ -62,16 +65,22 @@ def smooth_pose_files(
                     median_window_length=int(smoothing_config.get("median_window_length", 1)),
                     refine_window_length=int(smoothing_config.get("refine_window_length", 1)),
                     confidence_threshold=confidence_threshold,
+                    threshold_config=threshold_config if isinstance(threshold_config, dict) else {},
                     max_gap_frames=max_gap_frames,
+                    max_gap_config=max_gap_config if isinstance(max_gap_config, dict) else {},
                     jump_threshold_multiplier=float(
                         smoothing_config.get("jump_threshold_multiplier", 6.0)
                     ),
+                    joint_jump_config=smoothing_config.get("joint_jump_thresholds", {}),
                     torso_gate_enabled=bool(smoothing_config.get("torso_gate_enabled", True)),
                     torso_jump_threshold_multiplier=float(
                         smoothing_config.get("torso_jump_threshold_multiplier", 8.0)
                     ),
                     min_torso_jump_distance=float(
                         smoothing_config.get("min_torso_jump_distance", 0.08)
+                    ),
+                    limb_length_tolerance_ratio=float(
+                        smoothing_config.get("limb_length_tolerance_ratio", 0.28)
                     ),
                 )
             ]

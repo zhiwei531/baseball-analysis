@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from baseball_pose.pose.schema import POSE_CONNECTIONS, PoseRecord
+from baseball_pose.pose.quality import threshold_for_joint
+from baseball_pose.pose.schema import POSE_CONNECTIONS, PoseRecord, pose_score
 from baseball_pose.preprocessing.roi import RoiBox, crop_to_roi
 
 
@@ -104,13 +105,15 @@ def _confident_points(
     image_width: int,
     image_height: int,
     confidence_threshold: float,
+    threshold_config: dict[str, object] | None = None,
 ) -> dict[str, tuple[float, float]]:
     points: dict[str, tuple[float, float]] = {}
     for record in records:
         if record.x is None or record.y is None:
             continue
-        score = record.confidence if record.confidence is not None else record.visibility
-        if score is not None and score < confidence_threshold:
+        score = pose_score(record)
+        joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
+        if score is not None and score < joint_threshold:
             continue
         points[record.joint_name] = (record.x * image_width, record.y * image_height)
     return points

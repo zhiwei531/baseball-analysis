@@ -22,6 +22,10 @@ from baseball_pose.pipeline.figures import make_report_figures
 from baseball_pose.pipeline.image_proposal_debug import render_image_proposal_debug_videos
 from baseball_pose.pipeline.overlays import render_pose_overlays
 from baseball_pose.pipeline.postprocess import smooth_pose_files
+from baseball_pose.pipeline.report_llm import generate_llm_reports
+from baseball_pose.pipeline.report_prompt import build_report_prompts
+from baseball_pose.pipeline.report_summary import build_report_summaries
+from baseball_pose.pipeline.stability import summarize_pose_stability
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,6 +54,10 @@ def build_parser() -> argparse.ArgumentParser:
             "render-body-mask-debug",
             "render-image-proposal-debug",
             "summarize-roi-ablation",
+            "summarize-pose-stability",
+            "build-report-summary",
+            "build-report-prompt",
+            "generate-llm-report",
         ],
         help="Command to run.",
     )
@@ -68,6 +76,37 @@ def build_parser() -> argparse.ArgumentParser:
         "--condition",
         action="append",
         help="Condition id for commands that read existing pose or feature files.",
+    )
+    parser.add_argument(
+        "--athlete-group",
+        default=None,
+        help="Optional cohort alias such as youth_pitcher, high_school_pitcher, or professional_pitcher.",
+    )
+    parser.add_argument(
+        "--reference-file",
+        default="data/metadata/llm_biomechanics_reference.yaml",
+        help="Path to the YAML reference file used for report summary generation.",
+    )
+    parser.add_argument(
+        "--llm-model",
+        default="gpt-4.1",
+        help="Model name for the OpenAI-compatible chat completions endpoint.",
+    )
+    parser.add_argument(
+        "--llm-base-url",
+        default="https://api.openai.com/v1",
+        help="Base URL for an OpenAI-compatible API endpoint.",
+    )
+    parser.add_argument(
+        "--llm-api-key-env",
+        default="OPENAI_API_KEY",
+        help="Environment variable that stores the API key.",
+    )
+    parser.add_argument(
+        "--llm-temperature",
+        type=float,
+        default=0.2,
+        help="Sampling temperature for report generation.",
     )
     return parser
 
@@ -316,6 +355,71 @@ def main() -> None:
         output_path = config.data_dir / "processed" / "metrics" / "roi_ablation.csv"
         print(f"Wrote {len(rows)} ROI ablation metric rows: {output_path}")
         print(f"Wrote ROI ablation summary table: {output_path.with_name('roi_ablation_summary.csv')}")
+        return
+
+    if args.command == "summarize-pose-stability":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = summarize_pose_stability(
+            clip_ids=clip_ids,
+            config=config,
+            conditions=args.condition,
+        )
+        for result in results:
+            print(f"{result.clip_id}: wrote pose stability summaries")
+            print(f"  joints: {result.joint_csv}")
+            print(f"  limbs: {result.limb_csv}")
+        return
+
+    if args.command == "build-report-summary":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = build_report_summaries(
+            clip_ids=clip_ids,
+            config=config,
+            conditions=args.condition,
+            athlete_group=args.athlete_group,
+            reference_path=args.reference_file,
+        )
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.condition_id}: "
+                f"{result.frame_count} feature rows -> "
+                f"{result.available_metric_count} available, "
+                f"{result.partial_metric_count} partial, "
+                f"{result.unavailable_metric_count} unavailable"
+            )
+            print(f"  summary: {result.summary_path}")
+        return
+
+    if args.command == "build-report-prompt":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = build_report_prompts(
+            clip_ids=clip_ids,
+            config=config,
+            conditions=args.condition,
+        )
+        for result in results:
+            print(f"{result.clip_id}/{result.condition_id}: wrote prompt package")
+            print(f"  payload: {result.payload_path}")
+            print(f"  prompt: {result.prompt_path}")
+            print(f"  draft: {result.draft_report_path}")
+        return
+
+    if args.command == "generate-llm-report":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = generate_llm_reports(
+            clip_ids=clip_ids,
+            config=config,
+            conditions=args.condition,
+            model=args.llm_model,
+            base_url=args.llm_base_url,
+            api_key_env=args.llm_api_key_env,
+            temperature=float(args.llm_temperature),
+        )
+        for result in results:
+            print(f"{result.clip_id}/{result.condition_id}: wrote LLM report with {result.model}")
+            print(f"  report: {result.report_path}")
+            print(f"  request: {result.request_path}")
+            print(f"  response: {result.response_path}")
         return
 
 

@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from baseball_pose.io.video import FrameRecord, read_frame, write_video_from_frames
-from baseball_pose.pose.schema import PoseRecord
+from baseball_pose.pose.quality import threshold_for_joint
+from baseball_pose.pose.schema import PoseRecord, pose_score
 
 
 @dataclass(frozen=True)
@@ -218,13 +219,15 @@ def _pose_frame_boxes(
     image_height: int,
     confidence_threshold: float,
     min_joints_per_frame: int,
+    threshold_config: dict[str, object] | None = None,
 ) -> list[RoiBox]:
     by_frame: dict[int, list[PoseRecord]] = {}
     for record in records:
         if record.x is None or record.y is None:
             continue
-        score = record.confidence if record.confidence is not None else record.visibility
-        if score is not None and score < confidence_threshold:
+        score = pose_score(record)
+        joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
+        if score is not None and score < joint_threshold:
             continue
         by_frame.setdefault(record.frame_index, []).append(record)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from baseball_pose.config import RuntimeConfig
+from baseball_pose.config import RuntimeConfig, resolve_postprocess_config
 from baseball_pose.features.extraction import extract_motion_features
 from baseball_pose.io.feature_csv import write_feature_rows
 from baseball_pose.io.paths import feature_path, pose_path
@@ -26,16 +26,22 @@ def extract_feature_files(
     conditions: list[str] | None = None,
 ) -> list[FeatureExtractionResult]:
     condition_ids = conditions if conditions is not None else config.condition_ids
-    confidence_threshold = float(config.raw["postprocess"].get("confidence_threshold", 0.5))
     results: list[FeatureExtractionResult] = []
 
     for clip_id in clip_ids:
+        postprocess_config = resolve_postprocess_config(config.raw, clip_id)
+        confidence_threshold = float(postprocess_config.get("confidence_threshold", 0.5))
+        threshold_config = postprocess_config.get("confidence_thresholds", {})
         for condition_id in condition_ids:
             source_path = pose_path(config.data_dir, clip_id, condition_id)
             if not source_path.exists():
                 continue
             records = read_pose_records(source_path)
-            rows = extract_motion_features(records, confidence_threshold=confidence_threshold)
+            rows = extract_motion_features(
+                records,
+                confidence_threshold=confidence_threshold,
+                threshold_config=threshold_config if isinstance(threshold_config, dict) else {},
+            )
             output_path = feature_path(config.data_dir, clip_id, condition_id)
             write_feature_rows(output_path, rows)
             results.append(

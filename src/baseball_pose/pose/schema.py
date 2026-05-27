@@ -52,6 +52,21 @@ class PoseRecord:
     inference_time_ms: float | None = None
 
 
+def pose_score(record: PoseRecord) -> float | None:
+    """Return a conservative trust score for one pose record.
+
+    MediaPipe can emit high presence/confidence even when a joint is heavily
+    occluded. For downstream filtering and rendering, visibility is therefore
+    the safer signal. When both values are available, use the lower one.
+    """
+
+    if record.visibility is not None and record.confidence is not None:
+        return min(record.visibility, record.confidence)
+    if record.visibility is not None:
+        return record.visibility
+    return record.confidence
+
+
 def validate_joint_name(joint_name: str) -> None:
     if joint_name not in CANONICAL_JOINTS:
         raise ValueError(f"Unsupported joint name: {joint_name}")

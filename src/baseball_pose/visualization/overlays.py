@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from baseball_pose.pose.schema import POSE_CONNECTIONS, PoseRecord
+from baseball_pose.pose.quality import threshold_for_joint
+from baseball_pose.pose.schema import POSE_CONNECTIONS, PoseRecord, pose_score
 
 
 def draw_pose_overlay(
     image: Any,
     records: list[PoseRecord],
     confidence_threshold: float = 0.5,
+    threshold_config: dict[str, object] | None = None,
     tracks: dict[str, list[tuple[int, int]]] | None = None,
 ) -> Any:
     """Draw skeleton and optional joint tracks on one BGR image."""
@@ -23,8 +25,9 @@ def draw_pose_overlay(
     for record in records:
         if record.x is None or record.y is None:
             continue
-        score = record.confidence if record.confidence is not None else record.visibility
-        if score is not None and score < confidence_threshold:
+        score = pose_score(record)
+        joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
+        if score is not None and score < joint_threshold:
             continue
         x = int(record.x * width)
         y = int(record.y * height)

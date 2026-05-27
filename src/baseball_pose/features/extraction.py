@@ -10,7 +10,8 @@ from baseball_pose.features.angles import (
     segment_angle_degrees,
     signed_angle_delta_degrees,
 )
-from baseball_pose.pose.schema import PoseRecord
+from baseball_pose.pose.quality import threshold_for_joint
+from baseball_pose.pose.schema import PoseRecord, pose_score
 
 
 ANGLE_DEFINITIONS = {
@@ -60,6 +61,7 @@ class MotionFeatureRow:
 def extract_motion_features(
     records: list[PoseRecord],
     confidence_threshold: float = 0.5,
+    threshold_config: dict[str, object] | None = None,
 ) -> list[MotionFeatureRow]:
     """Convert long-form pose landmarks into one feature row per frame."""
 
@@ -78,7 +80,7 @@ def extract_motion_features(
         clip_id = frame_records[0].clip_id
         condition_id = frame_records[0].condition_id
         timestamp_sec = frame_records[0].timestamp_sec
-        points = _confident_points(frame_records, confidence_threshold)
+        points = _confident_points(frame_records, confidence_threshold, threshold_config)
         angles = {
             feature_name: _angle_for_points(points, joints)
             for feature_name, joints in ANGLE_DEFINITIONS.items()
@@ -184,13 +186,15 @@ def _records_by_frame(records: list[PoseRecord]) -> dict[int, list[PoseRecord]]:
 def _confident_points(
     records: list[PoseRecord],
     confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
 ) -> dict[str, tuple[float, float]]:
     points: dict[str, tuple[float, float]] = {}
     for record in records:
         if record.x is None or record.y is None:
             continue
-        score = record.confidence if record.confidence is not None else record.visibility
-        if score is not None and score < confidence_threshold:
+        score = pose_score(record)
+        joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
+        if score is not None and score < joint_threshold:
             continue
         points[record.joint_name] = (record.x, record.y)
     return points

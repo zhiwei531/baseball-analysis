@@ -5,12 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from baseball_pose.config import RuntimeConfig
+from baseball_pose.config import RuntimeConfig, resolve_postprocess_config
 from baseball_pose.io.frame_csv import read_frame_records
 from baseball_pose.io.paths import frame_manifest_path, overlay_frame_dir, overlay_video_path, pose_path
 from baseball_pose.io.pose_csv import read_pose_records
 from baseball_pose.io.video import read_frame, write_video_from_frames
-from baseball_pose.pose.schema import PoseRecord
+from baseball_pose.pose.quality import threshold_for_joint
+from baseball_pose.pose.schema import PoseRecord, pose_score
 from baseball_pose.visualization.overlays import draw_pose_overlay
 
 
@@ -29,10 +30,12 @@ def render_pose_overlays(
     draw_tracks: bool = False,
 ) -> list[OverlayRenderResult]:
     condition_ids = conditions if conditions is not None else _preferred_overlay_conditions(config.condition_ids)
-    confidence_threshold = float(config.raw["postprocess"].get("confidence_threshold", 0.5))
     results: list[OverlayRenderResult] = []
 
     for clip_id in clip_ids:
+        postprocess_config = resolve_postprocess_config(config.raw, clip_id)
+        confidence_threshold = float(postprocess_config.get("confidence_threshold", 0.5))
+        threshold_config = postprocess_config.get("confidence_thresholds", {})
         for condition_id in condition_ids:
             source_condition_id = _frame_source_condition(condition_id)
             frames_csv = frame_manifest_path(config.data_dir, clip_id, source_condition_id)
@@ -53,11 +56,19 @@ def render_pose_overlays(
                 image = read_frame(frame.frame_path)
                 frame_records = records_by_frame.get(frame.frame_index, [])
                 if tracks is not None:
-                    _update_tracks(tracks, frame_records, frame.width, frame.height)
+                    _update_tracks(
+                        tracks,
+                        frame_records,
+                        frame.width,
+                        frame.height,
+                        confidence_threshold=confidence_threshold,
+                        threshold_config=threshold_config if isinstance(threshold_config, dict) else {},
+                    )
                 overlay = draw_pose_overlay(
                     image,
                     frame_records,
                     confidence_threshold=confidence_threshold,
+                    threshold_config=threshold_config if isinstance(threshold_config, dict) else {},
                     tracks=tracks,
                 )
                 overlay_path = target_frame_dir / frame.frame_path.name.replace(
@@ -123,11 +134,17 @@ def _update_tracks(
     records: list[PoseRecord],
     width: int | None,
     height: int | None,
+    confidence_threshold: float,
+    threshold_config: dict[str, object],
 ) -> None:
     if width is None or height is None:
         return
     for record in records:
         if record.joint_name not in tracks or record.x is None or record.y is None:
+            continue
+        score = pose_score(record)
+        joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
+        if score is not None and score < joint_threshold:
             continue
         x = int(record.x * width)
         y = int(record.y * height)

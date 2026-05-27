@@ -107,6 +107,18 @@ def validate_config(config: RuntimeConfig) -> None:
         raise ValueError(f"Experiment references undefined conditions: {missing_conditions}")
 
 
+def resolve_postprocess_config(raw_config: dict[str, Any], clip_id: str) -> dict[str, Any]:
+    """Return postprocess config with optional clip-specific overrides merged in."""
+
+    base = dict(raw_config.get("postprocess", {}))
+    clip_overrides = base.pop("clip_overrides", {})
+    if isinstance(clip_overrides, dict):
+        override = clip_overrides.get(clip_id, {})
+        if isinstance(override, dict):
+            return _deep_merge(base, override)
+    return base
+
+
 def _read_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(path)

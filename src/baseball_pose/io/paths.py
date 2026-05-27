@@ -25,6 +25,18 @@ def metric_path(data_dir: str | Path, experiment_id: str) -> Path:
     return Path(data_dir) / "processed" / "metrics" / f"{experiment_id}.csv"
 
 
+def report_summary_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(data_dir) / "processed" / "metrics" / "report_summaries" / clip_id / f"{condition_id}.json"
+
+
+def report_prompt_dir(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(data_dir) / "processed" / "metrics" / "report_prompts" / clip_id / condition_id
+
+
+def report_llm_dir(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(data_dir) / "processed" / "metrics" / "report_llm" / clip_id / condition_id
+
+
 def overlay_frame_dir(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
     return Path(output_dir) / "overlays" / "frames" / clip_id / condition_id
 
