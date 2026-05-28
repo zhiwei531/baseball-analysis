@@ -2,6 +2,11 @@
 
 Reproducible 2D baseball pose-analysis pipeline for generating readable full-video baseball posture analysis from local batting and pitching clips.
 
+The current repo is still 2D-first, but a staged 3D extension plan now exists
+in [docs/3d_extension_plan.md](docs/3d_extension_plan.md). The intended
+expansion path is `smoothed 2D pose CSV -> temporal 3D lifting -> 3D features
+-> readable report visuals`, not direct world-coordinate reconstruction.
+
 ## Current Scope
 
 The current best full-video pipeline follows this path:
@@ -197,6 +202,29 @@ The feature CSV includes report-oriented 2D posture proxies that can be computed
 - wrist speed and a max-wrist hand-speed proxy.
 
 These are intentionally limited to 2D pose-derived quantities. Ball, bat, release, impact, MER, and SFC-specific metrics require event labels or extra object tracking before they should be reported as exact biomechanics.
+
+## Planned 3D Extension
+
+The repo now includes minimal 3D scaffolding so the architecture can grow
+without breaking the current 2D workflow:
+
+```text
+src/baseball_pose/pose3d/
+src/baseball_pose/features3d/
+src/baseball_pose/visualization3d/
+src/baseball_pose/pipeline/pose3d.py
+```
+
+Two new CLI commands expose the planned handoff point:
+
+```bash
+baseball-pose plan-3d --condition image_center_motion_grabcut_pose_smooth
+baseball-pose lift-pose-3d --condition image_center_motion_grabcut_pose_smooth
+```
+
+At this stage, `plan-3d` prints the intended 2D-to-3D artifact flow and
+`lift-pose-3d` fails with a clear placeholder message until a real temporal 3D
+lifting backend is integrated.
 
 Motion preview outputs are written to:
 

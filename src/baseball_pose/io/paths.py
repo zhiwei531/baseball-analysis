@@ -21,6 +21,14 @@ def feature_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
     return Path(data_dir) / "processed" / "features" / clip_id / f"{condition_id}.csv"
 
 
+def pose3d_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(data_dir) / "processed" / "poses3d" / clip_id / f"{condition_id}.csv"
+
+
+def feature3d_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(data_dir) / "processed" / "features3d" / clip_id / f"{condition_id}.csv"
+
+
 def metric_path(data_dir: str | Path, experiment_id: str) -> Path:
     return Path(data_dir) / "processed" / "metrics" / f"{experiment_id}.csv"
 

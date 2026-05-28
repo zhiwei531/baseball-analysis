@@ -21,6 +21,7 @@ from baseball_pose.pipeline.features import extract_feature_files
 from baseball_pose.pipeline.figures import make_report_figures
 from baseball_pose.pipeline.image_proposal_debug import render_image_proposal_debug_videos
 from baseball_pose.pipeline.overlays import render_pose_overlays
+from baseball_pose.pipeline.pose3d import build_pose3d_plan, lift_pose_sequence_placeholder
 from baseball_pose.pipeline.postprocess import smooth_pose_files
 from baseball_pose.pipeline.report_llm import generate_llm_reports
 from baseball_pose.pipeline.report_prompt import build_report_prompts
@@ -58,6 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
             "build-report-summary",
             "build-report-prompt",
             "generate-llm-report",
+            "plan-3d",
+            "lift-pose-3d",
         ],
         help="Command to run.",
     )
@@ -125,6 +128,44 @@ def main() -> None:
         print("Pipeline stages:")
         for stage in config.pipeline_stages:
             print(f"- {stage}")
+        return
+
+    if args.command == "plan-3d":
+        clips = load_clips(config.clips_file)
+        clip_filter = set(args.clip_id) if args.clip_id else set(config.clip_ids)
+        input_conditions = args.condition or config.condition_ids
+        for clip in clips:
+            if clip.clip_id not in clip_filter:
+                continue
+            for condition_id in input_conditions:
+                plan = build_pose3d_plan(
+                    clip,
+                    config,
+                    input_condition_id=condition_id,
+                )
+                print(f"{plan.clip_id}: {plan.input_condition_id} -> {plan.output_condition_id}")
+                print(f"  backend: {plan.backend}")
+                print(f"  root joint: {plan.root_joint}")
+                print(f"  input pose: {plan.input_pose_path}")
+                print(f"  output pose3d: {plan.output_pose3d_path}")
+                print(f"  output feature3d: {plan.output_feature3d_path}")
+        return
+
+    if args.command == "lift-pose-3d":
+        clips = load_clips(config.clips_file)
+        clip_filter = set(args.clip_id) if args.clip_id else set(config.clip_ids)
+        input_conditions = args.condition or config.condition_ids
+        for clip in clips:
+            if clip.clip_id not in clip_filter:
+                continue
+            for condition_id in input_conditions:
+                plan = build_pose3d_plan(
+                    clip,
+                    config,
+                    input_condition_id=condition_id,
+                )
+                print(f"Planned 3D lift: {plan.clip_id} {plan.input_condition_id} -> {plan.output_condition_id}")
+                lift_pose_sequence_placeholder(plan)
         return
 
     if args.command == "run-baseline":

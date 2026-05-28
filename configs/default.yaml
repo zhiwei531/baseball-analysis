@@ -27,6 +27,14 @@ pose:
   min_tracking_confidence: 0.5
   canonical_coordinate_space: normalized
 
+pose3d:
+  enabled: false
+  backend: temporal_lifter_stub
+  input_condition_suffix: _smooth
+  root_joint: pelvis_center
+  normalize_scale: true
+  min_valid_joints: 8
+
 postprocess:
   confidence_threshold: 0.5
   confidence_thresholds:
@@ -82,6 +90,7 @@ experiments:
     - baseline_raw
     - roi_clahe
     - roi_clahe_smooth
+  default_3d_conditions: []
 
 conditions:
   baseline_raw:

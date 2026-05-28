@@ -70,6 +70,18 @@ class RuntimeConfig:
     def pipeline_stages(self) -> tuple[str, ...]:
         return DEFAULT_PIPELINE_STAGES
 
+    @property
+    def pose3d_enabled(self) -> bool:
+        return bool(self.raw.get("pose3d", {}).get("enabled", False))
+
+    @property
+    def pose3d_backend(self) -> str:
+        return str(self.raw.get("pose3d", {}).get("backend", "temporal_lifter_stub"))
+
+    @property
+    def pose3d_condition_ids(self) -> list[str]:
+        return list(self.raw.get("experiments", {}).get("default_3d_conditions", []))
+
 
 def load_config(path: str | Path) -> RuntimeConfig:
     """Load a YAML config and merge one optional parent config."""
@@ -111,6 +123,18 @@ def resolve_postprocess_config(raw_config: dict[str, Any], clip_id: str) -> dict
     """Return postprocess config with optional clip-specific overrides merged in."""
 
     base = dict(raw_config.get("postprocess", {}))
+    clip_overrides = base.pop("clip_overrides", {})
+    if isinstance(clip_overrides, dict):
+        override = clip_overrides.get(clip_id, {})
+        if isinstance(override, dict):
+            return _deep_merge(base, override)
+    return base
+
+
+def resolve_pose3d_config(raw_config: dict[str, Any], clip_id: str) -> dict[str, Any]:
+    """Return pose3d config with optional clip-specific overrides merged in."""
+
+    base = dict(raw_config.get("pose3d", {}))
     clip_overrides = base.pop("clip_overrides", {})
     if isinstance(clip_overrides, dict):
         override = clip_overrides.get(clip_id, {})
