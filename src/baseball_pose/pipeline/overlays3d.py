@@ -5,12 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from baseball_pose.config import RuntimeConfig
+from baseball_pose.config import RuntimeConfig, resolve_postprocess_config
 from baseball_pose.io.frame_csv import read_frame_records
-from baseball_pose.io.paths import frame_manifest_path, overlay3d_frame_dir, overlay3d_video_path
+from baseball_pose.io.paths import frame_manifest_path, overlay3d_frame_dir, overlay3d_video_path, pose_path
+from baseball_pose.io.pose_csv import read_pose_records
 from baseball_pose.io.pose3d_csv import read_pose3d_records
 from baseball_pose.io.video import read_frame, write_video_from_frames
 from baseball_pose.pipeline.pose3d import _source_condition_for_3d
+from baseball_pose.visualization.overlays import draw_pose_overlay
 from baseball_pose.visualization3d.overlays import build_projection_context, draw_pose3d_preview
 
 
@@ -39,6 +41,12 @@ def render_pose3d_overlays(
 
             frames = read_frame_records(frames_csv)
             records_by_frame = _records_by_frame(read_pose3d_records(poses3d_csv))
+            pose2d_condition_id = _pose2d_condition_for_3d(condition_id)
+            pose2d_csv = pose_path(config.data_dir, clip_id, pose2d_condition_id)
+            pose2d_by_frame = _records_by_frame(read_pose_records(pose2d_csv)) if pose2d_csv.exists() else {}
+            postprocess_config = resolve_postprocess_config(config.raw, clip_id)
+            confidence_threshold = float(postprocess_config.get("confidence_threshold", 0.5))
+            threshold_config = postprocess_config.get("confidence_thresholds", {})
             projection_context = build_projection_context(records_by_frame)
             target_frame_dir = overlay3d_frame_dir(config.output_dir, clip_id, condition_id)
             target_frame_dir.mkdir(parents=True, exist_ok=True)
@@ -49,7 +57,13 @@ def render_pose3d_overlays(
                 if not frame_records:
                     continue
                 image = read_frame(frame.frame_path)
-                preview = draw_pose3d_preview(image, frame_records, context=projection_context)
+                image_with_2d = draw_pose_overlay(
+                    image,
+                    pose2d_by_frame.get(frame.frame_index, []),
+                    confidence_threshold=confidence_threshold,
+                    threshold_config=threshold_config if isinstance(threshold_config, dict) else {},
+                )
+                preview = draw_pose3d_preview(image_with_2d, frame_records, context=projection_context)
                 overlay_path = target_frame_dir / frame.frame_path.name.replace(source_condition_id, condition_id)
                 _write_image(overlay_path, preview)
                 overlay_paths.append(overlay_path)
@@ -84,6 +98,15 @@ def _frame_source_condition_for_3d(condition_id: str) -> str:
     if source.endswith("_3d"):
         source = source[: -len("_3d")]
     return _source_condition_for_3d(source)
+
+
+def _pose2d_condition_for_3d(condition_id: str) -> str:
+    source = condition_id
+    if source.endswith("_smooth"):
+        source = source[: -len("_smooth")]
+    if source.endswith("_3d"):
+        source = source[: -len("_3d")]
+    return source
 
 
 def _write_image(path: str | Path, image) -> None:
