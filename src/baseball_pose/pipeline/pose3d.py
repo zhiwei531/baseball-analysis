@@ -4,15 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from math import nan
 
 from baseball_pose.config import RuntimeConfig, resolve_pose3d_config
 from baseball_pose.io.frame_csv import read_frame_records
 from baseball_pose.io.metadata import ClipMetadata
 from baseball_pose.io.paths import feature3d_path, frame_manifest_path, pose3d_path, pose_path
+from baseball_pose.io.pose_csv import read_pose_records
 from baseball_pose.io.pose3d_csv import write_pose3d_records
 from baseball_pose.io.video import read_frame
+from baseball_pose.pose.quality import threshold_for_joint
 from baseball_pose.pose3d.mediapipe_world import MediaPipeWorldPoseEstimator
 from baseball_pose.pose.mediapipe_pose import _require_cv2
+from baseball_pose.pose.schema import pose_score
 from baseball_pose.preprocessing.image_proposal import (
     ImageProposalTracker,
     apply_image_proposal_mask,
@@ -95,6 +99,13 @@ def lift_pose_sequence(plan: Pose3DPlan, clip: ClipMetadata, config: RuntimeConf
             records = _lift_image_proposal_frames(frames, clip, config, estimator, plan.output_condition_id)
     finally:
         estimator.close()
+
+    if plan.input_pose_path.exists():
+        records = _gate_pose3d_with_2d_prior(
+            records,
+            pose2d_path=plan.input_pose_path,
+            pose3d_config=resolve_pose3d_config(config.raw, clip.clip_id),
+        )
 
     write_pose3d_records(plan.output_pose3d_path, records)
     return len(records)
@@ -192,3 +203,80 @@ def _lift_image_proposal_frames(
         previous_image = image
         previous_mask = proposal.mask
     return all_records
+
+
+def _gate_pose3d_with_2d_prior(
+    records,
+    *,
+    pose2d_path: Path,
+    pose3d_config: dict[str, object],
+):
+    """Use the cleaned 2D pipeline as a trust prior for 3D joints."""
+
+    threshold_config = pose3d_config.get("confidence_thresholds", {})
+    default_threshold = float(pose3d_config.get("confidence_threshold", 0.5))
+    pose2d_records = read_pose_records(pose2d_path)
+    pose2d_by_key = {
+        (record.frame_index, record.joint_name): record
+        for record in pose2d_records
+    }
+    gated = []
+    for record in records:
+        prior = pose2d_by_key.get((record.frame_index, record.joint_name))
+        if prior is None:
+            gated.append(
+                record.__class__(
+                    clip_id=record.clip_id,
+                    condition_id=record.condition_id,
+                    frame_index=record.frame_index,
+                    timestamp_sec=record.timestamp_sec,
+                    joint_name=record.joint_name,
+                    x_3d=nan,
+                    y_3d=nan,
+                    z_3d=nan,
+                    scale_mode=record.scale_mode,
+                    lift_backend=record.lift_backend,
+                    input_quality_score=None,
+                )
+            )
+            continue
+        threshold = threshold_for_joint(record.joint_name, default_threshold, threshold_config if isinstance(threshold_config, dict) else {})
+        prior_score = pose_score(prior)
+        if prior.x is None or prior.y is None or (prior_score is not None and prior_score < threshold):
+            gated.append(
+                record.__class__(
+                    clip_id=record.clip_id,
+                    condition_id=record.condition_id,
+                    frame_index=record.frame_index,
+                    timestamp_sec=record.timestamp_sec,
+                    joint_name=record.joint_name,
+                    x_3d=nan,
+                    y_3d=nan,
+                    z_3d=nan,
+                    scale_mode=record.scale_mode,
+                    lift_backend=record.lift_backend,
+                    input_quality_score=prior_score,
+                )
+            )
+            continue
+        merged_score = record.input_quality_score
+        if prior_score is not None and merged_score is not None:
+            merged_score = min(prior_score, merged_score)
+        elif prior_score is not None:
+            merged_score = prior_score
+        gated.append(
+            record.__class__(
+                clip_id=record.clip_id,
+                condition_id=record.condition_id,
+                frame_index=record.frame_index,
+                timestamp_sec=record.timestamp_sec,
+                joint_name=record.joint_name,
+                x_3d=record.x_3d,
+                y_3d=record.y_3d,
+                z_3d=record.z_3d,
+                scale_mode=record.scale_mode,
+                lift_backend=record.lift_backend,
+                input_quality_score=merged_score,
+            )
+        )
+    return gated

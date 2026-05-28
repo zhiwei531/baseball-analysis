@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import replace
 import statistics
+from math import nan
 
 import numpy as np
 from scipy.signal import savgol_filter
@@ -119,6 +120,9 @@ def _smooth_joint_records(
             output.append(
                 replace(
                     record,
+                    x_3d=nan,
+                    y_3d=nan,
+                    z_3d=nan,
                     input_quality_score=None,
                 )
             )

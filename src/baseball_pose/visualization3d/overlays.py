@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+import math
 from typing import Any
 
 from baseball_pose.pose.schema import POSE_CONNECTIONS
@@ -33,7 +34,11 @@ def draw_pose3d_preview(source_image: Any, records: list[Pose3DRecord]) -> Any:
     _draw_source_frame(canvas, source_image)
     _draw_projection_header(canvas)
 
-    points = {record.joint_name: record for record in records}
+    points = {
+        record.joint_name: record
+        for record in records
+        if _is_finite_record(record)
+    }
     if not points:
         return canvas
 
@@ -96,8 +101,11 @@ def _pelvis_center(points: dict[str, Pose3DRecord]) -> tuple[float, float, float
         return (left.x_3d, left.y_3d, left.z_3d)
     if right:
         return (right.x_3d, right.y_3d, right.z_3d)
-    nose = points["nose"]
-    return (nose.x_3d, nose.y_3d, nose.z_3d)
+    nose = points.get("nose")
+    if nose:
+        return (nose.x_3d, nose.y_3d, nose.z_3d)
+    first = next(iter(points.values()))
+    return (first.x_3d, first.y_3d, first.z_3d)
 
 
 def _normalize_points(
@@ -138,6 +146,17 @@ def _project_points(
         py = int(y0 + h / 2 - (values[ax1] - center_y) * scale)
         mapped[joint_name] = (px, py)
     return mapped
+
+
+def _is_finite_record(record: Pose3DRecord) -> bool:
+    return (
+        record.x_3d is not None
+        and record.y_3d is not None
+        and record.z_3d is not None
+        and math.isfinite(record.x_3d)
+        and math.isfinite(record.y_3d)
+        and math.isfinite(record.z_3d)
+    )
 
 
 def _require_cv2():
