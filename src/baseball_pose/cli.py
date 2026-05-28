@@ -21,6 +21,7 @@ from baseball_pose.pipeline.features import extract_feature_files
 from baseball_pose.pipeline.figures import make_report_figures
 from baseball_pose.pipeline.image_proposal_debug import render_image_proposal_debug_videos
 from baseball_pose.pipeline.overlays import render_pose_overlays
+from baseball_pose.pipeline.overlays3d import render_pose3d_overlays
 from baseball_pose.pipeline.pose3d import build_pose3d_plan, lift_pose_sequence
 from baseball_pose.pipeline.postprocess import smooth_pose_files
 from baseball_pose.pipeline.report_llm import generate_llm_reports
@@ -52,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
             "extract-features",
             "make-figures",
             "render-overlays",
+            "render-overlays-3d",
             "render-body-mask-debug",
             "render-image-proposal-debug",
             "summarize-roi-ablation",
@@ -171,6 +173,19 @@ def main() -> None:
                 print(f"  source condition: {plan.source_condition_id}")
                 print(f"  output pose3d: {plan.output_pose3d_path}")
                 print(f"  wrote {record_count} 3D joint records")
+        return
+
+    if args.command == "render-overlays-3d":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        condition_ids = args.condition or config.pose3d_condition_ids
+        if not condition_ids:
+            raise ValueError(
+                "render-overlays-3d requires at least one --condition or experiments.default_3d_conditions."
+            )
+        results = render_pose3d_overlays(clip_ids, config, condition_ids)
+        for result in results:
+            print(f"{result.clip_id}/{result.condition_id}: {result.frame_count} frames")
+            print(f"  overlay3d: {result.overlay_video}")
         return
 
     if args.command == "run-baseline":
