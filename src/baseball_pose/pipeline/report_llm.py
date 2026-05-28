@@ -281,22 +281,22 @@ def _build_final_report(
             "## Plain-Language Interpretation",
             llm_text.strip(),
             "",
-            "## Output Metrics Produced By This Model",
+            "## 模型输出指标清单",
         ]
     )
     for item in metric_inventory:
         available_examples = item.get("available_examples", [])
-        example_text = ", ".join(f"`{example}`" for example in available_examples) if available_examples else "No stable example fields in this clip."
+        example_text = ", ".join(f"`{example}`" for example in available_examples) if available_examples else "当前片段中暂无稳定字段示例。"
         lines.append(
             f"- **{item.get('category_en', 'Metric category')} / {item.get('category_cn', '')}**: "
-            f"{item.get('plain_language_cn', '')} Example fields: {example_text}"
+            f"{item.get('plain_language_cn', '')} 字段示例：{example_text}"
         )
     lines.append("")
 
     lines.extend(
         [
-            "## Public-Facing Key Metrics",
-            "| Metric | Observed value | Meaning for parents and coaches | Literature support |",
+            "## 面向家长与教练的关键指标",
+            "| 指标 | 本次结果 | 面向家长与教练的解释 | 文献支持 |",
             "|---|---:|---|---|",
         ]
     )
@@ -306,8 +306,8 @@ def _build_final_report(
 
     lines.extend(
         [
-            "## Key Metrics",
-            "| Metric | Observed value | Interpretation | Evidence source |",
+            "## 关键指标明细",
+            "| 指标 | 本次结果 | 解读 | 依据来源 |",
             "|---|---:|---|---|",
         ]
     )
@@ -317,7 +317,7 @@ def _build_final_report(
 
     lines.extend(
         [
-            "## Injury Prevention Considerations",
+            "## 伤病预防提示",
         ]
     )
     for note in injury_notes:
@@ -326,17 +326,17 @@ def _build_final_report(
 
     lines.extend(
         [
-            "## Scope And Limits",
+            "## 局限性说明",
         ]
     )
     for limitation in payload.get("known_limitations", []):
         lines.append(f"- {limitation}")
-    lines.append("- Batting interpretation is still borrowing part of its evidence base from pitching literature, so coaching use is stronger than clinical inference.")
+    lines.append("- 当前对击球动作的部分解释仍借用了投球研究中的文献依据，因此更适合作为训练沟通材料，而不适合作为临床推断。")
     lines.append("")
 
     lines.extend(
         [
-            "## Reference Sources",
+            "## 参考文献",
         ]
     )
     for reference in references:
@@ -451,29 +451,29 @@ def _metric_table_row(metric: dict[str, Any], reference_lookup: dict[str, str]) 
 
     if observed_value is None and isinstance(summary, dict):
         if summary.get("p95_abs") is not None:
-            observed_text = f"{float(summary['p95_abs']):.1f} (p95 abs)"
+            observed_text = f"{float(summary['p95_abs']):.1f}（P95 绝对值）"
         elif summary.get("mean") is not None:
-            observed_text = f"{float(summary['mean']):.1f} (mean)"
+            observed_text = f"{float(summary['mean']):.1f}（均值）"
         else:
-            observed_text = "n/a"
+            observed_text = "不适用"
     elif observed_value is None:
-        observed_text = "n/a"
+        observed_text = "不适用"
     elif "velocity" in name:
-        observed_text = f"{float(observed_value):.1f} deg/s"
+        observed_text = f"{float(observed_value):.1f} 度/秒"
     elif "separation" in name or "flexion" in name:
-        observed_text = f"{float(observed_value):.1f} deg"
+        observed_text = f"{float(observed_value):.1f} 度"
     else:
         observed_text = f"{float(observed_value):.3f}"
 
     if status == "partial":
-        interpretation = metric.get("note") or "Partial proxy only."
+        interpretation = _zh_note(str(metric.get("note") or "Partial proxy only."))
     elif comparison.get("mode") == "mean_sd":
         band = str(comparison.get("band", "unknown")).replace("_", " ")
-        interpretation = f"{band} vs available reference."
+        interpretation = f"{_zh_band(band)}。"
     elif metric.get("reason"):
-        interpretation = str(metric["reason"])
+        interpretation = _zh_reason(str(metric["reason"]))
     else:
-        interpretation = "Observed directly from the current feature CSV."
+        interpretation = "直接来自当前特征表的观察结果。"
 
     return f"| `{name}` | {observed_text} | {interpretation} | {reference_text} |"
 
@@ -481,11 +481,11 @@ def _metric_table_row(metric: dict[str, Any], reference_lookup: dict[str, str]) 
 def _metric_reference_names(metric: dict[str, Any], reference_lookup: dict[str, str]) -> str:
     context = metric.get("reference_context")
     if not isinstance(context, dict):
-        return "Current project output only"
+        return "仅为当前项目直接输出"
     source_ids = context.get("source_ids", [])
     if not source_ids:
         note = metric.get("note")
-        return str(note) if note else "Current project output only"
+        return _zh_note(str(note)) if note else "仅为当前项目直接输出"
     return ", ".join(reference_lookup.get(str(source_id), str(source_id)) for source_id in source_ids)
 
 
@@ -499,7 +499,7 @@ def _public_metric_card_row(card: dict[str, Any]) -> str:
     elif observed_value is None and summary.get("mean") is not None:
         observed_text = f"{float(summary['mean']):.1f} {unit}".strip()
     elif observed_value is None:
-        observed_text = "n/a"
+        observed_text = "不适用"
     elif unit:
         observed_text = f"{float(observed_value):.1f} {unit}"
     else:
@@ -508,9 +508,9 @@ def _public_metric_card_row(card: dict[str, Any]) -> str:
     raw_note = card.get("note")
     note = "" if raw_note in {None, "None"} else str(raw_note).strip()
     if note:
-        explanation = f"{explanation} 注意：{note}".strip()
+        explanation = f"{explanation} 注意：{_zh_note(note)}".strip()
     sources = card.get("reference_short_names", [])
-    source_text = ", ".join(str(source) for source in sources) if sources else "Current clip only"
+    source_text = ", ".join(str(source) for source in sources) if sources else "仅基于当前视频片段"
     return f"| {label} | {observed_text} | {explanation} | {source_text} |"
 
 
@@ -521,13 +521,13 @@ def _render_injury_note(note: dict[str, Any]) -> list[str]:
     rationale = note.get("rationale", "")
     scope_note = note.get("scope_note", "")
     title = note.get("title", "Injury prevention note")
-    lines = [f"- **{title}**: {guidance}"]
+    lines = [f"- **{_zh_injury_title(str(title))}**：{_zh_injury_text(str(guidance))}"]
     if rationale:
-        lines.append(f"  Rationale: {rationale}")
+        lines.append(f"  解释依据：{_zh_injury_text(str(rationale))}")
     if scope_note:
-        lines.append(f"  Scope: {scope_note}")
+        lines.append(f"  适用范围说明：{_zh_injury_text(str(scope_note))}")
     if source_names:
-        lines.append(f"  Literature: {source_names}.")
+        lines.append(f"  参考文献：{source_names}。")
     return lines
 
 
@@ -536,8 +536,68 @@ def _render_reference(reference: dict[str, Any]) -> str:
     citation = reference.get("citation", "")
     urls = reference.get("urls", [])
     if urls:
-        return f"- **{short_name}**: {citation} Source: {urls[0]}"
-    return f"- **{short_name}**: {citation}"
+        return f"- **{short_name}**：{citation} 来源：{urls[0]}"
+    return f"- **{short_name}**：{citation}"
+
+
+def _zh_band(text: str) -> str:
+    mapping = {
+        "below 1sd": "低于现有参考区间的 1 个标准差范围",
+        "within 1sd": "位于现有参考区间的 1 个标准差范围内",
+        "above 1sd": "高于现有参考区间的 1 个标准差范围",
+    }
+    return mapping.get(text, text)
+
+
+def _zh_reason(text: str) -> str:
+    mapping = {
+        "Observed from current feature CSV but not matched to a standard reference metric.": "当前可以从本次特征表直接观察到该指标，但还没有匹配到稳定可比的标准参考值。",
+        "Current feature CSV stores left/right knee angles, but it does not identify lead side or foot-contact timing.": "当前特征表有左右膝角度，但还不能自动识别前导腿，也不能自动定位脚落地时刻。",
+        "No stable example fields in this clip.": "当前片段中暂无稳定字段示例。",
+    }
+    return mapping.get(text, text)
+
+
+def _zh_note(text: str) -> str:
+    mapping = {
+        "This reference was derived from pitching literature; use cautiously for batting.": "该参考值主要来自投球研究，用于击球动作时需要谨慎解释。",
+        "Current pipeline summarizes full-clip separation and does not detect foot contact, so this is only a partial proxy for the foot-contact reference. Reference interpretation is pitching-specific.": "当前流程只统计整段视频中的髋肩分离变化，不能自动定位脚落地时刻，因此这里只能作为脚落地分离角的部分代理指标；参考解释也主要来自投球研究。",
+        "Partial proxy only.": "当前只能作为部分代理指标使用。",
+        "Current clip only": "仅基于当前视频片段",
+        "Current project output only": "仅为当前项目直接输出",
+    }
+    return mapping.get(text, text)
+
+
+def _zh_injury_title(text: str) -> str:
+    mapping = {
+        "Guidance": "训练建议",
+        "Injury prevention note": "伤病预防提示",
+        "Monitor trunk and pelvis sequencing": "持续关注躯干与骨盆的发力顺序",
+        "Treat separation as a coordination checkpoint, not a diagnosis": "应把髋肩分离看作动作协调的检查点，而不是诊断结论",
+        "Pair video with periodic ROM screening": "建议将视频分析与定期关节活动度筛查结合使用",
+        "Screen hip mobility if lower-body rotation looks limited": "如果下肢旋转看起来长期受限，建议进一步做髋关节活动度筛查",
+    }
+    return mapping.get(text, text)
+
+
+def _zh_injury_text(text: str) -> str:
+    mapping = {
+        "Monitor trunk and pelvis sequencing. When trunk and pelvis rotation proxies are consistently low, use coaching to improve timing and force transfer before simply asking the athlete to swing harder.": "持续关注躯干与骨盆的发力顺序。如果躯干和骨盆旋转代理指标长期偏低，应该先通过训练改善发力时序和力量传递，而不是只要求运动员更用力挥棒。",
+        "Published baseball biomechanics reviews link pelvis and trunk rotational contribution to performance output, but this 2D pipeline cannot diagnose injury from rotation speed alone.": "已有棒球生物力学综述指出，骨盆和躯干的旋转贡献与动作表现有关，但当前这套 2D 流程不能仅凭旋转速度就判断伤病风险。",
+        "Evidence base is strongest for pitching and overhead baseball populations; apply cautiously to batting-only interpretation.": "现有证据主要来自投球或过头用力的棒球人群，因此用于纯击球动作解释时需要谨慎。",
+        "Treat separation as a coordination checkpoint, not a diagnosis. Hip-shoulder separation can be useful for coaching rotational timing, but this project uses a full-clip proxy rather than a true event-timed measurement.": "应把髋肩分离看作动作协调的检查点，而不是诊断结论。髋肩分离对指导旋转时序有帮助，但本项目使用的是整段视频代理指标，不是真正按关键事件精确测得的数值。",
+        "The literature reference is pitching-oriented, so the safest use here is movement coaching and repeat-video monitoring rather than injury labeling.": "相关文献参考主要偏向投球研究，因此这里最稳妥的用途是动作训练指导和重复视频监测，而不是给出伤病标签。",
+        "Pair video with periodic ROM screening. If the athlete also pitches or reports arm discomfort, combine the video report with simple shoulder and elbow range-of-motion screening done by a qualified clinician or athletic trainer.": "建议将视频分析与定期关节活动度筛查结合使用。如果运动员同时参与投球，或已经出现手臂不适，应把视频报告与由合格临床医生或运动防护人员完成的肩肘活动度筛查结合起来。",
+        "Important injury-prevention markers such as shoulder internal rotation deficit, total arc deficit, and elbow extension loss are clinical measurements and are not recoverable from this 2D video alone.": "一些重要的伤病预防指标，例如肩内旋不足、总活动弧度不足和肘伸展受限，属于临床测量项目，无法仅凭这段 2D 视频直接恢复出来。",
+        "Screen hip mobility if lower-body rotation looks limited. When video repeatedly suggests limited lower-body contribution, add a simple hip rotation screen instead of assuming the issue is only technique.": "如果下肢旋转看起来长期受限，建议进一步做髋关节活动度筛查。当视频多次提示下肢贡献不足时，不应直接假设问题只来自技术动作，还应检查髋部旋转能力。",
+        "Prospective and correlation studies in baseball pitchers report links between hip mobility and throwing mechanics or shoulder-elbow injury risk.": "在棒球投手人群中的前瞻性研究和相关性研究都提示，髋关节活动度与投掷力学表现以及肩肘伤病风险之间存在联系。",
+        "When trunk and pelvis rotation proxies are consistently low, use coaching to improve timing and force transfer before simply asking the athlete to swing harder.": "如果躯干和骨盆旋转代理指标长期偏低，应该先通过训练改善发力时序和力量传递，而不是只要求运动员更用力挥棒。",
+        "Hip-shoulder separation can be useful for coaching rotational timing, but this project uses a full-clip proxy rather than a true event-timed measurement.": "髋肩分离对指导旋转时序有帮助，但本项目使用的是整段视频代理指标，不是真正按关键事件精确测得的数值。",
+        "If the athlete also pitches or reports arm discomfort, combine the video report with simple shoulder and elbow range-of-motion screening done by a qualified clinician or athletic trainer.": "如果运动员同时参与投球，或已经出现手臂不适，应把视频报告与由合格临床医生或运动防护人员完成的肩肘活动度筛查结合起来。",
+        "When video repeatedly suggests limited lower-body contribution, add a simple hip rotation screen instead of assuming the issue is only technique.": "当视频多次提示下肢贡献不足时，不应直接假设问题只来自技术动作，还应检查髋部旋转能力。",
+    }
+    return mapping.get(text, text)
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:

@@ -287,7 +287,7 @@ def _build_llm_sections(story: list[Any], styles: dict[str, ParagraphStyle], rep
         body = sections.get(title)
         if body:
             story.append(Paragraph(_section_title_cn(title), styles["subsection"]))
-            story.append(Paragraph(_escape(body), styles["body"]))
+            story.append(Paragraph(_escape(_report_text_cn(body)), styles["body"]))
     story.append(Spacer(1, 0.06 * inch))
 
 
@@ -347,12 +347,15 @@ def _build_metric_comparison(story: list[Any], styles: dict[str, ParagraphStyle]
 def _build_injury_prevention(story: list[Any], styles: dict[str, ParagraphStyle], payload: dict[str, Any]) -> None:
     story.append(Paragraph("伤病预防与后续监测建议", styles["section"]))
     for item in payload.get("injury_prevention_context", []):
-        title = _escape(str(item.get("title", "Guidance")))
-        guidance = _escape(str(item.get("guidance", "")))
-        rationale = _escape(str(item.get("rationale", "")))
-        scope_note = _escape(str(item.get("scope_note", "")))
+        title_raw = str(item.get("title", "Guidance"))
+        guidance_raw = str(item.get("guidance", ""))
+        title_cn, guidance_cn = _injury_entry_cn(title_raw, guidance_raw)
+        title = _escape(title_cn)
+        guidance = _escape(guidance_cn)
+        rationale = _escape(_injury_text_cn(str(item.get("rationale", ""))))
+        scope_note = _escape(_injury_text_cn(str(item.get("scope_note", ""))))
         sources = ", ".join(str(source.get("short_name", "")) for source in item.get("sources", []))
-        story.append(Paragraph(f"<b>{title}.</b> {guidance}", styles["body"]))
+        story.append(Paragraph(f"<b>{title}：</b>{guidance}", styles["body"]))
         if rationale:
             story.append(Paragraph(f"解释依据：{rationale}", styles["small"]))
         if scope_note:
@@ -371,7 +374,7 @@ def _build_scope_and_sources(story: list[Any], styles: dict[str, ParagraphStyle]
     for reference in payload.get("selected_reference_sources", []):
         short_name = _escape(str(reference.get("short_name", reference.get("source_id", ""))))
         citation = _escape(str(reference.get("citation", "")).strip())
-        focus = _escape(str(reference.get("focus", "")))
+        focus = _escape(_reference_focus_cn(str(reference.get("focus", ""))))
         line = f"<b>{short_name}</b>: {citation}"
         if focus:
             line += f" 关注重点：{focus}。"
@@ -404,16 +407,16 @@ def _comparison_text(metric: dict[str, Any]) -> tuple[str, str, str, str]:
         reference = f"{mean:.1f} ± {std:.1f}"
         gap = f"{delta:+.1f}"
         source_names = ", ".join(_source_short_names(reference_context))
-        evidence = source_names or _note_cn(note) or "主要参考投球文献"
+        evidence = source_names or _note_cn(note) or "主要参考投球研究文献"
         if note:
             evidence = f"{evidence}；{_note_cn(note)}"
         return reference, gap, _band_cn(band), evidence
     if metric.get("status") == "partial":
         source_names = ", ".join(_source_short_names(reference_context))
-        return "代理指标", "n/a", "部分代理", source_names or _note_cn(note) or "当前指标不是精确事件点测量"
+        return "代理指标", "不适用", "部分代理", source_names or _note_cn(note) or "当前指标不是精确事件点测量"
     if metric.get("reason"):
-        return "暂无匹配标准", "n/a", "仅直接观察", _reason_cn(str(metric["reason"]))
-    return "暂无匹配标准", "n/a", "直接观察", note or "当前项目直接输出"
+        return "暂无匹配标准", "不适用", "仅直接观察", _reason_cn(str(metric["reason"]))
+    return "暂无匹配标准", "不适用", "直接观察", _note_cn(note) or "当前项目的直接输出结果"
 
 
 def _metric_detail_paragraph(metric: dict[str, Any]) -> str:
@@ -437,7 +440,7 @@ def _metric_detail_paragraph(metric: dict[str, Any]) -> str:
             text += f" 注意：{_escape(note)}"
         return text
     if metric.get("status") == "partial":
-        return f"<b>{_escape(name)}：</b>{_escape(note or '当前流程中，这个指标只能作为部分代理指标使用。')}"
+        return f"<b>{_escape(name)}：</b>{_escape(_note_cn(note) if note else '当前流程中，这个指标只能作为部分代理指标使用。')}"
     reason = metric.get("reason")
     if reason:
         return f"<b>{_escape(name)}：</b>{_escape(_reason_cn(str(reason)))}"
@@ -450,15 +453,15 @@ def _format_observed(metric: dict[str, Any]) -> str:
     summary = metric.get("observed_summary") or {}
     if observed_value is None:
         if isinstance(summary, dict) and summary.get("p95_abs") is not None:
-            return f"{float(summary['p95_abs']):.1f} (p95 abs)"
+            return f"{float(summary['p95_abs']):.1f}（P95 绝对值）"
         if isinstance(summary, dict) and summary.get("mean") is not None:
-            return f"{float(summary['mean']):.1f} (mean)"
-        return "n/a"
+            return f"{float(summary['mean']):.1f}（均值）"
+        return "不适用"
     value = float(observed_value)
     if "velocity" in name:
-        return f"{value:.1f} deg/s"
+        return f"{value:.1f} 度/秒"
     if "separation" in name or "flexion" in name:
-        return f"{value:.1f} deg"
+        return f"{value:.1f} 度"
     return f"{value:.3f}"
 
 
@@ -580,7 +583,8 @@ def _humanize_metric_name(name: str) -> str:
         "Right knee flexion": "右膝屈曲",
         "Hand speed proxy": "手部速度代理指标",
     }
-    return cn_mapping.get(mapping.get(name, name.replace("_", " ")), name.replace("_", " "))
+    fallback = name.replace("_", " ")
+    return cn_mapping.get(mapping.get(name, fallback), fallback)
 
 
 def _escape(text: str) -> str:
@@ -623,6 +627,14 @@ def _section_title_cn(title: str) -> str:
         "Summary": "动作优点",
         "Coaching Priorities": "训练重点",
         "Injury Prevention Context": "伤病预防提示",
+        "Visual Evidence": "可视化证据",
+        "Plain-Language Interpretation": "通俗文字解读",
+        "Output Metrics Produced By This Model": "模型输出指标清单",
+        "Public-Facing Key Metrics": "面向家长与教练的关键指标",
+        "Key Metrics": "关键指标明细",
+        "Injury Prevention Considerations": "伤病预防提示",
+        "Scope And Limits": "局限性说明",
+        "Reference Sources": "参考文献",
     }
     return mapping.get(title, title)
 
@@ -644,6 +656,7 @@ def _reason_cn(text: str) -> str:
     mapping = {
         "Observed from current feature CSV but not matched to a standard reference metric.": "当前可以从本次特征表直接观察到该指标，但还没有匹配到稳定可比的标准参考值。",
         "Current feature CSV stores left/right knee angles, but it does not identify lead side or foot-contact timing.": "当前特征表有左右膝角度，但还不能自动识别前导腿，也不能自动定位脚落地时刻。",
+        "No stable example fields in this clip.": "当前视频片段中没有稳定可用的字段示例。",
     }
     return mapping.get(text, text)
 
@@ -652,6 +665,7 @@ def _limitation_cn(text: str) -> str:
     mapping = {
         "Current summary is built from 2D pose-derived feature CSV outputs.": "当前结论基于 2D 姿态视频特征，不是三维动作捕捉结果。",
         "Clinical passive ROM metrics remain unavailable unless separate physical screening data are provided.": "除非额外提供体格筛查或关节活动度测量数据，否则无法得到临床被动活动度指标。",
+        "Batting interpretation is still borrowing part of its evidence base from pitching literature, so coaching use is stronger than clinical inference.": "当前对击球动作的部分解释仍借用了投球研究中的文献依据，因此更适合训练沟通，不适合作为临床推断。",
     }
     return mapping.get(text, text)
 
@@ -660,6 +674,7 @@ def _note_cn(text: str) -> str:
     mapping = {
         "This reference was derived from pitching literature; use cautiously for batting.": "该参考值主要来自投球研究，用于击球动作时需要谨慎解释。",
         "Current pipeline summarizes full-clip separation and does not detect foot contact, so this is only a partial proxy for the foot-contact reference. Reference interpretation is pitching-specific.": "当前流程只统计整段视频中的髋肩分离变化，不能自动定位脚落地时刻，因此这里只能作为脚落地分离角的部分代理指标；参考解释也主要来自投球研究。",
+        "Partial proxy only.": "当前只能作为部分代理指标使用。",
     }
     return mapping.get(text, text)
 
@@ -669,6 +684,144 @@ def _measurement_source_cn(text: str) -> str:
         "2d_pose_video": "2D 姿态视频分析",
     }
     return mapping.get(text, text)
+
+
+def _injury_title_cn(text: str) -> str:
+    mapping = {
+        "Guidance": "训练建议",
+        "Injury prevention note": "伤病预防提示",
+        "Monitor trunk and pelvis sequencing": "持续关注躯干与骨盆的发力顺序",
+        "Treat separation as a coordination checkpoint, not a diagnosis": "应把髋肩分离看作动作协调的检查点，而不是诊断结论",
+        "Pair video with periodic ROM screening": "建议将视频分析与定期关节活动度筛查结合使用",
+        "Screen hip mobility if lower-body rotation looks limited": "如果下肢旋转看起来长期受限，建议进一步做髋关节活动度筛查",
+    }
+    return mapping.get(text, text)
+
+
+def _injury_text_cn(text: str) -> str:
+    mapping = {
+        "Monitor trunk and pelvis sequencing. When trunk and pelvis rotation proxies are consistently low, use coaching to improve timing and force transfer before simply asking the athlete to swing harder.": "持续关注躯干与骨盆的发力顺序。如果躯干和骨盆旋转代理指标长期偏低，应该先通过训练改善发力时序和力量传递，而不是只要求运动员更用力挥棒。",
+        "Published baseball biomechanics reviews link pelvis and trunk rotational contribution to performance output, but this 2D pipeline cannot diagnose injury from rotation speed alone.": "已有棒球生物力学综述指出，骨盆和躯干的旋转贡献与动作表现有关，但当前这套 2D 流程不能仅凭旋转速度就判断伤病风险。",
+        "Evidence base is strongest for pitching and overhead baseball populations; apply cautiously to batting-only interpretation.": "现有证据主要来自投球或过头用力的棒球人群，因此用于纯击球动作解释时需要谨慎。",
+        "Treat separation as a coordination checkpoint, not a diagnosis. Hip-shoulder separation can be useful for coaching rotational timing, but this project uses a full-clip proxy rather than a true event-timed measurement.": "应把髋肩分离看作动作协调的检查点，而不是诊断结论。髋肩分离对指导旋转时序有帮助，但本项目使用的是整段视频代理指标，不是真正按关键事件精确测得的数值。",
+        "The literature reference is pitching-oriented, so the safest use here is movement coaching and repeat-video monitoring rather than injury labeling.": "相关文献参考主要偏向投球研究，因此这里最稳妥的用途是动作训练指导和重复视频监测，而不是给出伤病标签。",
+        "Pair video with periodic ROM screening. If the athlete also pitches or reports arm discomfort, combine the video report with simple shoulder and elbow range-of-motion screening done by a qualified clinician or athletic trainer.": "建议将视频分析与定期关节活动度筛查结合使用。如果运动员同时参与投球，或已经出现手臂不适，应把视频报告与由合格临床医生或运动防护人员完成的肩肘活动度筛查结合起来。",
+        "Important injury-prevention markers such as shoulder internal rotation deficit, total arc deficit, and elbow extension loss are clinical measurements and are not recoverable from this 2D video alone.": "一些重要的伤病预防指标，例如肩内旋不足、总活动弧度不足和肘伸展受限，属于临床测量项目，无法仅凭这段 2D 视频直接恢复出来。",
+        "Screen hip mobility if lower-body rotation looks limited. When video repeatedly suggests limited lower-body contribution, add a simple hip rotation screen instead of assuming the issue is only technique.": "如果下肢旋转看起来长期受限，建议进一步做髋关节活动度筛查。当视频多次提示下肢贡献不足时，不应直接假设问题只来自技术动作，还应检查髋部旋转能力。",
+        "Prospective and correlation studies in baseball pitchers report links between hip mobility and throwing mechanics or shoulder-elbow injury risk.": "在棒球投手人群中的前瞻性研究和相关性研究都提示，髋关节活动度与投掷力学表现以及肩肘伤病风险之间存在联系。",
+        "When trunk and pelvis rotation proxies are consistently low, use coaching to improve timing and force transfer before simply asking the athlete to swing harder.": "如果躯干和骨盆旋转代理指标长期偏低，应该先通过训练改善发力时序和力量传递，而不是只要求运动员更用力挥棒。",
+        "Hip-shoulder separation can be useful for coaching rotational timing, but this project uses a full-clip proxy rather than a true event-timed measurement.": "髋肩分离对指导旋转时序有帮助，但本项目使用的是整段视频代理指标，不是真正按关键事件精确测得的数值。",
+        "If the athlete also pitches or reports arm discomfort, combine the video report with simple shoulder and elbow range-of-motion screening done by a qualified clinician or athletic trainer.": "如果运动员同时参与投球，或已经出现手臂不适，应把视频报告与由合格临床医生或运动防护人员完成的肩肘活动度筛查结合起来。",
+        "When video repeatedly suggests limited lower-body contribution, add a simple hip rotation screen instead of assuming the issue is only technique.": "当视频多次提示下肢贡献不足时，不应直接假设问题只来自技术动作，还应检查髋部旋转能力。",
+    }
+    return mapping.get(text, text)
+
+
+def _injury_entry_cn(title: str, guidance: str) -> tuple[str, str]:
+    mapping = {
+        "Monitor trunk and pelvis sequencing": (
+            "持续关注躯干与骨盆的发力顺序",
+            "如果躯干和骨盆旋转代理指标长期偏低，应该先通过训练改善发力时序和力量传递，而不是只要求运动员更用力挥棒。",
+        ),
+        "Treat separation as a coordination checkpoint, not a diagnosis": (
+            "应把髋肩分离看作动作协调的检查点，而不是诊断结论",
+            "髋肩分离对指导旋转时序有帮助，但本项目使用的是整段视频代理指标，不是真正按关键事件精确测得的数值。",
+        ),
+        "Pair video with periodic ROM screening": (
+            "建议将视频分析与定期关节活动度筛查结合使用",
+            "如果运动员同时参与投球，或已经出现手臂不适，应把视频报告与由合格临床医生或运动防护人员完成的肩肘活动度筛查结合起来。",
+        ),
+        "Screen hip mobility if lower-body rotation looks limited": (
+            "如果下肢旋转看起来长期受限，建议进一步做髋关节活动度筛查",
+            "当视频多次提示下肢贡献不足时，不应直接假设问题只来自技术动作，还应检查髋部旋转能力。",
+        ),
+    }
+    if title in mapping:
+        return mapping[title]
+    return _injury_title_cn(title), _injury_text_cn(guidance)
+
+
+def _reference_focus_cn(text: str) -> str:
+    mapping = {
+        "pelvis/trunk velocity and hip-shoulder separation": "骨盆与躯干旋转速度，以及髋肩分离",
+        "interpretable event-level pitching kinematics": "可解释的关键事件级投球运动学",
+        "youth and high-school passive ROM baselines": "青少年与高中运动员的被动活动度基线",
+        "professional shoulder adaptation summary": "职业球员肩部适应性变化综述",
+        "shoulder side-to-side injury-related thresholds": "肩部左右侧差异与伤病相关阈值",
+        "professional elbow ROM side-to-side baseline": "职业球员肘部左右侧活动度基线",
+    }
+    return mapping.get(text, text)
+
+
+def _report_text_cn(text: str) -> str:
+    translated = text
+    replacements = [
+        ("## 动作优点", ""),
+        ("## 训练重点", ""),
+        ("## 伤病预防提示", ""),
+        ("Rationale:", "解释依据："),
+        ("Scope:", "适用范围说明："),
+        ("Literature:", "参考文献："),
+        (
+            "**Monitor trunk and pelvis sequencing**: When trunk and pelvis rotation proxies are consistently low, use coaching to improve timing and force transfer before simply asking the athlete to swing harder.",
+            "**持续关注躯干与骨盆的发力顺序**：如果躯干和骨盆旋转代理指标长期偏低，应该先通过训练改善发力时序和力量传递，而不是只要求运动员更用力挥棒。",
+        ),
+        (
+            "**Treat separation as a coordination checkpoint, not a diagnosis**: Hip-shoulder separation can be useful for coaching rotational timing, but this project uses a full-clip proxy rather than a true event-timed measurement.",
+            "**应把髋肩分离看作动作协调的检查点，而不是诊断结论**：髋肩分离对指导旋转时序有帮助，但本项目使用的是整段视频代理指标，不是真正按关键事件精确测得的数值。",
+        ),
+        (
+            "**Pair video with periodic ROM screening**: If the athlete also pitches or reports arm discomfort, combine the video report with simple shoulder and elbow range-of-motion screening done by a qualified clinician or athletic trainer.",
+            "**建议将视频分析与定期关节活动度筛查结合使用**：如果运动员同时参与投球，或已经出现手臂不适，应把视频报告与由合格临床医生或运动防护人员完成的肩肘活动度筛查结合起来。",
+        ),
+        (
+            "**Screen hip mobility if lower-body rotation looks limited**: When video repeatedly suggests limited lower-body contribution, add a simple hip rotation screen instead of assuming the issue is only technique.",
+            "**如果下肢旋转看起来长期受限，建议进一步做髋关节活动度筛查**：当视频多次提示下肢贡献不足时，不应直接假设问题只来自技术动作，还应检查髋部旋转能力。",
+        ),
+        (
+            "Published baseball biomechanics reviews link pelvis and trunk rotational contribution to performance output, but this 2D pipeline cannot diagnose injury from rotation speed alone.",
+            "已有棒球生物力学综述指出，骨盆和躯干的旋转贡献与动作表现有关，但当前这套 2D 流程不能仅凭旋转速度就判断伤病风险。",
+        ),
+        (
+            "The literature reference is pitching-oriented, so the safest use here is movement coaching and repeat-video monitoring rather than injury labeling.",
+            "相关文献参考主要偏向投球研究，因此这里最稳妥的用途是动作训练指导和重复视频监测，而不是给出伤病标签。",
+        ),
+        (
+            "Important injury-prevention markers such as shoulder internal rotation deficit, total arc deficit, and elbow extension loss are clinical measurements and are not recoverable from this 2D video alone.",
+            "一些重要的伤病预防指标，例如肩内旋不足、总活动弧度不足和肘伸展受限，属于临床测量项目，无法仅凭这段 2D 视频直接恢复出来。",
+        ),
+        (
+            "Prospective and correlation studies in baseball pitchers report links between hip mobility and throwing mechanics or shoulder-elbow injury risk.",
+            "在棒球投手人群中的前瞻性研究和相关性研究都提示，髋关节活动度与投掷力学表现以及肩肘伤病风险之间存在联系。",
+        ),
+        (
+            "Evidence base is strongest for pitching and overhead baseball populations; apply cautiously to batting-only interpretation.",
+            "现有证据主要来自投球或过头用力的棒球人群，因此用于纯击球动作解释时需要谨慎。",
+        ),
+        ("Current clip only", "仅基于当前视频片段"),
+        ("Current project output only", "仅为当前项目直接输出"),
+        ("within 1sd vs available reference.", "位于现有参考区间的 1 个标准差范围内。"),
+        ("deg/s", "度/秒"),
+        ("deg", "度"),
+        ("(p95 abs)", "（P95 绝对值）"),
+        ("(mean)", "（均值）"),
+        (
+            "Observed from current feature CSV but not matched to a standard reference metric.",
+            "当前可以从本次特征表直接观察到该指标，但还没有匹配到稳定可比的标准参考值。",
+        ),
+        (
+            "Current pipeline summarizes full-clip separation and does not detect foot contact, so this is only a partial proxy for the foot-contact reference. Reference interpretation is pitching-specific.",
+            "当前流程只统计整段视频中的髋肩分离变化，不能自动定位脚落地时刻，因此这里只能作为脚落地分离角的部分代理指标；参考解释也主要来自投球研究。",
+        ),
+        (
+            "This reference was derived from pitching literature; use cautiously for batting.",
+            "该参考值主要来自投球研究，用于击球动作时需要谨慎解释。",
+        ),
+    ]
+    for source, target in replacements:
+        translated = translated.replace(source, target)
+    translated = re.sub(r"\s+", " ", translated).strip()
+    return translated
 
 
 if __name__ == "__main__":
