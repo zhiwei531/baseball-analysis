@@ -34,6 +34,29 @@ pose3d:
   root_joint: pelvis_center
   normalize_scale: true
   min_valid_joints: 8
+  confidence_threshold: 0.5
+  confidence_thresholds:
+    default: 0.5
+    torso: 0.45
+    mid_limb: 0.58
+    distal: 0.62
+  interpolate_max_gap_frames: 3
+  interpolate_max_gap_by_group:
+    default: 3
+    torso: 5
+    mid_limb: 3
+    distal: 2
+  smoothing:
+    window_length: 15
+    polyorder: 2
+    median_window_length: 5
+    refine_window_length: 9
+    jump_threshold_multiplier: 3.0
+    joint_jump_thresholds:
+      default: 3.0
+      torso: 4.0
+      mid_limb: 2.8
+      distal: 2.5
 
 postprocess:
   confidence_threshold: 0.5

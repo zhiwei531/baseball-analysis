@@ -77,7 +77,11 @@ def _records_by_frame(records):
 
 
 def _frame_source_condition_for_3d(condition_id: str) -> str:
-    source = condition_id.removesuffix("_3d")
+    source = condition_id
+    if source.endswith("_smooth"):
+        source = source[: -len("_smooth")]
+    if source.endswith("_3d"):
+        source = source[: -len("_3d")]
     return _source_condition_for_3d(source)
 
 
