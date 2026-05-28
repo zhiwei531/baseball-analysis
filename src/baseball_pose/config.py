@@ -76,7 +76,7 @@ class RuntimeConfig:
 
     @property
     def pose3d_backend(self) -> str:
-        return str(self.raw.get("pose3d", {}).get("backend", "temporal_lifter_stub"))
+        return str(self.raw.get("pose3d", {}).get("backend", "mediapipe_world"))
 
     @property
     def pose3d_condition_ids(self) -> list[str]:

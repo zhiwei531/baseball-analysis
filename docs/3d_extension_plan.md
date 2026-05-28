@@ -189,9 +189,16 @@ CSV at the first integration step. A combined report layer can merge them later.
 
 ### Short-Term Recommendation
 
-Use a **temporal 3D lifting backend** that consumes cleaned 2D joints rather
-than a full human-mesh-recovery model. This is the best fit for the repo
-because:
+Use a staged backend strategy:
+
+1. **MediaPipe world landmarks now**
+2. **temporal 3D lifting later**
+
+The first real backend in the repo can be MediaPipe world landmarks because it
+is immediately compatible with the current 2D pose stack and gives a genuine
+relative 3D skeleton output. The longer-term target should still be a temporal
+3D lifting backend that consumes cleaned 2D joints rather than a full
+human-mesh-recovery model. That remains the best fit for the repo because:
 
 - the repo already produces smoothed 2D sequences,
 - the project is single-view,
@@ -199,7 +206,7 @@ because:
 - the current reporting layer expects joint-level metrics more than dense mesh
   outputs.
 
-The first backend should therefore expose a narrow interface:
+The longer-term lifting backend should expose a narrow interface:
 
 ```python
 lift_sequence(frames_2d) -> frames_3d

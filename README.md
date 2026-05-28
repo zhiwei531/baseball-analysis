@@ -223,8 +223,9 @@ baseball-pose lift-pose-3d --condition image_center_motion_grabcut_pose_smooth
 ```
 
 At this stage, `plan-3d` prints the intended 2D-to-3D artifact flow and
-`lift-pose-3d` fails with a clear placeholder message until a real temporal 3D
-lifting backend is integrated.
+`lift-pose-3d` runs a first real backend based on MediaPipe world landmarks for
+supported source conditions. This is a relative 3D skeleton path, not calibrated
+world-coordinate biomechanics.
 
 Motion preview outputs are written to:
 

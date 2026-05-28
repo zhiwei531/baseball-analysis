@@ -10,7 +10,7 @@ def test_default_pose3d_config_is_optional():
     config = load_config("configs/default.yaml")
 
     assert config.pose3d_enabled is False
-    assert config.pose3d_backend == "temporal_lifter_stub"
+    assert config.pose3d_backend == "mediapipe_world"
     assert config.pose3d_condition_ids == []
 
 
@@ -19,7 +19,7 @@ def test_resolve_pose3d_config_uses_base_values():
 
     resolved = resolve_pose3d_config(config.raw, "batting_1")
 
-    assert resolved["backend"] == "temporal_lifter_stub"
+    assert resolved["backend"] == "mediapipe_world"
     assert resolved["root_joint"] == "pelvis_center"
 
 
@@ -56,4 +56,8 @@ def test_build_pose3d_plan_targets_smoothed_2d_outputs():
     )
     assert plan.output_feature3d_path == Path(
         "data/processed/features3d/clip_a/image_center_motion_grabcut_pose_smooth_3d.csv"
+    )
+    assert plan.source_condition_id == "image_center_motion_grabcut_pose"
+    assert plan.input_frames_path == Path(
+        "data/interim/frames/clip_a/image_center_motion_grabcut_pose.csv"
     )

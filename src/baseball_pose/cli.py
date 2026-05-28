@@ -21,7 +21,7 @@ from baseball_pose.pipeline.features import extract_feature_files
 from baseball_pose.pipeline.figures import make_report_figures
 from baseball_pose.pipeline.image_proposal_debug import render_image_proposal_debug_videos
 from baseball_pose.pipeline.overlays import render_pose_overlays
-from baseball_pose.pipeline.pose3d import build_pose3d_plan, lift_pose_sequence_placeholder
+from baseball_pose.pipeline.pose3d import build_pose3d_plan, lift_pose_sequence
 from baseball_pose.pipeline.postprocess import smooth_pose_files
 from baseball_pose.pipeline.report_llm import generate_llm_reports
 from baseball_pose.pipeline.report_prompt import build_report_prompts
@@ -144,9 +144,11 @@ def main() -> None:
                     input_condition_id=condition_id,
                 )
                 print(f"{plan.clip_id}: {plan.input_condition_id} -> {plan.output_condition_id}")
+                print(f"  source condition: {plan.source_condition_id}")
                 print(f"  backend: {plan.backend}")
                 print(f"  root joint: {plan.root_joint}")
                 print(f"  input pose: {plan.input_pose_path}")
+                print(f"  input frames: {plan.input_frames_path}")
                 print(f"  output pose3d: {plan.output_pose3d_path}")
                 print(f"  output feature3d: {plan.output_feature3d_path}")
         return
@@ -165,7 +167,10 @@ def main() -> None:
                     input_condition_id=condition_id,
                 )
                 print(f"Planned 3D lift: {plan.clip_id} {plan.input_condition_id} -> {plan.output_condition_id}")
-                lift_pose_sequence_placeholder(plan)
+                record_count = lift_pose_sequence(plan, clip, config)
+                print(f"  source condition: {plan.source_condition_id}")
+                print(f"  output pose3d: {plan.output_pose3d_path}")
+                print(f"  wrote {record_count} 3D joint records")
         return
 
     if args.command == "run-baseline":

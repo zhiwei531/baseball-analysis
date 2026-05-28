@@ -29,7 +29,7 @@ pose:
 
 pose3d:
   enabled: false
-  backend: temporal_lifter_stub
+  backend: mediapipe_world
   input_condition_suffix: _smooth
   root_joint: pelvis_center
   normalize_scale: true

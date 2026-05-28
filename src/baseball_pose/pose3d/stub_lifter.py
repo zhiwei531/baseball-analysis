@@ -19,6 +19,6 @@ class TemporalLifterStub(Pose3DLifter):
         condition_id: str,
     ) -> list[Pose3DRecord]:
         raise NotImplementedError(
-            "3D lifting is planned to consume smoothed 2D pose CSV files, but no"
-            " temporal 3D backend is wired in yet. See docs/3d_extension_plan.md."
+            "A future temporal-lifting backend is still planned, but the current"
+            " repo now ships a real mediapipe_world backend instead."
         )
