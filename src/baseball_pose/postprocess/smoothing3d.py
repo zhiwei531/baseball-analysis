@@ -10,6 +10,7 @@ from math import nan
 import numpy as np
 from scipy.signal import savgol_filter
 
+from baseball_pose.pose.quality import LIMB_SEGMENTS
 from baseball_pose.pose.quality import gap_for_joint, multiplier_for_joint, threshold_for_joint
 from baseball_pose.pose.schema import CANONICAL_JOINTS
 from baseball_pose.pose3d.schema import Pose3DRecord
@@ -28,6 +29,7 @@ def smooth_pose3d_records(
     max_gap_config: dict[str, object] | None = None,
     jump_threshold_multiplier: float = 3.0,
     joint_jump_config: dict[str, object] | None = None,
+    limb_length_tolerance_ratio: float = 0.28,
 ) -> list[Pose3DRecord]:
     """Smooth each joint trajectory in 3D while preserving the flat record schema."""
 
@@ -35,8 +37,16 @@ def smooth_pose3d_records(
         raise ValueError("window_length must be odd.")
     if polyorder >= window_length:
         raise ValueError("polyorder must be smaller than window_length.")
+    if limb_length_tolerance_ratio <= 0:
+        raise ValueError("limb_length_tolerance_ratio must be positive.")
 
-    by_key = _records_by_key(records)
+    gated_records = _apply_limb_length_consistency_gate(
+        records,
+        confidence_threshold=confidence_threshold,
+        threshold_config=threshold_config,
+        tolerance_ratio=limb_length_tolerance_ratio,
+    )
+    by_key = _records_by_key(gated_records)
     smoothed_by_identity: dict[tuple[int, str], Pose3DRecord] = {}
     for key_records in by_key.values():
         smoothed = _smooth_joint_records(
@@ -57,6 +67,69 @@ def smooth_pose3d_records(
 
     return [
         smoothed_by_identity.get((record.frame_index, record.joint_name), record)
+        for record in gated_records
+    ]
+
+
+def _apply_limb_length_consistency_gate(
+    records: list[Pose3DRecord],
+    *,
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+    tolerance_ratio: float,
+) -> list[Pose3DRecord]:
+    by_frame: dict[int, list[Pose3DRecord]] = defaultdict(list)
+    for record in records:
+        by_frame[record.frame_index].append(record)
+
+    baseline_lengths: dict[tuple[str, str], float] = {}
+    for proximal, distal, _ in LIMB_SEGMENTS:
+        lengths: list[float] = []
+        for frame_records in by_frame.values():
+            points = _confident_points(
+                frame_records,
+                confidence_threshold=confidence_threshold,
+                threshold_config=threshold_config,
+            )
+            if proximal not in points or distal not in points:
+                continue
+            lengths.append(float(np.linalg.norm(points[distal] - points[proximal])))
+        if lengths:
+            baseline_lengths[(proximal, distal)] = statistics.median(lengths)
+
+    if not baseline_lengths:
+        return records
+
+    rejected: set[tuple[int, str]] = set()
+    for frame_index, frame_records in by_frame.items():
+        points = _confident_points(
+            frame_records,
+            confidence_threshold=confidence_threshold,
+            threshold_config=threshold_config,
+        )
+        for proximal, distal, reject_joint in LIMB_SEGMENTS:
+            baseline = baseline_lengths.get((proximal, distal))
+            if baseline is None or baseline <= 0:
+                continue
+            if proximal not in points or distal not in points:
+                continue
+            length = float(np.linalg.norm(points[distal] - points[proximal]))
+            if abs(length - baseline) / baseline > tolerance_ratio:
+                rejected.add((frame_index, reject_joint))
+
+    if not rejected:
+        return records
+
+    return [
+        replace(
+            record,
+            x_3d=nan,
+            y_3d=nan,
+            z_3d=nan,
+            input_quality_score=None,
+        )
+        if (record.frame_index, record.joint_name) in rejected
+        else record
         for record in records
     ]
 
@@ -136,6 +209,28 @@ def _smooth_joint_records(
             )
         )
     return output
+
+
+def _confident_points(
+    records: list[Pose3DRecord],
+    *,
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+) -> dict[str, np.ndarray]:
+    points: dict[str, np.ndarray] = {}
+    for record in records:
+        score = record.input_quality_score
+        joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
+        if (
+            record.x_3d is None
+            or record.y_3d is None
+            or record.z_3d is None
+            or any(np.isnan(value) for value in (record.x_3d, record.y_3d, record.z_3d))
+            or (score is not None and score < joint_threshold)
+        ):
+            continue
+        points[record.joint_name] = np.array((record.x_3d, record.y_3d, record.z_3d), dtype=float)
+    return points
 
 
 def _confident_value(

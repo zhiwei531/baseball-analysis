@@ -66,6 +66,9 @@ def smooth_pose3d_files(
                     max_gap_config=max_gap_config if isinstance(max_gap_config, dict) else {},
                     jump_threshold_multiplier=float(smoothing_config.get("jump_threshold_multiplier", 3.0)),
                     joint_jump_config=smoothing_config.get("joint_jump_thresholds", {}),
+                    limb_length_tolerance_ratio=float(
+                        smoothing_config.get("limb_length_tolerance_ratio", 0.28)
+                    ),
                 )
             ]
             output_path = pose3d_path(config.data_dir, clip_id, condition_id)

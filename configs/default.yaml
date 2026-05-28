@@ -51,6 +51,7 @@ pose3d:
     polyorder: 2
     median_window_length: 5
     refine_window_length: 9
+    limb_length_tolerance_ratio: 0.24
     jump_threshold_multiplier: 3.0
     joint_jump_thresholds:
       default: 3.0
