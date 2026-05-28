@@ -11,7 +11,7 @@ from baseball_pose.io.paths import frame_manifest_path, overlay3d_frame_dir, ove
 from baseball_pose.io.pose3d_csv import read_pose3d_records
 from baseball_pose.io.video import read_frame, write_video_from_frames
 from baseball_pose.pipeline.pose3d import _source_condition_for_3d
-from baseball_pose.visualization3d.overlays import draw_pose3d_preview
+from baseball_pose.visualization3d.overlays import build_projection_context, draw_pose3d_preview
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,7 @@ def render_pose3d_overlays(
 
             frames = read_frame_records(frames_csv)
             records_by_frame = _records_by_frame(read_pose3d_records(poses3d_csv))
+            projection_context = build_projection_context(records_by_frame)
             target_frame_dir = overlay3d_frame_dir(config.output_dir, clip_id, condition_id)
             target_frame_dir.mkdir(parents=True, exist_ok=True)
             overlay_paths: list[Path] = []
@@ -48,7 +49,7 @@ def render_pose3d_overlays(
                 if not frame_records:
                     continue
                 image = read_frame(frame.frame_path)
-                preview = draw_pose3d_preview(image, frame_records)
+                preview = draw_pose3d_preview(image, frame_records, context=projection_context)
                 overlay_path = target_frame_dir / frame.frame_path.name.replace(source_condition_id, condition_id)
                 _write_image(overlay_path, preview)
                 overlay_paths.append(overlay_path)

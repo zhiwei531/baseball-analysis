@@ -17,6 +17,12 @@ class ProjectionSpec:
     axes: tuple[str, str]
 
 
+@dataclass(frozen=True)
+class ProjectionContext:
+    body_scale: float
+    bounds_by_projection: dict[str, tuple[float, float, float, float]]
+
+
 PROJECTIONS = (
     ProjectionSpec(name="Front", axes=("x_3d", "y_3d")),
     ProjectionSpec(name="Side", axes=("z_3d", "y_3d")),
@@ -24,7 +30,12 @@ PROJECTIONS = (
 )
 
 
-def draw_pose3d_preview(source_image: Any, records: list[Pose3DRecord]) -> Any:
+def draw_pose3d_preview(
+    source_image: Any,
+    records: list[Pose3DRecord],
+    *,
+    context: ProjectionContext | None = None,
+) -> Any:
     """Draw original frame plus three orthographic 3D skeleton projections."""
 
     cv2 = _require_cv2()
@@ -43,10 +54,11 @@ def draw_pose3d_preview(source_image: Any, records: list[Pose3DRecord]) -> Any:
         return canvas
 
     pelvis_center = _pelvis_center(points)
-    normalized = _normalize_points(points, pelvis_center)
+    body_scale = _body_scale(points)
+    normalized = _normalize_points(points, pelvis_center, body_scale if context is None else context.body_scale)
     for idx, spec in enumerate(PROJECTIONS):
         panel = _panel_rect(idx)
-        _draw_projection_panel(canvas, panel, spec, normalized)
+        _draw_projection_panel(canvas, panel, spec, normalized, context)
 
     return canvas
 
@@ -77,13 +89,20 @@ def _panel_rect(index: int) -> tuple[int, int, int, int]:
     return (x, y, 560, 180)
 
 
-def _draw_projection_panel(canvas, panel, spec: ProjectionSpec, points: dict[str, tuple[float, float, float]]) -> None:
+def _draw_projection_panel(
+    canvas,
+    panel,
+    spec: ProjectionSpec,
+    points: dict[str, tuple[float, float, float]],
+    context: ProjectionContext | None,
+) -> None:
     cv2 = _require_cv2()
     x0, y0, w, h = panel
     cv2.rectangle(canvas, (x0, y0), (x0 + w, y0 + h), (210, 210, 210), 2)
     cv2.putText(canvas, spec.name, (x0 + 12, y0 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (40, 40, 40), 2, cv2.LINE_AA)
 
-    projected = _project_points(points, spec.axes, x0 + 26, y0 + 36, w - 52, h - 52)
+    bounds = None if context is None else context.bounds_by_projection.get(spec.name)
+    projected = _project_points(points, spec.axes, x0 + 26, y0 + 36, w - 52, h - 52, bounds=bounds)
     for start, end in POSE_CONNECTIONS:
         if start in projected and end in projected:
             cv2.line(canvas, projected[start], projected[end], (36, 180, 255), 2, cv2.LINE_AA)
@@ -111,11 +130,17 @@ def _pelvis_center(points: dict[str, Pose3DRecord]) -> tuple[float, float, float
 def _normalize_points(
     points: dict[str, Pose3DRecord],
     pelvis_center: tuple[float, float, float],
+    body_scale: float,
 ) -> dict[str, tuple[float, float, float]]:
     px, py, pz = pelvis_center
+    scale = max(body_scale, 1e-6)
     normalized: dict[str, tuple[float, float, float]] = {}
     for joint_name, record in points.items():
-        normalized[joint_name] = (record.x_3d - px, -(record.y_3d - py), record.z_3d - pz)
+        normalized[joint_name] = (
+            (record.x_3d - px) / scale,
+            -(record.y_3d - py) / scale,
+            (record.z_3d - pz) / scale,
+        )
     return normalized
 
 
@@ -126,6 +151,8 @@ def _project_points(
     y0: int,
     w: int,
     h: int,
+    *,
+    bounds: tuple[float, float, float, float] | None = None,
 ) -> dict[str, tuple[int, int]]:
     axis_index = {"x_3d": 0, "y_3d": 1, "z_3d": 2}
     ax0 = axis_index[axes[0]]
@@ -133,8 +160,11 @@ def _project_points(
     coords = [(values[ax0], values[ax1]) for values in points.values()]
     xs = [c[0] for c in coords]
     ys = [c[1] for c in coords]
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
+    if bounds is None:
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+    else:
+        min_x, max_x, min_y, max_y = bounds
     range_x = max(max_x - min_x, 1e-5)
     range_y = max(max_y - min_y, 1e-5)
     scale = min(w / range_x, h / range_y) * 0.82
@@ -157,6 +187,114 @@ def _is_finite_record(record: Pose3DRecord) -> bool:
         and math.isfinite(record.y_3d)
         and math.isfinite(record.z_3d)
     )
+
+
+def build_projection_context(records_by_frame: dict[int, list[Pose3DRecord]]) -> ProjectionContext | None:
+    normalized_frames: list[dict[str, tuple[float, float, float]]] = []
+    body_scales: list[float] = []
+    for frame_records in records_by_frame.values():
+        points = {
+            record.joint_name: record
+            for record in frame_records
+            if _is_finite_record(record)
+        }
+        if not points:
+            continue
+        pelvis_center = _pelvis_center(points)
+        body_scale = _body_scale(points)
+        body_scales.append(body_scale)
+        normalized_frames.append(_normalize_points(points, pelvis_center, body_scale))
+    if not normalized_frames:
+        return None
+
+    stable_scale = _median(body_scales, fallback=1.0)
+    bounds_by_projection: dict[str, tuple[float, float, float, float]] = {}
+    for spec in PROJECTIONS:
+        xs: list[float] = []
+        ys: list[float] = []
+        ax0 = {"x_3d": 0, "y_3d": 1, "z_3d": 2}[spec.axes[0]]
+        ax1 = {"x_3d": 0, "y_3d": 1, "z_3d": 2}[spec.axes[1]]
+        for points in normalized_frames:
+            for values in points.values():
+                xs.append(values[ax0])
+                ys.append(values[ax1])
+        if not xs or not ys:
+            continue
+        bounds_by_projection[spec.name] = _robust_bounds(xs, ys)
+    return ProjectionContext(body_scale=stable_scale, bounds_by_projection=bounds_by_projection)
+
+
+def _body_scale(points: dict[str, Pose3DRecord]) -> float:
+    candidates: list[float] = []
+    for left_name, right_name in (
+        ("left_shoulder", "right_shoulder"),
+        ("left_hip", "right_hip"),
+    ):
+        left = points.get(left_name)
+        right = points.get(right_name)
+        if left and right:
+            candidates.append(
+                math.dist(
+                    (left.x_3d, left.y_3d, left.z_3d),
+                    (right.x_3d, right.y_3d, right.z_3d),
+                )
+            )
+    left_shoulder = points.get("left_shoulder")
+    right_shoulder = points.get("right_shoulder")
+    left_hip = points.get("left_hip")
+    right_hip = points.get("right_hip")
+    if left_shoulder and left_hip:
+        candidates.append(
+            math.dist(
+                (left_shoulder.x_3d, left_shoulder.y_3d, left_shoulder.z_3d),
+                (left_hip.x_3d, left_hip.y_3d, left_hip.z_3d),
+            )
+        )
+    if right_shoulder and right_hip:
+        candidates.append(
+            math.dist(
+                (right_shoulder.x_3d, right_shoulder.y_3d, right_shoulder.z_3d),
+                (right_hip.x_3d, right_hip.y_3d, right_hip.z_3d),
+            )
+        )
+    return _median(candidates, fallback=1.0)
+
+
+def _median(values: list[float], *, fallback: float) -> float:
+    cleaned = [value for value in values if math.isfinite(value) and value > 0]
+    if not cleaned:
+        return fallback
+    cleaned.sort()
+    mid = len(cleaned) // 2
+    if len(cleaned) % 2 == 1:
+        return cleaned[mid]
+    return (cleaned[mid - 1] + cleaned[mid]) / 2
+
+
+def _robust_bounds(xs: list[float], ys: list[float]) -> tuple[float, float, float, float]:
+    xs_sorted = sorted(xs)
+    ys_sorted = sorted(ys)
+    min_x = _percentile(xs_sorted, 0.05)
+    max_x = _percentile(xs_sorted, 0.95)
+    min_y = _percentile(ys_sorted, 0.05)
+    max_y = _percentile(ys_sorted, 0.95)
+    pad_x = max((max_x - min_x) * 0.15, 1e-4)
+    pad_y = max((max_y - min_y) * 0.15, 1e-4)
+    return (min_x - pad_x, max_x + pad_x, min_y - pad_y, max_y + pad_y)
+
+
+def _percentile(sorted_values: list[float], q: float) -> float:
+    if not sorted_values:
+        return 0.0
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    position = q * (len(sorted_values) - 1)
+    lower = int(math.floor(position))
+    upper = int(math.ceil(position))
+    if lower == upper:
+        return sorted_values[lower]
+    weight = position - lower
+    return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
 
 
 def _require_cv2():
