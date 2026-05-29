@@ -154,6 +154,14 @@ def _build_styles(font_name: str) -> dict[str, ParagraphStyle]:
             leading=9.4,
             textColor=colors.HexColor("#1F2933"),
         ),
+        "metric_header_cell": ParagraphStyle(
+            "MetricHeaderCell",
+            parent=base["BodyText"],
+            fontName=font_name,
+            fontSize=7.8,
+            leading=9.4,
+            textColor=colors.white,
+        ),
     }
     return styles
 
@@ -300,13 +308,14 @@ def _build_metric_comparison(story: list[Any], styles: dict[str, ParagraphStyle]
         )
     )
 
+    header_style = styles["metric_header_cell"]
     header = [
-        Paragraph("<b>指标</b>", styles["metric_cell"]),
-        Paragraph("<b>本次结果</b>", styles["metric_cell"]),
-        Paragraph("<b>参考区间</b>", styles["metric_cell"]),
-        Paragraph("<b>差值</b>", styles["metric_cell"]),
-        Paragraph("<b>解读</b>", styles["metric_cell"]),
-        Paragraph("<b>文献 / 注意事项</b>", styles["metric_cell"]),
+        Paragraph("<b>指标</b>", header_style),
+        Paragraph("<b>本次结果</b>", header_style),
+        Paragraph("<b>参考区间</b>", header_style),
+        Paragraph("<b>差值</b>", header_style),
+        Paragraph("<b>解读</b>", header_style),
+        Paragraph("<b>文献 / 注意事项</b>", header_style),
     ]
     rows = [header]
     for metric in payload.get("selected_metrics", []):
@@ -498,7 +507,11 @@ def _pick_overlay_frame(project_root: Path, clip_id: str, condition: str, action
         import csv
         with feature_csv.open("r", encoding="utf-8", newline="") as handle:
             rows = list(csv.DictReader(handle))
-        action_frames = frame_indices_in_action_window(rows, action_type=action_type)
+        action_frames = frame_indices_in_action_window(
+            rows,
+            action_type=action_type,
+            expanded=(action_type == "batting"),
+        )
     pose_csv = project_root / "data_full" / "processed" / "poses" / clip_id / f"{condition}.csv"
     if pose_csv.exists():
         preferred_index = _best_stable_action_frame(read_pose_records(pose_csv), action_frames)

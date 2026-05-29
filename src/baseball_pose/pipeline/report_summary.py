@@ -136,7 +136,11 @@ def build_report_summary(
     """Return one LLM-ready summary payload."""
 
     parsed_rows = [_parse_feature_row(row) for row in rows]
-    action_rows, action_window = filter_rows_to_action_window(parsed_rows, action_type=action_type)
+    action_rows, action_window = filter_rows_to_action_window(
+        parsed_rows,
+        action_type=action_type,
+        expanded=(action_type == "batting"),
+    )
     window_rows = action_rows if action_rows else parsed_rows
     feature_stats = _summarize_feature_rows(window_rows)
     derived_stats = _summarize_derived_metrics(window_rows)

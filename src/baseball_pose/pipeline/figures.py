@@ -133,7 +133,11 @@ def _select_figure_feature_paths(
 def _write_action_window_feature_csvs(feature_paths: dict[str, Path], action_type: str) -> None:
     for condition_id, source_path in feature_paths.items():
         rows = read_feature_rows(source_path)
-        window_rows, _window = filter_rows_to_action_window(rows, action_type=action_type)
+        window_rows, _window = filter_rows_to_action_window(
+            rows,
+            action_type=action_type,
+            expanded=(action_type == "batting"),
+        )
         if not window_rows:
             continue
         target_path = source_path.parent / f"{condition_id}__action_window.csv"

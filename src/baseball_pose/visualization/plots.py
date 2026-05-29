@@ -476,7 +476,11 @@ def _primary_condition_rows(
         return "", []
     condition_id = sorted(feature_paths)[0]
     rows = _read_rows(feature_paths[condition_id])
-    filtered_rows, _window = filter_rows_to_action_window(rows, action_type=action_type)
+    filtered_rows, _window = filter_rows_to_action_window(
+        rows,
+        action_type=action_type,
+        expanded=(action_type == "batting"),
+    )
     return condition_id, filtered_rows if filtered_rows else rows
 
 

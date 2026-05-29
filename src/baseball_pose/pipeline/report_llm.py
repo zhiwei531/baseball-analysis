@@ -385,7 +385,11 @@ def _pick_overlay_frame(
     action_frames: set[int] = set()
     if feature_csv.exists():
         rows = read_feature_rows(feature_csv)
-        action_frames = frame_indices_in_action_window(rows, action_type=action_type)
+        action_frames = frame_indices_in_action_window(
+            rows,
+            action_type=action_type,
+            expanded=(action_type == "batting"),
+        )
     pose_csv = pose_path(config.data_dir, clip_id, condition_id)
     if pose_csv.exists():
         candidate_index = _best_stable_action_frame(
