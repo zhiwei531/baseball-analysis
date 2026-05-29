@@ -53,6 +53,10 @@ def overlay_video_path(output_dir: str | Path, clip_id: str, condition_id: str) 
     return Path(output_dir) / "overlays" / f"{clip_id}__{condition_id}.mp4"
 
 
+def action_window_video_path(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(output_dir) / "action_windows" / f"{clip_id}__{condition_id}__action_window.mp4"
+
+
 def overlay3d_frame_dir(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
     return Path(output_dir) / "overlays3d" / "frames" / clip_id / condition_id
 

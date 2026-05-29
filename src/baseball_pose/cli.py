@@ -20,6 +20,7 @@ from baseball_pose.pipeline.run_experiment import (
 from baseball_pose.pipeline.features import extract_feature_files
 from baseball_pose.pipeline.figures import make_report_figures
 from baseball_pose.pipeline.image_proposal_debug import render_image_proposal_debug_videos
+from baseball_pose.pipeline.action_window_video import export_action_window_videos
 from baseball_pose.pipeline.overlays import render_pose_overlays
 from baseball_pose.pipeline.overlays3d import render_pose3d_overlays
 from baseball_pose.pipeline.pose3d import build_pose3d_plan, lift_pose_sequence
@@ -55,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
             "extract-features",
             "make-figures",
             "render-overlays",
+            "export-action-window-video",
             "render-overlays-3d",
             "render-body-mask-debug",
             "render-image-proposal-debug",
@@ -387,6 +389,23 @@ def main() -> None:
                 f"{result.frame_count} overlay frames"
             )
             print(f"  overlay: {result.overlay_video}")
+        return
+
+    if args.command == "export-action-window-video":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = export_action_window_videos(
+            clip_ids=clip_ids,
+            config=config,
+            conditions=args.condition,
+        )
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.condition_id}: "
+                f"frames {result.start_frame} to {result.end_frame} "
+                f"-> {result.frame_count} action-window frames"
+            )
+            print(f"  source: {result.source_condition_id}")
+            print(f"  video: {result.video_path}")
         return
 
     if args.command == "render-body-mask-debug":
