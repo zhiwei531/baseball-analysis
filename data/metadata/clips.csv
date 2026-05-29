@@ -13,3 +13,4 @@ pitching_single_topdown,../test_dataset/pitching_single_topdown.mov,pitching,,30
 pitching_single_back,../test_dataset/pitching_single_back.mov,pitching,,30,,,,,,"single_person;back_view","Test dataset clip: pitching, single person, back view."
 pitching_multi_sideback,../test_dataset/pitching_multi_sideback.mov,pitching,,30,,,,,,"multi_person;side_back_view","Test dataset clip: pitching, multiple people, side-back view."
 julian_wave_vicon,/Users/lizhiwei/Desktop/DKU/Project/Baseball/data (2)/data/Julian_wave.xlsx,batting,,100,,,,,,"vicon;marker_3d;non_video","Vicon XLSX trial projected to 2D pose format for compatibility testing only."
+julian_bunt_vicon,/Users/lizhiwei/Desktop/DKU/Project/Baseball/data (2)/data/Julian_bunt_88%.xlsx,batting,,100,,,,,,"vicon;marker_3d;bunt","Vicon XLSX bunt trial projected to 2D pose format for compatibility testing."
