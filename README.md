@@ -67,10 +67,20 @@ On the external-drive macOS setup, MediaPipe Tasks currently works under Python 
 .venv312/bin/python -m pip install --timeout 120 -e ".[dev]"
 ```
 
-MediaPipe Tasks also needs a local pose model file:
+MediaPipe Tasks also needs a local pose model file. The default configuration uses
+the Heavy model:
 
 ```bash
 mkdir -p models
+curl -L \
+  https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task \
+  -o models/pose_landmarker_heavy.task
+```
+
+The Lite model can still be used for faster comparison runs by overriding
+`pose.model_asset_path`:
+
+```bash
 curl -L \
   https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task \
   -o models/pose_landmarker_lite.task

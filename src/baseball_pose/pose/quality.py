@@ -5,8 +5,30 @@ from __future__ import annotations
 from typing import Any
 
 
-TORSO_JOINTS = {"nose", "left_shoulder", "right_shoulder", "left_hip", "right_hip"}
-DISTAL_JOINTS = {"left_wrist", "right_wrist", "left_ankle", "right_ankle"}
+TORSO_JOINTS = {
+    "nose",
+    "head",
+    "neck",
+    "hip",
+    "left_shoulder",
+    "right_shoulder",
+    "left_hip",
+    "right_hip",
+}
+DISTAL_JOINTS = {
+    "left_wrist",
+    "right_wrist",
+    "left_ankle",
+    "right_ankle",
+    "left_big_toe",
+    "right_big_toe",
+    "left_small_toe",
+    "right_small_toe",
+    "left_heel",
+    "right_heel",
+    "left_foot_index",
+    "right_foot_index",
+}
 MID_LIMB_JOINTS = {"left_elbow", "right_elbow", "left_knee", "right_knee"}
 
 LIMB_SEGMENTS = (

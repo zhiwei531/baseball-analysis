@@ -9,7 +9,7 @@ from typing import Any
 
 from baseball_pose.io.video import FrameRecord
 from baseball_pose.pose.base import PoseEstimator
-from baseball_pose.pose.schema import PoseRecord
+from baseball_pose.pose.schema import MEDIAPIPE_JOINTS, PoseRecord
 
 
 MEDIAPIPE_TO_CANONICAL = {
@@ -27,6 +27,8 @@ MEDIAPIPE_TO_CANONICAL = {
     27: "left_ankle",
     28: "right_ankle",
 }
+
+MEDIAPIPE_TO_FULL = dict(enumerate(MEDIAPIPE_JOINTS))
 
 
 class MediaPipePoseEstimator(PoseEstimator):
@@ -56,7 +58,7 @@ class MediaPipePoseEstimator(PoseEstimator):
         if not model_path.exists():
             raise FileNotFoundError(
                 f"MediaPipe pose model not found: {model_path}. "
-                "Download pose_landmarker_lite.task into models/ before running pose estimation."
+                "Download the configured Pose Landmarker task model before running pose estimation."
             )
 
         self._mp = mp
@@ -84,7 +86,7 @@ class MediaPipePoseEstimator(PoseEstimator):
 
         records: list[PoseRecord] = []
         landmarks = result.pose_landmarks[0] if result.pose_landmarks else None
-        for index, joint_name in MEDIAPIPE_TO_CANONICAL.items():
+        for index, joint_name in MEDIAPIPE_TO_FULL.items():
             landmark = landmarks[index] if landmarks else None
             records.append(
                 PoseRecord(

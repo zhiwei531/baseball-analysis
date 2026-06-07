@@ -1,0 +1,47 @@
+extends: ../default.yaml
+
+project:
+  data_dir: data_full/suzhou_heavy_full33_test
+  output_dir: outputs_full/suzhou_heavy_full33_test
+
+dataset:
+  clips_file: data/metadata/clips_suzhou_full.csv
+  difficulty_file: data/metadata/difficulty_labels.csv
+  clip_ids:
+    - suzhou_img_8084
+    - suzhou_img_8139
+
+video:
+  target_fps: 30
+  resize_longest_side: 1280
+  preserve_aspect_ratio: true
+  write_frames: true
+  max_frames_per_clip: null
+
+pose:
+  backend: mediapipe
+  model_asset_path: models/pose_landmarker_heavy.task
+
+postprocess:
+  confidence_threshold: 0.0
+  confidence_thresholds:
+    default: 0.0
+    torso: 0.0
+    mid_limb: 0.0
+    distal: 0.0
+
+experiments:
+  name: mediapipe_heavy_suzhou_test
+  default_conditions:
+    - image_center_motion_grabcut_pose
+    - image_center_motion_grabcut_pose_smooth
+
+conditions:
+  image_center_motion_grabcut_pose_smooth:
+    roi:
+      enabled: true
+      mode: image_center_motion_grabcut
+      source_condition: image_center_motion_grabcut_pose
+    preprocessing: []
+    postprocess:
+      enabled: true

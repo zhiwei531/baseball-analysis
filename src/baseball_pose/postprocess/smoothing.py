@@ -10,7 +10,6 @@ import numpy as np
 from scipy.signal import savgol_filter
 
 from baseball_pose.pose.quality import LIMB_SEGMENTS, gap_for_joint, multiplier_for_joint, threshold_for_joint
-from baseball_pose.pose.schema import CANONICAL_JOINTS
 from baseball_pose.pose.schema import PoseRecord, pose_score
 
 
@@ -106,8 +105,6 @@ def smooth_pose_records(
 def _records_by_key(records: list[PoseRecord]) -> dict[tuple[str, str, str], list[PoseRecord]]:
     grouped: dict[tuple[str, str, str], list[PoseRecord]] = {}
     for record in records:
-        if record.joint_name not in CANONICAL_JOINTS:
-            continue
         grouped.setdefault((record.clip_id, record.condition_id, record.joint_name), []).append(record)
     for key_records in grouped.values():
         key_records.sort(key=lambda item: item.frame_index)

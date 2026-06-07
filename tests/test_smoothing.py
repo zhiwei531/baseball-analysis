@@ -125,6 +125,27 @@ def test_smooth_pose_records_median_window_reduces_alternating_noise():
     assert _total_variation(filtered) < _total_variation(base)
 
 
+def test_smooth_pose_records_processes_full_mediapipe_landmarks():
+    records = [
+        _record(0, 0.00, 0.00, joint_name="left_foot_index"),
+        _record(1, 0.10, 0.10, joint_name="left_foot_index"),
+        _record(2, 0.02, 0.02, joint_name="left_foot_index"),
+        _record(3, 0.12, 0.12, joint_name="left_foot_index"),
+        _record(4, 0.04, 0.04, joint_name="left_foot_index"),
+    ]
+
+    smoothed = smooth_pose_records(
+        records,
+        window_length=3,
+        polyorder=1,
+        median_window_length=3,
+        torso_gate_enabled=False,
+    )
+
+    assert len(smoothed) == len(records)
+    assert _total_variation(smoothed) < _total_variation(records)
+
+
 def _record(
     frame_index: int,
     x: float,
