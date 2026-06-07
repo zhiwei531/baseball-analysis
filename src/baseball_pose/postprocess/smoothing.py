@@ -9,7 +9,13 @@ from collections import defaultdict
 import numpy as np
 from scipy.signal import savgol_filter
 
-from baseball_pose.pose.quality import LIMB_SEGMENTS, gap_for_joint, multiplier_for_joint, threshold_for_joint
+from baseball_pose.pose.quality import (
+    FOOT_SEGMENTS,
+    LIMB_SEGMENTS,
+    gap_for_joint,
+    multiplier_for_joint,
+    threshold_for_joint,
+)
 from baseball_pose.pose.schema import PoseRecord, pose_score
 
 
@@ -30,6 +36,7 @@ def smooth_pose_records(
     torso_jump_threshold_multiplier: float = 8.0,
     min_torso_jump_distance: float = 0.08,
     limb_length_tolerance_ratio: float = 0.28,
+    foot_length_tolerance_ratio: float = 1.20,
 ) -> list[PoseRecord]:
     """Smooth each joint trajectory while preserving the common pose schema.
 
@@ -60,6 +67,8 @@ def smooth_pose_records(
         raise ValueError("min_torso_jump_distance must be positive.")
     if limb_length_tolerance_ratio <= 0:
         raise ValueError("limb_length_tolerance_ratio must be positive.")
+    if foot_length_tolerance_ratio <= 0:
+        raise ValueError("foot_length_tolerance_ratio must be positive.")
 
     gated_records = (
         _apply_torso_continuity_gate(
@@ -76,6 +85,14 @@ def smooth_pose_records(
         confidence_threshold=confidence_threshold,
         threshold_config=threshold_config,
         tolerance_ratio=limb_length_tolerance_ratio,
+        segments=LIMB_SEGMENTS,
+    )
+    gated_records = _apply_limb_length_consistency_gate(
+        gated_records,
+        confidence_threshold=confidence_threshold,
+        threshold_config=threshold_config,
+        tolerance_ratio=foot_length_tolerance_ratio,
+        segments=FOOT_SEGMENTS,
     )
     by_key = _records_by_key(gated_records)
     smoothed_by_identity: dict[tuple[int, str], PoseRecord] = {}
@@ -151,6 +168,10 @@ def _smooth_joint_records(
     y_values = _savgol_valid_segments(y_values, window_length, polyorder)
     x_values = _moving_average_valid_segments(x_values, refine_window_length)
     y_values = _moving_average_valid_segments(y_values, refine_window_length)
+    x_values = _interpolate_short_gaps(x_values, joint_gap)
+    y_values = _interpolate_short_gaps(y_values, joint_gap)
+    x_values = _fill_short_edge_gaps(x_values, joint_gap)
+    y_values = _fill_short_edge_gaps(y_values, joint_gap)
 
     output: list[PoseRecord] = []
     for record, x_value, y_value in zip(records, x_values, y_values):
@@ -273,13 +294,14 @@ def _apply_limb_length_consistency_gate(
     confidence_threshold: float,
     threshold_config: dict[str, object] | None,
     tolerance_ratio: float,
+    segments: tuple[tuple[str, str, str], ...],
 ) -> list[PoseRecord]:
     by_frame: dict[int, list[PoseRecord]] = defaultdict(list)
     for record in records:
         by_frame[record.frame_index].append(record)
 
     baseline_lengths: dict[tuple[str, str], float] = {}
-    for proximal, distal, _ in LIMB_SEGMENTS:
+    for proximal, distal, _ in segments:
         lengths: list[float] = []
         for frame_records in by_frame.values():
             points = _confident_points(
@@ -303,7 +325,7 @@ def _apply_limb_length_consistency_gate(
             confidence_threshold=confidence_threshold,
             threshold_config=threshold_config,
         )
-        for proximal, distal, reject_joint in LIMB_SEGMENTS:
+        for proximal, distal, reject_joint in segments:
             baseline = baseline_lengths.get((proximal, distal))
             if baseline is None or baseline <= 0:
                 continue
@@ -415,6 +437,27 @@ def _interpolate_short_gaps(values: np.ndarray, max_gap_frames: int) -> np.ndarr
             and not np.isnan(output[end])
         ):
             output[start:end] = np.linspace(output[start - 1], output[end], gap_length + 2)[1:-1]
+    return output
+
+
+def _fill_short_edge_gaps(values: np.ndarray, max_gap_frames: int) -> np.ndarray:
+    if max_gap_frames <= 0:
+        return values
+
+    output = values.copy()
+    valid_indices = np.flatnonzero(~np.isnan(output))
+    if len(valid_indices) == 0:
+        return output
+
+    first_valid = int(valid_indices[0])
+    if 0 < first_valid <= max_gap_frames:
+        output[:first_valid] = output[first_valid]
+
+    last_valid = int(valid_indices[-1])
+    trailing_gap = len(output) - last_valid - 1
+    if 0 < trailing_gap <= max_gap_frames:
+        output[last_valid + 1 :] = output[last_valid]
+
     return output
 
 

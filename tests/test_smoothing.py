@@ -146,6 +146,61 @@ def test_smooth_pose_records_processes_full_mediapipe_landmarks():
     assert _total_variation(smoothed) < _total_variation(records)
 
 
+def test_smooth_pose_records_fills_short_edge_gap():
+    records = [
+        _record(0, 0.00, 0.00),
+        _record(1, 0.01, 0.01),
+        _record(2, 0.02, 0.02),
+        _record(3, 0.03, 0.03, confidence=0.1),
+        _record(4, 0.04, 0.04, confidence=0.1),
+    ]
+
+    smoothed = smooth_pose_records(
+        records,
+        window_length=3,
+        polyorder=1,
+        confidence_threshold=0.5,
+        max_gap_frames=2,
+        torso_gate_enabled=False,
+    )
+
+    assert smoothed[-1].x is not None
+    assert smoothed[-1].y is not None
+
+
+def test_smooth_pose_records_rejects_foot_drift_from_ankle():
+    records = []
+    toe_values = [0.11, 0.12, 0.80, 0.14, 0.15]
+    for frame_index, toe_x in enumerate(toe_values):
+        records.extend(
+            [
+                _record(frame_index, 0.10, 0.50, joint_name="left_ankle"),
+                _record(frame_index, toe_x, 0.51, joint_name="left_big_toe"),
+            ]
+        )
+
+    smoothed = smooth_pose_records(
+        records,
+        window_length=3,
+        polyorder=1,
+        median_window_length=1,
+        refine_window_length=1,
+        confidence_threshold=0.5,
+        max_gap_frames=1,
+        torso_gate_enabled=False,
+        limb_length_tolerance_ratio=10.0,
+        foot_length_tolerance_ratio=1.0,
+    )
+    toe = [
+        record
+        for record in smoothed
+        if record.joint_name == "left_big_toe" and record.frame_index == 2
+    ][0]
+
+    assert toe.x is not None
+    assert toe.x < 0.20
+
+
 def _record(
     frame_index: int,
     x: float,

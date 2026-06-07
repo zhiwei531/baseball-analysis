@@ -42,6 +42,15 @@ LIMB_SEGMENTS = (
     ("right_knee", "right_ankle", "right_ankle"),
 )
 
+FOOT_SEGMENTS = (
+    ("left_ankle", "left_big_toe", "left_big_toe"),
+    ("left_ankle", "left_small_toe", "left_small_toe"),
+    ("left_ankle", "left_heel", "left_heel"),
+    ("right_ankle", "right_big_toe", "right_big_toe"),
+    ("right_ankle", "right_small_toe", "right_small_toe"),
+    ("right_ankle", "right_heel", "right_heel"),
+)
+
 
 def joint_group(joint_name: str) -> str:
     if joint_name in TORSO_JOINTS:

@@ -42,9 +42,9 @@ postprocess:
   interpolate_max_gap_frames: 8
   interpolate_max_gap_by_group:
     default: 8
-    torso: 10
-    mid_limb: 6
-    distal: 4
+    torso: 15
+    mid_limb: 10
+    distal: 24
   smoothing:
     enabled: true
     method: savgol
@@ -61,7 +61,8 @@ postprocess:
     torso_gate_enabled: true
     torso_jump_threshold_multiplier: 5.0
     min_torso_jump_distance: 0.05
-    limb_length_tolerance_ratio: 0.34
+    limb_length_tolerance_ratio: 0.80
+    foot_length_tolerance_ratio: 0.85
 
 experiments:
   name: rtmpose_suzhou_test

@@ -82,6 +82,9 @@ def smooth_pose_files(
                     limb_length_tolerance_ratio=float(
                         smoothing_config.get("limb_length_tolerance_ratio", 0.28)
                     ),
+                    foot_length_tolerance_ratio=float(
+                        smoothing_config.get("foot_length_tolerance_ratio", 1.20)
+                    ),
                 )
             ]
             output_path = pose_path(config.data_dir, clip_id, condition_id)
