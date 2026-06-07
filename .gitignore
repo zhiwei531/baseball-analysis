@@ -21,6 +21,7 @@ outputs/
 outputs_full/
 .cache/
 models/*.task
+models/*.onnx
 
 # Keep raw videos local unless the submission explicitly requires binaries.
 raw/*.mov

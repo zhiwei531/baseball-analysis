@@ -21,7 +21,7 @@ from baseball_pose.io.paths import (
 )
 from baseball_pose.io.pose_csv import read_pose_records, write_pose_records
 from baseball_pose.io.video import read_frame, sample_video_frames, write_video_from_frames
-from baseball_pose.pose.mediapipe_pose import MediaPipePoseEstimator
+from baseball_pose.pose.factory import create_pose_estimator, pose_prefers_unmasked_input
 from baseball_pose.pose.schema import PoseRecord
 from baseball_pose.preprocessing.body_mask import create_body_prior_masked_crop
 from baseball_pose.preprocessing.image_proposal import (
@@ -111,14 +111,7 @@ def run_baseline_clip(
     frames_csv = frame_manifest_path(config.data_dir, clip.clip_id, condition_id)
     write_frame_records(frames_csv, frames)
 
-    estimator = MediaPipePoseEstimator(
-        model_asset_path=config.raw["pose"].get(
-            "model_asset_path",
-            "models/pose_landmarker_lite.task",
-        ),
-        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
-        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
-    )
+    estimator = create_pose_estimator(config.raw)
     all_pose_records: list[PoseRecord] = []
     overlay_paths: list[Path] = []
     tracks: dict[str, list[tuple[int, int]]] = {"left_wrist": [], "right_wrist": []}
@@ -237,14 +230,7 @@ def run_auto_roi_clip(
     debug_video = roi_debug_video_path(config.output_dir, clip.clip_id, condition_id)
     write_roi_debug_video(frames, roi_result.roi, debug_video, fps=config.target_fps)
 
-    estimator = MediaPipePoseEstimator(
-        model_asset_path=config.raw["pose"].get(
-            "model_asset_path",
-            "models/pose_landmarker_lite.task",
-        ),
-        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
-        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
-    )
+    estimator = create_pose_estimator(config.raw)
     all_pose_records: list[PoseRecord] = []
     overlay_paths: list[Path] = []
     tracks: dict[str, list[tuple[int, int]]] = {"left_wrist": [], "right_wrist": []}
@@ -349,14 +335,7 @@ def run_pose_prior_roi_clip(
     debug_video = roi_debug_video_path(config.output_dir, clip.clip_id, condition_id)
     write_roi_debug_video(frames, roi_result.roi, debug_video, fps=config.target_fps)
 
-    estimator = MediaPipePoseEstimator(
-        model_asset_path=config.raw["pose"].get(
-            "model_asset_path",
-            "models/pose_landmarker_lite.task",
-        ),
-        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
-        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
-    )
+    estimator = create_pose_estimator(config.raw)
     all_pose_records: list[PoseRecord] = []
     overlay_paths: list[Path] = []
     tracks: dict[str, list[tuple[int, int]]] = {"left_wrist": [], "right_wrist": []}
@@ -452,14 +431,7 @@ def run_center_prior_roi_clip(
     debug_video = roi_debug_video_path(config.output_dir, clip.clip_id, condition_id)
     write_roi_debug_video(frames, roi_result.roi, debug_video, fps=config.target_fps)
 
-    estimator = MediaPipePoseEstimator(
-        model_asset_path=config.raw["pose"].get(
-            "model_asset_path",
-            "models/pose_landmarker_lite.task",
-        ),
-        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
-        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
-    )
+    estimator = create_pose_estimator(config.raw)
     all_pose_records: list[PoseRecord] = []
     overlay_paths: list[Path] = []
     tracks: dict[str, list[tuple[int, int]]] = {"left_wrist": [], "right_wrist": []}
@@ -563,14 +535,7 @@ def run_body_prior_mask_roi_clip(
     debug_video = roi_debug_video_path(config.output_dir, clip.clip_id, condition_id)
     write_roi_debug_video(frames, fallback_roi_result.roi, debug_video, fps=config.target_fps)
 
-    estimator = MediaPipePoseEstimator(
-        model_asset_path=config.raw["pose"].get(
-            "model_asset_path",
-            "models/pose_landmarker_lite.task",
-        ),
-        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
-        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
-    )
+    estimator = create_pose_estimator(config.raw)
     all_pose_records: list[PoseRecord] = []
     overlay_paths: list[Path] = []
     tracks: dict[str, list[tuple[int, int]]] = {"left_wrist": [], "right_wrist": []}
@@ -656,14 +621,8 @@ def run_image_proposal_roi_clip(
     frames_csv = frame_manifest_path(config.data_dir, clip.clip_id, condition_id)
     write_frame_records(frames_csv, frames)
 
-    estimator = MediaPipePoseEstimator(
-        model_asset_path=config.raw["pose"].get(
-            "model_asset_path",
-            "models/pose_landmarker_lite.task",
-        ),
-        min_detection_confidence=float(config.raw["pose"].get("min_detection_confidence", 0.5)),
-        min_tracking_confidence=float(config.raw["pose"].get("min_tracking_confidence", 0.5)),
-    )
+    estimator = create_pose_estimator(config.raw)
+    use_unmasked_pose_input = pose_prefers_unmasked_input(config.raw)
     cv2 = _require_cv2()
     background_subtractor = cv2.createBackgroundSubtractorMOG2(
         history=80,
@@ -725,7 +684,8 @@ def run_image_proposal_roi_clip(
                 ),
             )
             masked_image = apply_image_proposal_mask(image, proposal)
-            crop = crop_to_roi(masked_image, proposal.roi)
+            pose_input_image = image if use_unmasked_pose_input else masked_image
+            crop = crop_to_roi(pose_input_image, proposal.roi)
             crop_records = estimator.estimate_frame(crop, frame, condition_id)
             records = remap_pose_records_to_full_frame(
                 crop_records,

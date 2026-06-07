@@ -88,6 +88,16 @@ curl -L \
 
 The `.task` file is ignored by git.
 
+Optional RTMPose runs use RTMLib and ONNXRuntime rather than the full
+MMPose/MMCV stack:
+
+```bash
+.venv312/bin/python -m pip install -e ".[rtmpose]"
+```
+
+The current RTMPose test config expects a local ONNX model at
+`models/rtmpose-x-coco17.onnx`.
+
 ## Initial Checks
 
 ```bash

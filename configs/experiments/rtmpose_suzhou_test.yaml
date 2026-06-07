@@ -1,0 +1,77 @@
+extends: ../default.yaml
+
+project:
+  data_dir: data_full/suzhou_rtmpose_test
+  output_dir: outputs_full/suzhou_rtmpose_test
+
+dataset:
+  clips_file: data/metadata/clips_suzhou_full.csv
+  difficulty_file: data/metadata/difficulty_labels.csv
+  clip_ids:
+    - suzhou_img_8084
+    - suzhou_img_8139
+
+video:
+  target_fps: 30
+  resize_longest_side: 1280
+  preserve_aspect_ratio: true
+  write_frames: true
+  max_frames_per_clip: null
+
+pose:
+  backend: rtmpose
+  mode: performance
+  runtime_backend: onnxruntime
+  device: cpu
+  model_url: models/rtmpose-x-coco17.onnx
+  model_input_size: [288, 384]
+  keypoint_schema: coco17
+  use_masked_input: false
+  min_keypoint_score: 0.0
+
+postprocess:
+  confidence_threshold: 0.30
+  confidence_thresholds:
+    default: 0.30
+    torso: 0.25
+    mid_limb: 0.35
+    distal: 0.40
+  interpolate_max_gap_frames: 8
+  interpolate_max_gap_by_group:
+    default: 8
+    torso: 10
+    mid_limb: 6
+    distal: 4
+  smoothing:
+    enabled: true
+    method: savgol
+    window_length: 15
+    polyorder: 2
+    median_window_length: 5
+    refine_window_length: 9
+    jump_threshold_multiplier: 3.4
+    joint_jump_thresholds:
+      default: 3.4
+      torso: 5.0
+      mid_limb: 3.0
+      distal: 2.7
+    torso_gate_enabled: true
+    torso_jump_threshold_multiplier: 5.0
+    min_torso_jump_distance: 0.05
+    limb_length_tolerance_ratio: 0.34
+
+experiments:
+  name: rtmpose_suzhou_test
+  default_conditions:
+    - image_center_motion_grabcut_pose
+    - image_center_motion_grabcut_pose_smooth
+
+conditions:
+  image_center_motion_grabcut_pose_smooth:
+    roi:
+      enabled: true
+      mode: image_center_motion_grabcut
+      source_condition: image_center_motion_grabcut_pose
+    preprocessing: []
+    postprocess:
+      enabled: true
