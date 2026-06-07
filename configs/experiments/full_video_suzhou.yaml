@@ -1,0 +1,127 @@
+extends: ../default.yaml
+
+project:
+  data_dir: data_full/suzhou_all_2d
+  output_dir: outputs_full/suzhou_all_2d
+
+dataset:
+  clips_file: data/metadata/clips_suzhou_full.csv
+  difficulty_file: data/metadata/difficulty_labels.csv
+  clip_ids:
+    - suzhou_img_8084
+    - suzhou_img_8085
+    - suzhou_img_8086
+    - suzhou_img_8087
+    - suzhou_img_8088
+    - suzhou_img_8089
+    - suzhou_img_8090
+    - suzhou_img_8091
+    - suzhou_img_8092
+    - suzhou_img_8093
+    - suzhou_img_8094
+    - suzhou_img_8095
+    - suzhou_img_8096
+    - suzhou_img_8097
+    - suzhou_img_8098
+    - suzhou_img_8099
+    - suzhou_img_8100
+    - suzhou_img_8102
+    - suzhou_img_8104
+    - suzhou_img_8105
+    - suzhou_img_8106
+    - suzhou_img_8107
+    - suzhou_img_8109
+    - suzhou_img_8110
+    - suzhou_img_8111
+    - suzhou_img_8112
+    - suzhou_img_8113
+    - suzhou_img_8114
+    - suzhou_img_8115
+    - suzhou_img_8117
+    - suzhou_img_8118
+    - suzhou_img_8119
+    - suzhou_img_8120
+    - suzhou_img_8121
+    - suzhou_img_8122
+    - suzhou_img_8123
+    - suzhou_img_8125
+    - suzhou_img_8126
+    - suzhou_img_8127
+    - suzhou_img_8128
+    - suzhou_img_8129
+    - suzhou_img_8130
+    - suzhou_img_8131
+    - suzhou_img_8132
+    - suzhou_img_8133
+    - suzhou_img_8134
+    - suzhou_img_8135
+    - suzhou_img_8136
+    - suzhou_img_8137
+    - suzhou_img_8138
+    - suzhou_img_8139
+    - suzhou_img_8140
+    - suzhou_img_8141
+    - suzhou_img_8142
+    - suzhou_img_8143
+    - suzhou_img_8144
+    - suzhou_img_8145
+    - suzhou_img_8146
+    - suzhou_img_8147
+    - suzhou_img_8148
+    - suzhou_img_8149
+    - suzhou_img_8150
+    - suzhou_img_8151
+    - suzhou_img_8152
+    - suzhou_img_8153
+    - suzhou_img_8154
+    - suzhou_img_8155
+    - suzhou_img_8157
+    - suzhou_img_8158
+    - suzhou_img_8159
+    - suzhou_img_8160
+    - suzhou_img_8161
+    - suzhou_img_8162
+    - suzhou_img_8163
+    - suzhou_img_8164
+    - suzhou_img_8165
+    - suzhou_img_8166
+    - suzhou_img_8167
+    - suzhou_img_8168_2
+    - suzhou_img_8169_2
+    - suzhou_img_8170_2
+    - suzhou_img_8171
+    - suzhou_img_8172
+    - suzhou_img_8173
+    - suzhou_img_8174
+    - suzhou_img_8175
+    - suzhou_img_8176
+    - suzhou_img_8177
+    - suzhou_img_8178_3
+    - suzhou_img_8179
+    - suzhou_img_8180
+    - suzhou_img_8181_3
+    - suzhou_img_8182_3
+    - suzhou_img_8183_3
+
+video:
+  target_fps: 30
+  resize_longest_side: 1280
+  preserve_aspect_ratio: true
+  write_frames: true
+  max_frames_per_clip: null
+
+experiments:
+  name: suzhou_full_video_2d
+  default_conditions:
+    - image_center_motion_grabcut_pose
+    - image_center_motion_grabcut_pose_smooth
+
+conditions:
+  image_center_motion_grabcut_pose_smooth:
+    roi:
+      enabled: true
+      mode: image_center_motion_grabcut
+      source_condition: image_center_motion_grabcut_pose
+    preprocessing: []
+    postprocess:
+      enabled: true
