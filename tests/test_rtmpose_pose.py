@@ -1,4 +1,7 @@
-from baseball_pose.pose.rtmpose_pose import _coco_wholebody133_to_halpe26
+from baseball_pose.pose.rtmpose_pose import (
+    _coco_wholebody133_to_halpe26,
+    _fuse_coco17_body_with_wholebody_feet,
+)
 
 
 def test_coco_wholebody133_to_halpe26_projects_body_and_feet():
@@ -21,3 +24,25 @@ def test_coco_wholebody133_to_halpe26_projects_body_and_feet():
         keypoints[19],
         keypoints[22],
     ]
+
+
+def test_fused_halpe26_anchors_implausible_wholebody_feet():
+    body_keypoints = [[float(index), float(index + 100)] for index in range(17)]
+    body_scores = [0.9 for _ in range(17)]
+    wholebody_keypoints = [[float(index), float(index + 100)] for index in range(133)]
+    wholebody_scores = [0.5 for _ in range(133)]
+    wholebody_keypoints[17] = [500.0, 500.0]
+    wholebody_keypoints[18] = [700.0, 700.0]
+    wholebody_keypoints[19] = [900.0, 900.0]
+
+    projected_keypoints, projected_scores = _fuse_coco17_body_with_wholebody_feet(
+        body_keypoints,
+        body_scores,
+        wholebody_keypoints,
+        wholebody_scores,
+    )
+
+    assert projected_keypoints[20] == body_keypoints[15]
+    assert projected_keypoints[22] == body_keypoints[15]
+    assert projected_keypoints[24] == body_keypoints[15]
+    assert projected_scores[20] == 0.35

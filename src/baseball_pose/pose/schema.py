@@ -144,7 +144,6 @@ POSE_CONNECTIONS = (
     ("right_ankle", "right_heel"),
     ("right_heel", "right_foot_index"),
     ("right_ankle", "right_foot_index"),
-    ("head", "neck"),
     ("neck", "hip"),
     ("neck", "left_shoulder"),
     ("neck", "right_shoulder"),
@@ -154,6 +153,31 @@ POSE_CONNECTIONS = (
     ("left_ankle", "left_small_toe"),
     ("right_ankle", "right_big_toe"),
     ("right_ankle", "right_small_toe"),
+)
+
+BODY_CORE_CONNECTIONS = (
+    ("left_shoulder", "right_shoulder"),
+    ("left_shoulder", "left_elbow"),
+    ("left_elbow", "left_wrist"),
+    ("right_shoulder", "right_elbow"),
+    ("right_elbow", "right_wrist"),
+    ("left_shoulder", "left_hip"),
+    ("right_shoulder", "right_hip"),
+    ("left_hip", "right_hip"),
+    ("left_hip", "left_knee"),
+    ("left_knee", "left_ankle"),
+    ("right_hip", "right_knee"),
+    ("right_knee", "right_ankle"),
+    ("head", "neck"),
+    ("neck", "hip"),
+    ("neck", "left_shoulder"),
+    ("neck", "right_shoulder"),
+    ("left_hip", "hip"),
+    ("right_hip", "hip"),
+)
+
+BODY_CORE_JOINTS = tuple(
+    dict.fromkeys(joint for connection in BODY_CORE_CONNECTIONS for joint in connection)
 )
 
 

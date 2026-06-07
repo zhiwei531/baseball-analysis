@@ -267,10 +267,64 @@ def _fuse_coco17_body_with_wholebody_feet(
     neck_score = body_mean_score(5, 6)
     hip = body_midpoint(11, 12)
     hip_score = body_mean_score(11, 12)
-    foot_order = [17, 20, 18, 21, 19, 22]
-    feet = [wholebody_point(index) for index in foot_order]
-    feet_scores = [wholebody_score(index) for index in foot_order]
+    left_feet, left_foot_scores = _stable_side_foot_points(
+        ankle=body_point(15),
+        knee=body_point(13),
+        ankle_score=body_score(15),
+        wholebody_points=[wholebody_point(index) for index in (17, 18, 19)],
+        wholebody_scores=[wholebody_score(index) for index in (17, 18, 19)],
+    )
+    right_feet, right_foot_scores = _stable_side_foot_points(
+        ankle=body_point(16),
+        knee=body_point(14),
+        ankle_score=body_score(16),
+        wholebody_points=[wholebody_point(index) for index in (20, 21, 22)],
+        wholebody_scores=[wholebody_score(index) for index in (20, 21, 22)],
+    )
+    feet = [
+        left_feet[0],
+        right_feet[0],
+        left_feet[1],
+        right_feet[1],
+        left_feet[2],
+        right_feet[2],
+    ]
+    feet_scores = [
+        left_foot_scores[0],
+        right_foot_scores[0],
+        left_foot_scores[1],
+        right_foot_scores[1],
+        left_foot_scores[2],
+        right_foot_scores[2],
+    ]
     return (
         [*body, head, neck, hip, *feet],
         [*body_confidences, head_score, neck_score, hip_score, *feet_scores],
     )
+
+
+def _stable_side_foot_points(
+    ankle: list[float],
+    knee: list[float],
+    ankle_score: float,
+    wholebody_points: list[list[float]],
+    wholebody_scores: list[float],
+) -> tuple[list[list[float]], list[float]]:
+    lower_leg_length = max(float(((ankle[0] - knee[0]) ** 2 + (ankle[1] - knee[1]) ** 2) ** 0.5), 1.0)
+    ankle_distances = [
+        float(((point[0] - ankle[0]) ** 2 + (point[1] - ankle[1]) ** 2) ** 0.5)
+        for point in wholebody_points
+    ]
+    foot_spread = max(
+        float(((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5)
+        for index, a in enumerate(wholebody_points)
+        for b in wholebody_points[index + 1 :]
+    )
+    max_distance = max(ankle_distances)
+    plausible = max_distance <= lower_leg_length * 0.75 and foot_spread <= lower_leg_length * 0.55
+    if plausible:
+        return wholebody_points, wholebody_scores
+
+    anchored = [[ankle[0], ankle[1]], [ankle[0], ankle[1]], [ankle[0], ankle[1]]]
+    anchored_score = min(float(ankle_score), 0.35)
+    return anchored, [anchored_score, anchored_score, anchored_score]

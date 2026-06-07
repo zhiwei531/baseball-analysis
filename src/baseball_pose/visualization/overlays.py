@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from baseball_pose.pose.quality import threshold_for_joint
-from baseball_pose.pose.schema import POSE_CONNECTIONS, PoseRecord, pose_score
+from baseball_pose.pose.schema import BODY_CORE_CONNECTIONS, BODY_CORE_JOINTS, PoseRecord, pose_score
 
 
 def draw_pose_overlay(
@@ -23,6 +23,8 @@ def draw_pose_overlay(
     points: dict[str, tuple[int, int]] = {}
 
     for record in records:
+        if record.joint_name not in BODY_CORE_JOINTS:
+            continue
         if record.x is None or record.y is None:
             continue
         score = pose_score(record)
@@ -34,7 +36,7 @@ def draw_pose_overlay(
         if 0 <= x < width and 0 <= y < height:
             points[record.joint_name] = (x, y)
 
-    for start, end in POSE_CONNECTIONS:
+    for start, end in BODY_CORE_CONNECTIONS:
         if start in points and end in points:
             cv2.line(output, points[start], points[end], (36, 180, 255), 2, cv2.LINE_AA)
 
