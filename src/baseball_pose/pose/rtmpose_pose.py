@@ -45,6 +45,9 @@ class RTMPoseEstimator(PoseEstimator):
         device: str = "cpu",
         model_url: str | None = None,
         model_input_size: tuple[int, int] | None = None,
+        body_model_url: str | None = None,
+        body_model_input_size: tuple[int, int] | None = None,
+        source_keypoint_schema: str = "halpe26",
         keypoint_schema: str = "halpe26",
         min_keypoint_score: float = 0.0,
     ) -> None:
@@ -68,18 +71,44 @@ class RTMPoseEstimator(PoseEstimator):
             backend=backend,
             device=device,
         )
+        self._body_pose = (
+            RTMPose(
+                body_model_url,
+                model_input_size=body_model_input_size or (288, 384),
+                to_openpose=False,
+                backend=backend,
+                device=device,
+            )
+            if body_model_url
+            else None
+        )
+        self._source_keypoint_schema = source_keypoint_schema
+        self._keypoint_schema = keypoint_schema
         if keypoint_schema == "halpe26":
             self._joint_names = HALPE26_JOINTS
         elif keypoint_schema == "coco17":
             self._joint_names = COCO17_JOINTS
         else:
             raise ValueError(f"Unsupported RTMPose keypoint schema: {keypoint_schema}")
+        if source_keypoint_schema not in {"halpe26", "coco17", "coco_wholebody133"}:
+            raise ValueError(f"Unsupported RTMPose source keypoint schema: {source_keypoint_schema}")
+        if keypoint_schema != source_keypoint_schema and (
+            source_keypoint_schema,
+            keypoint_schema,
+        ) != ("coco_wholebody133", "halpe26"):
+            raise ValueError(
+                "RTMPose keypoint schema conversion is only supported from "
+                "coco_wholebody133 to halpe26."
+            )
         self._min_keypoint_score = float(min_keypoint_score)
 
     def estimate_frame(self, image: Any, frame: FrameRecord, condition_id: str) -> list[PoseRecord]:
         height, width = image.shape[:2]
         start = time.perf_counter()
         keypoints, scores = self._pose(image, bboxes=[[0, 0, width, height]])
+        body_keypoints = body_scores = None
+        if self._body_pose is not None:
+            body_keypoints, body_scores = self._body_pose(image, bboxes=[[0, 0, width, height]])
         inference_time_ms = (time.perf_counter() - start) * 1000
 
         if len(keypoints) == 0:
@@ -91,6 +120,22 @@ class RTMPoseEstimator(PoseEstimator):
         instance_index = _best_instance_index(scores)
         instance_keypoints = keypoints[instance_index]
         instance_scores = scores[instance_index]
+        if (self._source_keypoint_schema, self._keypoint_schema) == (
+            "coco_wholebody133",
+            "halpe26",
+        ):
+            if self._body_pose is not None and body_keypoints is not None and len(body_keypoints) > 0:
+                body_instance_index = _best_instance_index(body_scores)
+                instance_keypoints, instance_scores = _fuse_coco17_body_with_wholebody_feet(
+                    body_keypoints[body_instance_index],
+                    body_scores[body_instance_index],
+                    instance_keypoints,
+                    instance_scores,
+                )
+            else:
+                instance_keypoints, instance_scores = _coco_wholebody133_to_halpe26(
+                    instance_keypoints, instance_scores
+                )
 
         records: list[PoseRecord] = []
         for index, joint_name in enumerate(self._joint_names):
@@ -146,3 +191,86 @@ def _best_instance_index(scores: Any) -> int:
     if len(scores) == 1:
         return 0
     return max(range(len(scores)), key=lambda index: float(scores[index].mean()))
+
+
+def _coco_wholebody133_to_halpe26(keypoints: Any, scores: Any) -> tuple[list[list[float]], list[float]]:
+    """Project COCO-WholeBody output to the Halpe26 body-with-feet schema."""
+
+    def point(index: int) -> list[float]:
+        return [float(keypoints[index][0]), float(keypoints[index][1])]
+
+    def score(index: int) -> float:
+        return float(scores[index])
+
+    def midpoint(left_index: int, right_index: int) -> list[float]:
+        left = point(left_index)
+        right = point(right_index)
+        return [(left[0] + right[0]) / 2.0, (left[1] + right[1]) / 2.0]
+
+    def mean_score(left_index: int, right_index: int) -> float:
+        return (score(left_index) + score(right_index)) / 2.0
+
+    body = [point(index) for index in range(17)]
+    body_scores = [score(index) for index in range(17)]
+
+    head = point(0)
+    head_score = score(0)
+    neck = midpoint(5, 6)
+    neck_score = mean_score(5, 6)
+    hip = midpoint(11, 12)
+    hip_score = mean_score(11, 12)
+
+    # COCO-WholeBody foot order: left toe/small toe/heel, then right toe/small toe/heel.
+    foot_order = [17, 20, 18, 21, 19, 22]
+    feet = [point(index) for index in foot_order]
+    feet_scores = [score(index) for index in foot_order]
+
+    return (
+        [*body, head, neck, hip, *feet],
+        [*body_scores, head_score, neck_score, hip_score, *feet_scores],
+    )
+
+
+def _fuse_coco17_body_with_wholebody_feet(
+    body_keypoints: Any,
+    body_scores: Any,
+    wholebody_keypoints: Any,
+    wholebody_scores: Any,
+) -> tuple[list[list[float]], list[float]]:
+    """Use a stable COCO17 body model and only take feet from COCO-WholeBody."""
+
+    def body_point(index: int) -> list[float]:
+        return [float(body_keypoints[index][0]), float(body_keypoints[index][1])]
+
+    def body_score(index: int) -> float:
+        return float(body_scores[index])
+
+    def wholebody_point(index: int) -> list[float]:
+        return [float(wholebody_keypoints[index][0]), float(wholebody_keypoints[index][1])]
+
+    def wholebody_score(index: int) -> float:
+        return float(wholebody_scores[index])
+
+    def body_midpoint(left_index: int, right_index: int) -> list[float]:
+        left = body_point(left_index)
+        right = body_point(right_index)
+        return [(left[0] + right[0]) / 2.0, (left[1] + right[1]) / 2.0]
+
+    def body_mean_score(left_index: int, right_index: int) -> float:
+        return (body_score(left_index) + body_score(right_index)) / 2.0
+
+    body = [body_point(index) for index in range(17)]
+    body_confidences = [body_score(index) for index in range(17)]
+    head = body_point(0)
+    head_score = body_score(0)
+    neck = body_midpoint(5, 6)
+    neck_score = body_mean_score(5, 6)
+    hip = body_midpoint(11, 12)
+    hip_score = body_mean_score(11, 12)
+    foot_order = [17, 20, 18, 21, 19, 22]
+    feet = [wholebody_point(index) for index in foot_order]
+    feet_scores = [wholebody_score(index) for index in foot_order]
+    return (
+        [*body, head, neck, hip, *feet],
+        [*body_confidences, head_score, neck_score, hip_score, *feet_scores],
+    )

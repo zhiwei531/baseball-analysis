@@ -1,8 +1,8 @@
 extends: ../default.yaml
 
 project:
-  data_dir: data_full/suzhou_rtmpose_test
-  output_dir: outputs_full/suzhou_rtmpose_test
+  data_dir: data_full/suzhou_rtmpose_halpe26_test
+  output_dir: outputs_full/suzhou_rtmpose_halpe26_test
 
 dataset:
   clips_file: data/metadata/clips_suzhou_full.csv
@@ -20,22 +20,25 @@ video:
 
 pose:
   backend: rtmpose
-  mode: performance
+  mode: lightweight
   runtime_backend: onnxruntime
   device: cpu
-  model_url: models/rtmpose-x-coco17.onnx
-  model_input_size: [288, 384]
-  keypoint_schema: coco17
+  model_url: models/rtmpose-m-wholebody.onnx
+  model_input_size: [192, 256]
+  body_model_url: models/rtmpose-x-coco17.onnx
+  body_model_input_size: [288, 384]
+  source_keypoint_schema: coco_wholebody133
+  keypoint_schema: halpe26
   use_masked_input: false
   min_keypoint_score: 0.0
 
 postprocess:
-  confidence_threshold: 0.30
+  confidence_threshold: 0.12
   confidence_thresholds:
-    default: 0.30
-    torso: 0.25
-    mid_limb: 0.35
-    distal: 0.40
+    default: 0.12
+    torso: 0.12
+    mid_limb: 0.14
+    distal: 0.16
   interpolate_max_gap_frames: 8
   interpolate_max_gap_by_group:
     default: 8
