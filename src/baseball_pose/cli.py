@@ -326,7 +326,7 @@ def main() -> None:
 
     if args.command == "run-image-proposal-roi":
         clips = load_clips(config.clips_file)
-        clip_filter = set(args.clip_id) if args.clip_id else {"batting_1"}
+        clip_filter = set(args.clip_id) if args.clip_id else set(config.clip_ids)
         results = run_image_proposal_roi_experiment(
             clips,
             config,

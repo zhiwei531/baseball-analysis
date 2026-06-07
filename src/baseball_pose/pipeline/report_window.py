@@ -119,7 +119,7 @@ def _apply_window_constraints(
         extra_before = deficit // 2
         extra_after = deficit - extra_before
         start_index = max(0, start_index - extra_before)
-        end_index = min(len(parsed) - 1, end_index + extra_after)
+        end_index = min(total_count - 1, end_index + extra_after)
 
     current_count = end_index - start_index + 1
     if current_count > max_frames:
