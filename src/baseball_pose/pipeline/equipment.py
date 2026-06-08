@@ -60,6 +60,7 @@ def track_equipment_files(
     raw_tracking_config = config.raw.get("equipment_tracking", {})
     tracking_config = _tracking_config(raw_tracking_config)
     disable_bat_clip_ids = set(raw_tracking_config.get("disable_bat_clip_ids", []))
+    enable_ball_clip_ids = set(raw_tracking_config.get("enable_ball_clip_ids", []))
     action_types = _action_types_by_clip(config)
     results: list[EquipmentTrackingResult] = []
     for clip_id in clip_ids:
@@ -73,6 +74,16 @@ def track_equipment_files(
                     tracking_config.detect_bat
                     and action_types.get(clip_id) != "pitching"
                     and clip_id not in disable_bat_clip_ids
+                ),
+                "detect_ball": (
+                    tracking_config.detect_ball
+                    and (
+                        clip_id in enable_ball_clip_ids
+                        or
+                        (action_types.get(clip_id) == "pitching" and tracking_config.detect_ball_for_pitching)
+                        or (action_types.get(clip_id) == "batting" and tracking_config.detect_ball_for_batting)
+                        or action_types.get(clip_id) not in {"pitching", "batting"}
+                    )
                 ),
             }
         )

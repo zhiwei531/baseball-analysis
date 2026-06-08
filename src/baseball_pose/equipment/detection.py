@@ -16,6 +16,12 @@ from baseball_pose.pose.schema import PoseRecord, pose_score
 
 @dataclass(frozen=True)
 class EquipmentTrackingConfig:
+    motion_backend: str = "background"
+    motion_background_samples: int = 60
+    motion_background_threshold: int = 28
+    motion_frame_threshold: int = 18
+    motion_min_area_px: int = 8
+    motion_dilate_iterations: int = 1
     bat_min_line_length_ratio: float = 0.08
     bat_max_line_length_ratio: float = 0.32
     bat_max_line_gap_ratio: float = 0.02
@@ -26,15 +32,19 @@ class EquipmentTrackingConfig:
     bat_max_frame_jump_ratio: float = 0.16
     ball_min_radius_px: int = 3
     ball_max_radius_px: int = 14
-    ball_min_brightness: int = 160
-    ball_min_saturation: int = 35
-    ball_motion_threshold: int = 22
     ball_previous_weight: float = 0.45
     ball_max_frame_jump_ratio: float = 0.16
+    ball_start_anchor_distance_ratio: float = 0.18
+    ball_max_below_anchor_ratio: float = 0.20
+    ball_max_y_ratio: float = 0.66
+    ball_max_area_px: int = 650
+    ball_max_aspect_ratio: float = 5.0
     pose_confidence_threshold: float = 0.12
     pose_thresholds: dict[str, object] | None = None
     detect_bat: bool = True
     detect_ball: bool = True
+    detect_ball_for_batting: bool = False
+    detect_ball_for_pitching: bool = True
     use_wrist_bat_proxy: bool = True
 
 
@@ -63,6 +73,7 @@ def detect_equipment_tracks(
 
     cfg = config or EquipmentTrackingConfig()
     frames = read_frame_records(frames_csv)
+    background_gray = _build_background_gray(frames, cfg)
     pose_by_frame = _pose_by_frame(pose_csv, cfg) if pose_csv is not None and Path(pose_csv).exists() else {}
     records: list[ObjectTrackRecord] = []
     previous_bat: _BatCandidate | None = None
@@ -73,11 +84,12 @@ def detect_equipment_tracks(
         image = read_frame(frame.frame_path)
         cv2 = _require_cv2()
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        motion_mask = _motion_mask(gray, previous_gray, background_gray, cfg)
         height, width = image.shape[:2]
         wrist_points = _wrist_points(pose_by_frame.get(frame.frame_index, []), width, height, cfg)
 
-        bat = _detect_bat(image, wrist_points, previous_bat, cfg) if cfg.detect_bat else None
-        bat_source = "hough_line_wrist_prior"
+        bat = _detect_bat(image, motion_mask, wrist_points, previous_bat, cfg) if cfg.detect_bat else None
+        bat_source = "motion_line_wrist_prior"
         if bat is None and cfg.detect_bat and cfg.use_wrist_bat_proxy:
             bat = _bat_wrist_proxy(wrist_points)
             bat_source = "wrist_proxy"
@@ -101,7 +113,10 @@ def detect_equipment_tracks(
                 )
             )
 
-        ball = _detect_ball(image, previous_gray, previous_ball, cfg) if cfg.detect_ball else None
+        ball_anchors = list(wrist_points)
+        if bat is not None:
+            ball_anchors.extend([bat.barrel, bat.handle])
+        ball = _detect_ball(image, motion_mask, previous_ball, ball_anchors, cfg) if cfg.detect_ball else None
         if ball is not None:
             previous_ball = ball
             records.append(
@@ -118,7 +133,7 @@ def detect_equipment_tracks(
                     confidence=ball.confidence,
                     width=width,
                     height=height,
-                    source="bright_small_blob_temporal",
+                    source="motion_blob_temporal",
                 )
             )
         previous_gray = gray
@@ -128,17 +143,21 @@ def detect_equipment_tracks(
 
 def _detect_bat(
     image,
+    motion_mask,
     wrist_points: list[tuple[float, float]],
     previous: _BatCandidate | None,
     config: EquipmentTrackingConfig,
 ) -> _BatCandidate | None:
     cv2 = _require_cv2()
     height, width = image.shape[:2]
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(gray, 50, 150)
+    if motion_mask is None:
+        return None
     min_line_length = max(20, int(config.bat_min_line_length_ratio * max(width, height)))
     max_line_gap = max(4, int(config.bat_max_line_gap_ratio * max(width, height)))
+    moving = cv2.bitwise_and(image, image, mask=motion_mask)
+    gray = cv2.cvtColor(moving, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    edges = cv2.Canny(gray, 35, 120)
     lines = cv2.HoughLinesP(
         edges,
         rho=1,
@@ -197,37 +216,42 @@ def _detect_bat(
 
 def _detect_ball(
     image,
-    previous_gray,
+    motion_mask,
     previous: _BallCandidate | None,
+    anchors: list[tuple[float, float]],
     config: EquipmentTrackingConfig,
 ) -> _BallCandidate | None:
     cv2 = _require_cv2()
-    if previous_gray is None:
+    if motion_mask is None:
         return None
     height, width = image.shape[:2]
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    motion = cv2.absdiff(gray, previous_gray)
-    _, motion_mask = cv2.threshold(motion, config.ball_motion_threshold, 255, cv2.THRESH_BINARY)
-    motion_mask = cv2.dilate(motion_mask, None, iterations=1)
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    lower = (0, 0, config.ball_min_brightness)
-    upper = (180, config.ball_min_saturation, 255)
-    mask = cv2.inRange(hsv, lower, upper)
-    mask = cv2.bitwise_and(mask, motion_mask)
-    mask = cv2.medianBlur(mask, 5)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     diagonal = math.hypot(width, height)
     candidates: list[_BallCandidate] = []
     for contour in contours:
         area = cv2.contourArea(contour)
-        if area <= 0:
+        if area < config.motion_min_area_px or area > config.ball_max_area_px:
             continue
         (x, y), radius = cv2.minEnclosingCircle(contour)
         if radius < config.ball_min_radius_px or radius > config.ball_max_radius_px:
             continue
+        bx, by, bw, bh = cv2.boundingRect(contour)
+        aspect = max(bw, bh) / max(1, min(bw, bh))
+        if aspect > config.ball_max_aspect_ratio:
+            continue
+        if y > config.ball_max_y_ratio * height:
+            continue
+        if anchors and y > max(anchor[1] for anchor in anchors) + config.ball_max_below_anchor_ratio * height:
+            continue
+        if previous is None and not _near_any_anchor(
+            (x, y),
+            anchors,
+            config.ball_start_anchor_distance_ratio * diagonal,
+        ):
+            continue
         circle_area = math.pi * radius * radius
         circularity = min(1.0, area / circle_area) if circle_area > 0 else 0.0
-        if circularity < 0.35:
+        if circularity < 0.18:
             continue
         size_score = 1.0 - abs(radius - (config.ball_min_radius_px + config.ball_max_radius_px) / 2) / max(
             1.0,
@@ -241,7 +265,7 @@ def _detect_ball(
                 continue
             previous_score = max(0.0, 1.0 - jump / (config.ball_max_frame_jump_ratio * diagonal))
         confidence = (
-            (1.0 - config.ball_previous_weight) * (0.65 * circularity + 0.35 * size_score)
+            (1.0 - config.ball_previous_weight) * (0.45 * circularity + 0.35 * size_score + 0.20 * (1.0 / aspect))
             + config.ball_previous_weight * previous_score
         )
         candidates.append(_BallCandidate(center=(x, y), radius_px=radius, confidence=confidence))
@@ -249,6 +273,64 @@ def _detect_ball(
         return None
     best = max(candidates, key=lambda item: item.confidence)
     return best if best.confidence >= 0.40 else None
+
+
+def _near_any_anchor(
+    point: tuple[float, float],
+    anchors: list[tuple[float, float]],
+    max_distance: float,
+) -> bool:
+    if not anchors:
+        return False
+    return any(_distance(point, anchor) <= max_distance for anchor in anchors)
+
+
+def _build_background_gray(frame_records, config: EquipmentTrackingConfig):
+    if config.motion_backend != "background" or not frame_records:
+        return None
+    cv2 = _require_cv2()
+    sample_count = min(config.motion_background_samples, len(frame_records))
+    if sample_count <= 0:
+        return None
+    if sample_count == len(frame_records):
+        sampled = frame_records
+    else:
+        step = (len(frame_records) - 1) / max(1, sample_count - 1)
+        sampled = [frame_records[round(index * step)] for index in range(sample_count)]
+    gray_frames = []
+    for frame in sampled:
+        image = read_frame(frame.frame_path)
+        gray_frames.append(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
+    import numpy as np
+
+    return np.median(np.stack(gray_frames, axis=0), axis=0).astype("uint8")
+
+
+def _motion_mask(
+    gray,
+    previous_gray,
+    background_gray,
+    config: EquipmentTrackingConfig,
+):
+    cv2 = _require_cv2()
+    masks = []
+    if background_gray is not None:
+        bg_delta = cv2.absdiff(gray, background_gray)
+        _, bg_mask = cv2.threshold(bg_delta, config.motion_background_threshold, 255, cv2.THRESH_BINARY)
+        masks.append(bg_mask)
+    if previous_gray is not None:
+        frame_delta = cv2.absdiff(gray, previous_gray)
+        _, frame_mask = cv2.threshold(frame_delta, config.motion_frame_threshold, 255, cv2.THRESH_BINARY)
+        masks.append(frame_mask)
+    if not masks:
+        return None
+    mask = masks[0]
+    for extra in masks[1:]:
+        mask = cv2.bitwise_and(mask, extra) if background_gray is not None else cv2.bitwise_or(mask, extra)
+    if config.motion_dilate_iterations > 0:
+        mask = cv2.dilate(mask, None, iterations=config.motion_dilate_iterations)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, None, iterations=1)
+    return mask
 
 
 def _bat_wrist_proxy(wrist_points: list[tuple[float, float]]) -> _BatCandidate | None:
