@@ -61,9 +61,12 @@ def smooth_pose_files(
                     records,
                     method=str(smoothing_config.get("method", "savgol")),
                     window_length=int(smoothing_config.get("window_length", 7)),
+                    window_length_config=smoothing_config.get("window_lengths", {}),
                     polyorder=int(smoothing_config.get("polyorder", 2)),
                     median_window_length=int(smoothing_config.get("median_window_length", 1)),
+                    median_window_config=smoothing_config.get("median_window_lengths", {}),
                     refine_window_length=int(smoothing_config.get("refine_window_length", 1)),
+                    refine_window_config=smoothing_config.get("refine_window_lengths", {}),
                     confidence_threshold=confidence_threshold,
                     threshold_config=threshold_config if isinstance(threshold_config, dict) else {},
                     max_gap_frames=max_gap_frames,
@@ -78,6 +81,9 @@ def smooth_pose_files(
                     ),
                     min_torso_jump_distance=float(
                         smoothing_config.get("min_torso_jump_distance", 0.08)
+                    ),
+                    min_valid_segment_frames=int(
+                        smoothing_config.get("min_valid_segment_frames", 1)
                     ),
                     limb_length_tolerance_ratio=float(
                         smoothing_config.get("limb_length_tolerance_ratio", 0.28)

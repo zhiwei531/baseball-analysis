@@ -23,9 +23,12 @@ def smooth_pose_records(
     records: list[PoseRecord],
     method: str = "savgol",
     window_length: int = 7,
+    window_length_config: dict[str, object] | None = None,
     polyorder: int = 2,
     median_window_length: int = 1,
+    median_window_config: dict[str, object] | None = None,
     refine_window_length: int = 1,
+    refine_window_config: dict[str, object] | None = None,
     confidence_threshold: float = 0.5,
     threshold_config: dict[str, object] | None = None,
     max_gap_frames: int = 3,
@@ -35,6 +38,7 @@ def smooth_pose_records(
     torso_gate_enabled: bool = True,
     torso_jump_threshold_multiplier: float = 8.0,
     min_torso_jump_distance: float = 0.08,
+    min_valid_segment_frames: int = 1,
     limb_length_tolerance_ratio: float = 0.28,
     foot_length_tolerance_ratio: float = 1.20,
 ) -> list[PoseRecord]:
@@ -65,6 +69,8 @@ def smooth_pose_records(
         raise ValueError("torso_jump_threshold_multiplier must be positive.")
     if min_torso_jump_distance <= 0:
         raise ValueError("min_torso_jump_distance must be positive.")
+    if min_valid_segment_frames < 1:
+        raise ValueError("min_valid_segment_frames must be at least 1.")
     if limb_length_tolerance_ratio <= 0:
         raise ValueError("limb_length_tolerance_ratio must be positive.")
     if foot_length_tolerance_ratio <= 0:
@@ -79,6 +85,11 @@ def smooth_pose_records(
         )
         if torso_gate_enabled
         else records
+    )
+    gated_records = _remove_short_torso_segments(
+        gated_records,
+        confidence_threshold=confidence_threshold,
+        min_segment_frames=min_valid_segment_frames,
     )
     gated_records = _apply_limb_length_consistency_gate(
         gated_records,
@@ -100,9 +111,12 @@ def smooth_pose_records(
         smoothed = _smooth_joint_records(
             key_records,
             window_length=window_length,
+            window_length_config=window_length_config,
             polyorder=polyorder,
             median_window_length=median_window_length,
+            median_window_config=median_window_config,
             refine_window_length=refine_window_length,
+            refine_window_config=refine_window_config,
             confidence_threshold=confidence_threshold,
             threshold_config=threshold_config,
             max_gap_frames=max_gap_frames,
@@ -131,9 +145,12 @@ def _records_by_key(records: list[PoseRecord]) -> dict[tuple[str, str, str], lis
 def _smooth_joint_records(
     records: list[PoseRecord],
     window_length: int,
+    window_length_config: dict[str, object] | None,
     polyorder: int,
     median_window_length: int,
+    median_window_config: dict[str, object] | None,
     refine_window_length: int,
+    refine_window_config: dict[str, object] | None,
     confidence_threshold: float,
     threshold_config: dict[str, object] | None,
     max_gap_frames: int,
@@ -145,6 +162,21 @@ def _smooth_joint_records(
         return []
 
     joint_name = records[0].joint_name
+    joint_window_length = _odd_window_for_joint(
+        joint_name,
+        window_length,
+        window_length_config if isinstance(window_length_config, dict) else None,
+    )
+    joint_median_window_length = _odd_window_for_joint(
+        joint_name,
+        median_window_length,
+        median_window_config if isinstance(median_window_config, dict) else None,
+    )
+    joint_refine_window_length = _odd_window_for_joint(
+        joint_name,
+        refine_window_length,
+        refine_window_config if isinstance(refine_window_config, dict) else None,
+    )
     x_values = np.array(
         [_confident_value(record, "x", confidence_threshold, threshold_config) for record in records],
         dtype=float,
@@ -162,12 +194,12 @@ def _smooth_joint_records(
     joint_gap = gap_for_joint(joint_name, max_gap_frames, max_gap_config if isinstance(max_gap_config, dict) else None)
     x_values = _interpolate_short_gaps(x_values, joint_gap)
     y_values = _interpolate_short_gaps(y_values, joint_gap)
-    x_values = _median_valid_segments(x_values, median_window_length)
-    y_values = _median_valid_segments(y_values, median_window_length)
-    x_values = _savgol_valid_segments(x_values, window_length, polyorder)
-    y_values = _savgol_valid_segments(y_values, window_length, polyorder)
-    x_values = _moving_average_valid_segments(x_values, refine_window_length)
-    y_values = _moving_average_valid_segments(y_values, refine_window_length)
+    x_values = _median_valid_segments(x_values, joint_median_window_length)
+    y_values = _median_valid_segments(y_values, joint_median_window_length)
+    x_values = _savgol_valid_segments(x_values, joint_window_length, polyorder)
+    y_values = _savgol_valid_segments(y_values, joint_window_length, polyorder)
+    x_values = _moving_average_valid_segments(x_values, joint_refine_window_length)
+    y_values = _moving_average_valid_segments(y_values, joint_refine_window_length)
     x_values = _interpolate_short_gaps(x_values, joint_gap)
     y_values = _interpolate_short_gaps(y_values, joint_gap)
     x_values = _fill_short_edge_gaps(x_values, joint_gap)
@@ -183,6 +215,17 @@ def _smooth_joint_records(
             )
         )
     return output
+
+
+def _odd_window_for_joint(
+    joint_name: str,
+    default_window: int,
+    config: dict[str, object] | None,
+) -> int:
+    window = gap_for_joint(joint_name, default_window, config)
+    if window <= 1:
+        return max(1, window)
+    return window if window % 2 == 1 else window - 1
 
 
 def _confident_value(
@@ -287,6 +330,49 @@ def _torso_center(
             sum(point[1] for point in points.values()) / len(points),
         )
     return None
+
+
+def _remove_short_torso_segments(
+    records: list[PoseRecord],
+    confidence_threshold: float,
+    min_segment_frames: int,
+) -> list[PoseRecord]:
+    if min_segment_frames <= 1:
+        return records
+
+    by_frame: dict[int, list[PoseRecord]] = defaultdict(list)
+    for record in records:
+        by_frame[record.frame_index].append(record)
+
+    valid_frames = [
+        frame_index
+        for frame_index, frame_records in sorted(by_frame.items())
+        if _torso_center(frame_records, confidence_threshold) is not None
+    ]
+    if len(valid_frames) < min_segment_frames:
+        return records
+
+    short_frames: set[int] = set()
+    segment: list[int] = []
+    previous_frame: int | None = None
+    for frame_index in valid_frames:
+        if previous_frame is None or frame_index == previous_frame + 1:
+            segment.append(frame_index)
+        else:
+            if len(segment) < min_segment_frames:
+                short_frames.update(segment)
+            segment = [frame_index]
+        previous_frame = frame_index
+    if len(segment) < min_segment_frames:
+        short_frames.update(segment)
+
+    if not short_frames:
+        return records
+
+    return [
+        replace(record, x=None, y=None) if record.frame_index in short_frames else record
+        for record in records
+    ]
 
 
 def _apply_limb_length_consistency_gate(

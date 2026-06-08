@@ -61,9 +61,24 @@ postprocess:
     enabled: true
     method: savgol
     window_length: 15
+    window_lengths:
+      default: 15
+      torso: 15
+      mid_limb: 7
+      distal: 7
     polyorder: 2
     median_window_length: 5
+    median_window_lengths:
+      default: 5
+      torso: 5
+      mid_limb: 3
+      distal: 3
     refine_window_length: 9
+    refine_window_lengths:
+      default: 9
+      torso: 9
+      mid_limb: 3
+      distal: 3
     jump_threshold_multiplier: 3.4
     joint_jump_thresholds:
       default: 3.4
@@ -72,7 +87,8 @@ postprocess:
       distal: 2.7
     torso_gate_enabled: true
     torso_jump_threshold_multiplier: 5.0
-    min_torso_jump_distance: 0.05
+    min_torso_jump_distance: 0.12
+    min_valid_segment_frames: 4
     limb_length_tolerance_ratio: 0.80
     foot_length_tolerance_ratio: 0.85
 

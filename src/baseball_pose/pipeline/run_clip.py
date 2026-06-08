@@ -821,7 +821,7 @@ def _pose_candidate_score(records: list[PoseRecord]) -> float:
     if width <= 0 or height <= 0:
         return -1.0
     aspect = height / max(width, 1e-6)
-    if width < 0.055 or height < 0.12 or aspect > 6.5 or aspect < 0.8:
+    if width < 0.055 or height < 0.12 or aspect > 6.5 or aspect < 0.65:
         return -1.0
     if _limb_length_ratio(points, "left_hip", "left_knee", "left_knee", "left_ankle") > 3.5:
         return -1.0
