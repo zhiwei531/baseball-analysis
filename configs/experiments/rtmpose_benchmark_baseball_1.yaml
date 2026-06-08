@@ -1,0 +1,110 @@
+extends: ../default.yaml
+
+project:
+  data_dir: data_full/benchmark_rtmpose_test
+  output_dir: outputs_full/benchmark_rtmpose_test
+
+dataset:
+  clips_file: data/metadata/clips_benchmark_baseball_1.csv
+  clip_ids:
+    - benchmark_pitch_vertical_10
+    - benchmark_pitch_vertical_09
+    - benchmark_hit_vertical_02
+    - benchmark_hit_horizontal_06
+
+video:
+  target_fps: 30
+  resize_longest_side: 1280
+  preserve_aspect_ratio: true
+  write_frames: true
+  max_frames_per_clip: null
+
+pose:
+  backend: rtmpose
+  mode: lightweight
+  runtime_backend: onnxruntime
+  device: cpu
+  model_url: models/rtmpose-m-wholebody.onnx
+  model_input_size: [192, 256]
+  body_model_url: models/rtmpose-x-coco17.onnx
+  body_model_input_size: [288, 384]
+  source_keypoint_schema: coco_wholebody133
+  keypoint_schema: halpe26
+  use_masked_input: false
+  min_keypoint_score: 0.0
+  full_frame_fallback: true
+
+postprocess:
+  confidence_threshold: 0.12
+  confidence_thresholds:
+    default: 0.12
+    torso: 0.12
+    mid_limb: 0.14
+    distal: 0.16
+  overlay_confidence_threshold: 0.12
+  overlay_confidence_thresholds:
+    default: 0.12
+    torso: 0.12
+    mid_limb: 0.14
+    distal: 0.16
+    joint_overrides:
+      left_elbow: 0.50
+      right_elbow: 0.50
+      left_wrist: 0.60
+      right_wrist: 0.60
+  interpolate_max_gap_frames: 4
+  interpolate_max_gap_by_group:
+    default: 4
+    torso: 4
+    mid_limb: 4
+    distal: 8
+  smoothing:
+    enabled: true
+    method: savgol
+    window_length: 15
+    window_lengths:
+      default: 15
+      torso: 15
+      mid_limb: 7
+      distal: 7
+    polyorder: 2
+    median_window_length: 5
+    median_window_lengths:
+      default: 5
+      torso: 5
+      mid_limb: 3
+      distal: 3
+    refine_window_length: 9
+    refine_window_lengths:
+      default: 9
+      torso: 9
+      mid_limb: 3
+      distal: 3
+    jump_threshold_multiplier: 3.4
+    joint_jump_thresholds:
+      default: 3.4
+      torso: 5.0
+      mid_limb: 3.0
+      distal: 2.7
+    torso_gate_enabled: true
+    torso_jump_threshold_multiplier: 5.0
+    min_torso_jump_distance: 0.12
+    min_valid_segment_frames: 4
+    limb_length_tolerance_ratio: 0.80
+    foot_length_tolerance_ratio: 0.85
+
+experiments:
+  name: rtmpose_benchmark_baseball_1
+  default_conditions:
+    - image_center_motion_grabcut_pose
+    - image_center_motion_grabcut_pose_smooth
+
+conditions:
+  image_center_motion_grabcut_pose_smooth:
+    roi:
+      enabled: true
+      mode: image_center_motion_grabcut
+      source_condition: image_center_motion_grabcut_pose
+    preprocessing: []
+    postprocess:
+      enabled: true

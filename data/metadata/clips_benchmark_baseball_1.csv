@@ -1,0 +1,5 @@
+clip_id,source_path,action_type,fps_original,fps_target,width,height,duration_sec,start_time_sec,end_time_sec,difficulty_tags,notes
+benchmark_pitch_vertical_10,../Benchmark棒球视频(1)/Pitch_vertical_zhiwei_10.MOV,pitching,,30,,,,,,"benchmark;baseball;pitching;vertical","Benchmark baseball video set 1."
+benchmark_pitch_vertical_09,../Benchmark棒球视频(1)/Pitch_vertical_zhiwei_09.MOV,pitching,,30,,,,,,"benchmark;baseball;pitching;vertical","Benchmark baseball video set 1."
+benchmark_hit_vertical_02,../Benchmark棒球视频(1)/Hit_vertical_zhiwei_02.MOV,batting,,30,,,,,,"benchmark;baseball;batting;vertical","Benchmark baseball video set 1."
+benchmark_hit_horizontal_06,../Benchmark棒球视频(1)/Hit_horizontal_zhiwei_06.MOV,batting,,30,,,,,,"benchmark;baseball;batting;horizontal","Benchmark baseball video set 1."
