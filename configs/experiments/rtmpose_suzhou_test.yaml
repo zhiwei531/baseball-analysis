@@ -39,6 +39,17 @@ postprocess:
     torso: 0.12
     mid_limb: 0.14
     distal: 0.16
+  overlay_confidence_threshold: 0.12
+  overlay_confidence_thresholds:
+    default: 0.12
+    torso: 0.12
+    mid_limb: 0.14
+    distal: 0.16
+    joint_overrides:
+      left_elbow: 0.50
+      right_elbow: 0.50
+      left_wrist: 0.60
+      right_wrist: 0.60
   interpolate_max_gap_frames: 8
   interpolate_max_gap_by_group:
     default: 8

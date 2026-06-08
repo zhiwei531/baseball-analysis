@@ -34,8 +34,16 @@ def render_pose_overlays(
 
     for clip_id in clip_ids:
         postprocess_config = resolve_postprocess_config(config.raw, clip_id)
-        confidence_threshold = float(postprocess_config.get("confidence_threshold", 0.5))
-        threshold_config = postprocess_config.get("confidence_thresholds", {})
+        confidence_threshold = float(
+            postprocess_config.get(
+                "overlay_confidence_threshold",
+                postprocess_config.get("confidence_threshold", 0.5),
+            )
+        )
+        threshold_config = postprocess_config.get(
+            "overlay_confidence_thresholds",
+            postprocess_config.get("confidence_thresholds", {}),
+        )
         for condition_id in condition_ids:
             source_condition_id = _frame_source_condition(condition_id)
             frames_csv = frame_manifest_path(config.data_dir, clip_id, source_condition_id)

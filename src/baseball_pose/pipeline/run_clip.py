@@ -22,7 +22,8 @@ from baseball_pose.io.paths import (
 from baseball_pose.io.pose_csv import read_pose_records, write_pose_records
 from baseball_pose.io.video import read_frame, sample_video_frames, write_video_from_frames
 from baseball_pose.pose.factory import create_pose_estimator, pose_prefers_unmasked_input
-from baseball_pose.pose.schema import PoseRecord
+from baseball_pose.pose.quality import threshold_for_joint
+from baseball_pose.pose.schema import PoseRecord, pose_score
 from baseball_pose.preprocessing.body_mask import create_body_prior_masked_crop
 from baseball_pose.preprocessing.image_proposal import (
     ImageProposalTracker,
@@ -123,12 +124,19 @@ def run_baseline_clip(
             image = read_frame(frame.frame_path)
             records = estimator.estimate_frame(image, frame, condition_id)
             all_pose_records.extend(records)
-            _update_tracks(tracks, records, frame.width, frame.height)
+            _update_tracks(
+                tracks,
+                records,
+                frame.width,
+                frame.height,
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
+            )
             overlay = draw_pose_overlay(
                 image,
                 records,
-                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
-                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -249,12 +257,19 @@ def run_auto_roi_clip(
                 image_height=frame.height or image.shape[0],
             )
             all_pose_records.extend(records)
-            _update_tracks(tracks, records, frame.width, frame.height)
+            _update_tracks(
+                tracks,
+                records,
+                frame.width,
+                frame.height,
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
+            )
             overlay = draw_pose_overlay(
                 image,
                 records,
-                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
-                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -354,12 +369,19 @@ def run_pose_prior_roi_clip(
                 image_height=frame.height or image.shape[0],
             )
             all_pose_records.extend(records)
-            _update_tracks(tracks, records, frame.width, frame.height)
+            _update_tracks(
+                tracks,
+                records,
+                frame.width,
+                frame.height,
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
+            )
             overlay = draw_pose_overlay(
                 image,
                 records,
-                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
-                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -450,12 +472,19 @@ def run_center_prior_roi_clip(
                 image_height=frame.height or image.shape[0],
             )
             all_pose_records.extend(records)
-            _update_tracks(tracks, records, frame.width, frame.height)
+            _update_tracks(
+                tracks,
+                records,
+                frame.width,
+                frame.height,
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
+            )
             overlay = draw_pose_overlay(
                 image,
                 records,
-                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
-                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -566,12 +595,19 @@ def run_body_prior_mask_roi_clip(
                 image_height=frame.height or image.shape[0],
             )
             all_pose_records.extend(records)
-            _update_tracks(tracks, records, frame.width, frame.height)
+            _update_tracks(
+                tracks,
+                records,
+                frame.width,
+                frame.height,
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
+            )
             overlay = draw_pose_overlay(
                 image,
                 records,
-                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
-                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -694,12 +730,19 @@ def run_image_proposal_roi_clip(
                 image_height=frame.height or image.shape[0],
             )
             all_pose_records.extend(records)
-            _update_tracks(tracks, records, frame.width, frame.height)
+            _update_tracks(
+                tracks,
+                records,
+                frame.width,
+                frame.height,
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
+            )
             overlay = draw_pose_overlay(
                 image,
                 records,
-                confidence_threshold=float(config.raw["postprocess"].get("confidence_threshold", 0.5)),
-                threshold_config=config.raw["postprocess"].get("confidence_thresholds", {}),
+                confidence_threshold=_overlay_confidence_threshold(config.raw["postprocess"]),
+                threshold_config=_overlay_threshold_config(config.raw["postprocess"]),
                 tracks=tracks,
             )
             overlay_path = overlay_dir / frame.frame_path.name
@@ -740,16 +783,39 @@ def _update_tracks(
     records: list[PoseRecord],
     width: int | None,
     height: int | None,
+    confidence_threshold: float,
+    threshold_config: dict[str, object],
 ) -> None:
     if width is None or height is None:
         return
     for record in records:
         if record.joint_name not in tracks or record.x is None or record.y is None:
             continue
+        score = pose_score(record)
+        joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
+        if score is not None and score < joint_threshold:
+            continue
         x = int(record.x * width)
         y = int(record.y * height)
         if 0 <= x < width and 0 <= y < height:
             tracks[record.joint_name].append((x, y))
+
+
+def _overlay_confidence_threshold(postprocess_config: dict[str, object]) -> float:
+    return float(
+        postprocess_config.get(
+            "overlay_confidence_threshold",
+            postprocess_config.get("confidence_threshold", 0.5),
+        )
+    )
+
+
+def _overlay_threshold_config(postprocess_config: dict[str, object]) -> dict[str, object]:
+    threshold_config = postprocess_config.get(
+        "overlay_confidence_thresholds",
+        postprocess_config.get("confidence_thresholds", {}),
+    )
+    return threshold_config if isinstance(threshold_config, dict) else {}
 
 
 def _write_image(path: Path, image) -> None:
