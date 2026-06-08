@@ -21,6 +21,14 @@ def feature_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
     return Path(data_dir) / "processed" / "features" / clip_id / f"{condition_id}.csv"
 
 
+def object_track_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(data_dir) / "processed" / "objects" / clip_id / f"{condition_id}.csv"
+
+
+def object_feature_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(data_dir) / "processed" / "object_features" / clip_id / f"{condition_id}.csv"
+
+
 def pose3d_path(data_dir: str | Path, clip_id: str, condition_id: str) -> Path:
     return Path(data_dir) / "processed" / "poses3d" / clip_id / f"{condition_id}.csv"
 
@@ -51,6 +59,14 @@ def overlay_frame_dir(output_dir: str | Path, clip_id: str, condition_id: str) -
 
 def overlay_video_path(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
     return Path(output_dir) / "overlays" / f"{clip_id}__{condition_id}.mp4"
+
+
+def object_overlay_frame_dir(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(output_dir) / "object_overlays" / "frames" / clip_id / condition_id
+
+
+def object_overlay_video_path(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:
+    return Path(output_dir) / "object_overlays" / f"{clip_id}__{condition_id}.mp4"
 
 
 def action_window_video_path(output_dir: str | Path, clip_id: str, condition_id: str) -> Path:

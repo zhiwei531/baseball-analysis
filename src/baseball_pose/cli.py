@@ -9,6 +9,11 @@ from baseball_pose.evaluation.roi_ablation import summarize_roi_ablation
 from baseball_pose.io.metadata import load_clips
 from baseball_pose.pipeline.body_mask_debug import render_body_mask_debug_videos
 from baseball_pose.pipeline.completion import complete_pose_files
+from baseball_pose.pipeline.equipment import (
+    extract_object_feature_files,
+    render_object_overlays,
+    track_equipment_files,
+)
 from baseball_pose.pipeline.run_experiment import (
     run_auto_roi_experiment,
     run_baseline_experiment,
@@ -56,8 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
             "smooth-poses",
             "smooth-pose-3d",
             "extract-features",
+            "detect-objects",
+            "extract-object-features",
             "make-figures",
             "render-overlays",
+            "render-object-overlays",
             "export-action-window-video",
             "render-overlays-3d",
             "render-body-mask-debug",
@@ -386,6 +394,22 @@ def main() -> None:
             print(f"  features: {result.feature_csv}")
         return
 
+    if args.command == "detect-objects":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = track_equipment_files(clip_ids=clip_ids, config=config, conditions=args.condition)
+        for result in results:
+            print(f"{result.clip_id}/{result.condition_id}: {result.record_count} object records")
+            print(f"  objects: {result.object_csv}")
+        return
+
+    if args.command == "extract-object-features":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = extract_object_feature_files(clip_ids=clip_ids, config=config, conditions=args.condition)
+        for result in results:
+            print(f"{result.clip_id}/{result.condition_id}: {result.frame_count} object feature rows")
+            print(f"  object features: {result.feature_csv}")
+        return
+
     if args.command == "make-figures":
         clip_ids = args.clip_id if args.clip_id else config.clip_ids
         results = make_report_figures(clip_ids=clip_ids, config=config, conditions=args.condition)
@@ -406,6 +430,17 @@ def main() -> None:
                 f"{result.frame_count} overlay frames"
             )
             print(f"  overlay: {result.overlay_video}")
+        return
+
+    if args.command == "render-object-overlays":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = render_object_overlays(clip_ids=clip_ids, config=config, conditions=args.condition)
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.condition_id}: "
+                f"{result.frame_count} object overlay frames"
+            )
+            print(f"  object overlay: {result.overlay_video}")
         return
 
     if args.command == "export-action-window-video":

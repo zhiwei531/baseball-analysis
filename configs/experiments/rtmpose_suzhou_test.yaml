@@ -106,6 +106,27 @@ completion:
     distal: 8
   imputed_confidence: 0.62
 
+equipment_tracking:
+  conditions:
+    - image_center_motion_grabcut_pose_complete_smooth
+  disable_bat_clip_ids:
+    - suzhou_img_8139
+  bat_min_line_length_ratio: 0.07
+  bat_max_line_length_ratio: 0.30
+  bat_max_line_gap_ratio: 0.025
+  bat_max_handle_distance_ratio: 0.08
+  bat_max_wrist_spread_ratio: 0.16
+  bat_max_frame_jump_ratio: 0.14
+  ball_min_radius_px: 3
+  ball_max_radius_px: 13
+  ball_min_brightness: 155
+  ball_motion_threshold: 22
+  ball_max_frame_jump_ratio: 0.10
+  feature_bat_confidence_threshold: 0.48
+  feature_ball_confidence_threshold: 0.48
+  feature_max_bat_speed_px_s: 8000
+  feature_max_ball_speed_px_s: 12000
+
 experiments:
   name: rtmpose_suzhou_test
   default_conditions:
