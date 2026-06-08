@@ -8,6 +8,7 @@ from baseball_pose.config import load_config
 from baseball_pose.evaluation.roi_ablation import summarize_roi_ablation
 from baseball_pose.io.metadata import load_clips
 from baseball_pose.pipeline.body_mask_debug import render_body_mask_debug_videos
+from baseball_pose.pipeline.completion import complete_pose_files
 from baseball_pose.pipeline.run_experiment import (
     run_auto_roi_experiment,
     run_baseline_experiment,
@@ -51,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
             "run-center-prior-roi",
             "run-body-prior-mask-roi",
             "run-image-proposal-roi",
+            "complete-poses",
             "smooth-poses",
             "smooth-pose-3d",
             "extract-features",
@@ -346,6 +348,21 @@ def main() -> None:
     if args.command == "smooth-poses":
         clip_ids = args.clip_id if args.clip_id else config.clip_ids
         results = smooth_pose_files(
+            clip_ids=clip_ids,
+            config=config,
+            source_conditions=args.condition,
+        )
+        for result in results:
+            print(
+                f"{result.clip_id}/{result.source_condition_id} -> {result.condition_id}: "
+                f"{result.pose_record_count} pose records"
+            )
+            print(f"  poses: {result.pose_csv}")
+        return
+
+    if args.command == "complete-poses":
+        clip_ids = args.clip_id if args.clip_id else config.clip_ids
+        results = complete_pose_files(
             clip_ids=clip_ids,
             config=config,
             source_conditions=args.condition,

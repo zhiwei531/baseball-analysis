@@ -127,7 +127,8 @@ def _preferred_overlay_conditions(condition_ids: list[str]) -> list[str]:
 
 
 def _frame_source_condition(condition_id: str) -> str:
-    return condition_id.removesuffix("_smooth")
+    source_condition_id = condition_id.removesuffix("_smooth")
+    return source_condition_id.removesuffix("_complete")
 
 
 def _records_by_frame(records: list[PoseRecord]) -> dict[int, list[PoseRecord]]:

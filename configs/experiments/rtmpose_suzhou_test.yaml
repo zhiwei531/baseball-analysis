@@ -92,18 +92,50 @@ postprocess:
     limb_length_tolerance_ratio: 0.80
     foot_length_tolerance_ratio: 0.85
 
+completion:
+  confidence_threshold: 0.12
+  confidence_thresholds:
+    default: 0.12
+    torso: 0.12
+    mid_limb: 0.14
+    distal: 0.16
+  max_gap_frames: 6
+  max_gap_by_group:
+    default: 6
+    mid_limb: 6
+    distal: 8
+  imputed_confidence: 0.62
+
 experiments:
   name: rtmpose_suzhou_test
   default_conditions:
     - image_center_motion_grabcut_pose
+    - image_center_motion_grabcut_pose_complete
     - image_center_motion_grabcut_pose_smooth
+    - image_center_motion_grabcut_pose_complete_smooth
 
 conditions:
+  image_center_motion_grabcut_pose_complete:
+    roi:
+      enabled: true
+      mode: image_center_motion_grabcut
+      source_condition: image_center_motion_grabcut_pose
+    preprocessing: []
+    postprocess:
+      enabled: true
   image_center_motion_grabcut_pose_smooth:
     roi:
       enabled: true
       mode: image_center_motion_grabcut
       source_condition: image_center_motion_grabcut_pose
+    preprocessing: []
+    postprocess:
+      enabled: true
+  image_center_motion_grabcut_pose_complete_smooth:
+    roi:
+      enabled: true
+      mode: image_center_motion_grabcut
+      source_condition: image_center_motion_grabcut_pose_complete
     preprocessing: []
     postprocess:
       enabled: true
