@@ -31,6 +31,7 @@ pose:
   keypoint_schema: halpe26
   use_masked_input: false
   min_keypoint_score: 0.0
+  full_frame_fallback: true
 
 postprocess:
   confidence_threshold: 0.12
@@ -50,12 +51,12 @@ postprocess:
       right_elbow: 0.50
       left_wrist: 0.60
       right_wrist: 0.60
-  interpolate_max_gap_frames: 8
+  interpolate_max_gap_frames: 4
   interpolate_max_gap_by_group:
-    default: 8
-    torso: 15
-    mid_limb: 10
-    distal: 24
+    default: 4
+    torso: 4
+    mid_limb: 4
+    distal: 8
   smoothing:
     enabled: true
     method: savgol

@@ -729,6 +729,9 @@ def run_image_proposal_roi_clip(
                 image_width=frame.width or image.shape[1],
                 image_height=frame.height or image.shape[0],
             )
+            if bool(config.raw.get("pose", {}).get("full_frame_fallback", False)):
+                full_frame_records = estimator.estimate_frame(image, frame, condition_id)
+                records = _select_pose_candidate(records, full_frame_records)
             all_pose_records.extend(records)
             _update_tracks(
                 tracks,
@@ -776,6 +779,99 @@ def _records_by_frame(records: list[PoseRecord]) -> dict[int, list[PoseRecord]]:
     for record in records:
         by_frame.setdefault(record.frame_index, []).append(record)
     return by_frame
+
+
+def _select_pose_candidate(
+    roi_records: list[PoseRecord],
+    full_frame_records: list[PoseRecord],
+) -> list[PoseRecord]:
+    roi_score = _pose_candidate_score(roi_records)
+    full_frame_score = _pose_candidate_score(full_frame_records)
+    if roi_score < 0 and full_frame_score < 0:
+        return [_empty_pose_record(record) for record in roi_records]
+    return full_frame_records if full_frame_score > roi_score * 1.08 else roi_records
+
+
+def _pose_candidate_score(records: list[PoseRecord]) -> float:
+    core_joints = {
+        "left_shoulder",
+        "right_shoulder",
+        "left_elbow",
+        "right_elbow",
+        "left_wrist",
+        "right_wrist",
+        "left_hip",
+        "right_hip",
+        "left_knee",
+        "right_knee",
+        "left_ankle",
+        "right_ankle",
+    }
+    points = {
+        record.joint_name: record
+        for record in records
+        if record.joint_name in core_joints and record.x is not None and record.y is not None
+    }
+    if len(points) < 6:
+        return -1.0
+    xs = [record.x for record in points.values() if record.x is not None]
+    ys = [record.y for record in points.values() if record.y is not None]
+    width = max(xs) - min(xs)
+    height = max(ys) - min(ys)
+    if width <= 0 or height <= 0:
+        return -1.0
+    aspect = height / max(width, 1e-6)
+    if width < 0.055 or height < 0.12 or aspect > 6.5 or aspect < 0.8:
+        return -1.0
+    if _limb_length_ratio(points, "left_hip", "left_knee", "left_knee", "left_ankle") > 3.5:
+        return -1.0
+    if _limb_length_ratio(points, "right_hip", "right_knee", "right_knee", "right_ankle") > 3.5:
+        return -1.0
+
+    confidences = [pose_score(record) or 0.0 for record in points.values()]
+    confidence_score = sum(confidences) / len(confidences)
+    center_y = (min(ys) + max(ys)) / 2
+    lower_frame_bonus = 1.0 + max(0.0, center_y - 0.35) * 1.2
+    size_score = min(height * width, 0.18)
+    return confidence_score * (1.0 + 8.0 * size_score) * lower_frame_bonus
+
+
+def _limb_length_ratio(
+    points: dict[str, PoseRecord],
+    a: str,
+    b: str,
+    c: str,
+    d: str,
+) -> float:
+    first = _record_distance(points.get(a), points.get(b))
+    second = _record_distance(points.get(c), points.get(d))
+    if first is None or second is None or min(first, second) <= 1e-6:
+        return 1.0
+    return max(first, second) / min(first, second)
+
+
+def _record_distance(first: PoseRecord | None, second: PoseRecord | None) -> float | None:
+    if first is None or second is None:
+        return None
+    if first.x is None or first.y is None or second.x is None or second.y is None:
+        return None
+    return ((first.x - second.x) ** 2 + (first.y - second.y) ** 2) ** 0.5
+
+
+def _empty_pose_record(record: PoseRecord) -> PoseRecord:
+    return PoseRecord(
+        clip_id=record.clip_id,
+        condition_id=record.condition_id,
+        frame_index=record.frame_index,
+        timestamp_sec=record.timestamp_sec,
+        joint_name=record.joint_name,
+        x=None,
+        y=None,
+        visibility=record.visibility,
+        confidence=record.confidence,
+        backend=record.backend,
+        inference_time_ms=record.inference_time_ms,
+    )
 
 
 def _update_tracks(
