@@ -11,6 +11,7 @@ __pycache__/
 .mypy_cache/
 .venv/
 .venv312/
+.venv_gvhmr310/
 venv/
 *.egg-info/
 
@@ -20,6 +21,7 @@ data_full/
 outputs/
 outputs_full/
 .cache/
+.cache_gvhmr/
 models/*.task
 models/*.onnx
 external/

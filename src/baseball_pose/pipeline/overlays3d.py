@@ -36,6 +36,9 @@ def render_pose3d_overlays(
             source_condition_id = _frame_source_condition_for_3d(condition_id)
             frames_csv = frame_manifest_path(config.data_dir, clip_id, source_condition_id)
             poses3d_csv = Path(config.data_dir) / "processed" / "poses3d" / clip_id / f"{condition_id}.csv"
+            if not frames_csv.exists() and "_complete" in source_condition_id:
+                source_condition_id = source_condition_id.replace("_complete", "")
+                frames_csv = frame_manifest_path(config.data_dir, clip_id, source_condition_id)
             if not frames_csv.exists() or not poses3d_csv.exists():
                 continue
 

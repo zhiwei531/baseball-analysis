@@ -12,7 +12,7 @@ from baseball_pose.io.metadata import ClipMetadata
 from baseball_pose.io.paths import feature3d_path, frame_manifest_path, pose3d_path, pose_path
 from baseball_pose.io.pose_csv import read_pose_records
 from baseball_pose.io.pose3d_csv import write_pose3d_records
-from baseball_pose.io.video import read_frame
+from baseball_pose.io.video import FrameRecord, read_frame
 from baseball_pose.pose.quality import threshold_for_joint
 from baseball_pose.pose3d.external_video_hmr import read_external_video_hmr_records
 from baseball_pose.pose3d.mediapipe_world import MediaPipeWorldPoseEstimator
@@ -127,11 +127,7 @@ def _lift_external_video_hmr(
     config: RuntimeConfig,
     pose3d_config: dict[str, object],
 ):
-    if not plan.input_frames_path.exists():
-        raise FileNotFoundError(
-            f"External 3D import requires existing sampled frames for {plan.source_condition_id}: "
-            f"{plan.input_frames_path}"
-        )
+    frames = _read_external_3d_timeline(plan)
     result_path = _external_video_hmr_result_path(
         pose3d_config,
         config=config,
@@ -145,12 +141,37 @@ def _lift_external_video_hmr(
         result_path,
         clip_id=clip.clip_id,
         condition_id=plan.output_condition_id,
-        frames=read_frame_records(plan.input_frames_path),
+        frames=frames,
         backend_name=plan.backend,
         scale_mode=str(pose3d_config.get("external_scale_mode", "external_video_hmr")),
         joint_names=_string_list(pose3d_config.get("external_joint_names")),
         joint_name_map=_string_map(pose3d_config.get("external_joint_name_map")),
     )
+
+
+def _read_external_3d_timeline(plan: Pose3DPlan) -> list[FrameRecord]:
+    if plan.input_frames_path.exists():
+        return read_frame_records(plan.input_frames_path)
+    if not plan.input_pose_path.exists():
+        raise FileNotFoundError(
+            f"External 3D import requires either sampled frames or input 2D poses: "
+            f"{plan.input_frames_path} / {plan.input_pose_path}"
+        )
+    records_by_frame = {}
+    for record in read_pose_records(plan.input_pose_path):
+        records_by_frame.setdefault(record.frame_index, record.timestamp_sec)
+    return [
+        FrameRecord(
+            clip_id=plan.clip_id,
+            condition_id=plan.source_condition_id,
+            frame_index=frame_index,
+            timestamp_sec=timestamp_sec,
+            frame_path=Path(""),
+            width=None,
+            height=None,
+        )
+        for frame_index, timestamp_sec in sorted(records_by_frame.items())
+    ]
 
 
 def _external_video_hmr_result_path(
