@@ -296,7 +296,8 @@ def _project_isometric_points(
 
 def _isometric_project(values: tuple[float, float, float]) -> tuple[float, float]:
     x, y, z = values
-    return (x - 0.68 * z, y - 0.36 * z)
+    display_x = -x
+    return (display_x - 0.68 * z, y - 0.36 * z)
 
 
 def _isometric_bounds(points: dict[str, tuple[float, float, float]]) -> tuple[float, float, float, float]:
@@ -364,18 +365,20 @@ def _draw_isometric_grid(canvas, origin: tuple[float, float], scale: float) -> N
 
     y_floor = -2.0
     y_max = 1.8
+    back_z = -extent
+    side_x = extent
     for x in values:
         line((x, y_floor, -extent), (x, y_floor, extent), grid_color)
-        line((x, y_floor, extent), (x, y_max, extent), grid_color)
+        line((x, y_floor, back_z), (x, y_max, back_z), grid_color)
     for z in values:
         line((-extent, y_floor, z), (extent, y_floor, z), grid_color)
-        line((-extent, y_floor, z), (-extent, y_max, z), grid_color)
+        line((side_x, y_floor, z), (side_x, y_max, z), grid_color)
     y_values = [round(y_floor + idx * step, 2) for idx in range(int((y_max - y_floor) / step) + 1)]
     for y in y_values:
         if y < y_floor or y > y_max:
             continue
-        line((-extent, y, extent), (extent, y, extent), grid_color)
-        line((-extent, y, -extent), (-extent, y, extent), grid_color)
+        line((-extent, y, back_z), (extent, y, back_z), grid_color)
+        line((side_x, y, -extent), (side_x, y, extent), grid_color)
 
     corners = (
         (-extent, y_floor, -extent),
@@ -385,14 +388,15 @@ def _draw_isometric_grid(canvas, origin: tuple[float, float], scale: float) -> N
     )
     for start, end in zip(corners, corners[1:] + corners[:1]):
         line(start, end, edge_color, 1)
-    line((-extent, y_floor, extent), (-extent, y_max, extent), edge_color, 1)
-    line((extent, y_floor, extent), (extent, y_max, extent), edge_color, 1)
-    line((-extent, y_max, extent), (extent, y_max, extent), edge_color, 1)
-    line((-extent, y_floor, -extent), (-extent, y_max, -extent), edge_color, 1)
-    line((-extent, y_max, -extent), (-extent, y_max, extent), edge_color, 1)
+    line((-extent, y_floor, back_z), (-extent, y_max, back_z), edge_color, 1)
+    line((extent, y_floor, back_z), (extent, y_max, back_z), edge_color, 1)
+    line((-extent, y_max, back_z), (extent, y_max, back_z), edge_color, 1)
+    line((side_x, y_floor, -extent), (side_x, y_max, -extent), edge_color, 1)
+    line((side_x, y_floor, extent), (side_x, y_max, extent), edge_color, 1)
+    line((side_x, y_max, -extent), (side_x, y_max, extent), edge_color, 1)
 
     cv2.putText(canvas, "X", map_point((extent + 0.18, y_floor, 0.0)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (130, 130, 130), 1, cv2.LINE_AA)
-    cv2.putText(canvas, "Y", map_point((-extent, y_max + 0.15, -extent)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (130, 130, 130), 1, cv2.LINE_AA)
+    cv2.putText(canvas, "Y", map_point((side_x, y_max + 0.15, back_z)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (130, 130, 130), 1, cv2.LINE_AA)
     cv2.putText(canvas, "Z", map_point((-extent, y_floor, extent + 0.18)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (130, 130, 130), 1, cv2.LINE_AA)
 
 
