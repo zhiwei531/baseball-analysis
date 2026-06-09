@@ -39,14 +39,14 @@ postprocess:
   confidence_thresholds:
     default: 0.12
     torso: 0.12
-    mid_limb: 0.14
-    distal: 0.16
+    mid_limb: 0.50
+    distal: 0.60
   overlay_confidence_threshold: 0.12
   overlay_confidence_thresholds:
     default: 0.12
     torso: 0.12
-    mid_limb: 0.14
-    distal: 0.16
+    mid_limb: 0.50
+    distal: 0.60
     joint_overrides:
       left_elbow: 0.50
       right_elbow: 0.50
@@ -98,14 +98,19 @@ completion:
   confidence_thresholds:
     default: 0.12
     torso: 0.12
-    mid_limb: 0.14
-    distal: 0.16
+    mid_limb: 0.50
+    distal: 0.60
   max_gap_frames: 6
   max_gap_by_group:
     default: 6
     mid_limb: 6
     distal: 8
   imputed_confidence: 0.62
+  rescue_low_confidence: true
+  rescue_min_confidence: 0.03
+  rescue_temporal_only_min_confidence: 0.30
+  rescue_limb_tolerance_ratio: 0.85
+  rescue_temporal_tolerance: 0.14
 
 equipment_tracking:
   conditions:

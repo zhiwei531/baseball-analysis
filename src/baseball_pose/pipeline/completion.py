@@ -47,6 +47,13 @@ def complete_pose_files(
         max_gap_frames = int(completion_config.get("max_gap_frames", 5))
         max_gap_config = completion_config.get("max_gap_by_group", {})
         imputed_confidence = float(completion_config.get("imputed_confidence", 0.62))
+        rescue_low_confidence = bool(completion_config.get("rescue_low_confidence", True))
+        rescue_min_confidence = float(completion_config.get("rescue_min_confidence", 0.03))
+        rescue_temporal_only_min_confidence = float(
+            completion_config.get("rescue_temporal_only_min_confidence", 0.30)
+        )
+        rescue_limb_tolerance_ratio = float(completion_config.get("rescue_limb_tolerance_ratio", 0.75))
+        rescue_temporal_tolerance = float(completion_config.get("rescue_temporal_tolerance", 0.12))
         for source_condition_id in condition_ids:
             source_path = pose_path(config.data_dir, clip_id, source_condition_id)
             if not source_path.exists():
@@ -74,6 +81,11 @@ def complete_pose_files(
                     max_gap_frames=max_gap_frames,
                     max_gap_config=max_gap_config if isinstance(max_gap_config, dict) else {},
                     imputed_confidence=imputed_confidence,
+                    rescue_low_confidence=rescue_low_confidence,
+                    rescue_min_confidence=rescue_min_confidence,
+                    rescue_temporal_only_min_confidence=rescue_temporal_only_min_confidence,
+                    rescue_limb_tolerance_ratio=rescue_limb_tolerance_ratio,
+                    rescue_temporal_tolerance=rescue_temporal_tolerance,
                 )
             ]
             output_path = pose_path(config.data_dir, clip_id, condition_id)

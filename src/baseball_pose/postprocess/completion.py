@@ -17,6 +17,7 @@ LIMB_CHAINS = (
     ("left_hip", "left_knee", "left_ankle"),
     ("right_hip", "right_knee", "right_ankle"),
 )
+COMPLETABLE_JOINTS = tuple(dict.fromkeys(joint for chain in LIMB_CHAINS for joint in chain))
 
 
 def complete_pose_records(
@@ -26,6 +27,11 @@ def complete_pose_records(
     max_gap_frames: int = 5,
     max_gap_config: dict[str, object] | None = None,
     imputed_confidence: float = 0.62,
+    rescue_low_confidence: bool = True,
+    rescue_min_confidence: float = 0.03,
+    rescue_temporal_only_min_confidence: float = 0.30,
+    rescue_limb_tolerance_ratio: float = 0.75,
+    rescue_temporal_tolerance: float = 0.12,
 ) -> list[PoseRecord]:
     """Fill short missing limb gaps without changing the pose schema.
 
@@ -41,7 +47,6 @@ def complete_pose_records(
     if not records:
         return []
 
-    by_key = _records_by_key(records)
     frame_records = _records_by_frame(records)
     segment_lengths = _median_segment_lengths(
         frame_records,
@@ -49,6 +54,29 @@ def complete_pose_records(
         threshold_config=threshold_config,
     )
     completed: dict[tuple[int, str], PoseRecord] = {}
+
+    if rescue_low_confidence:
+        _rescue_low_confidence_records(
+            by_key=_records_by_key(records),
+            frame_records=frame_records,
+            output=completed,
+            segment_lengths=segment_lengths,
+            confidence_threshold=confidence_threshold,
+            threshold_config=threshold_config,
+            rescue_min_confidence=rescue_min_confidence,
+            rescue_temporal_only_min_confidence=rescue_temporal_only_min_confidence,
+            limb_tolerance_ratio=rescue_limb_tolerance_ratio,
+            temporal_tolerance=rescue_temporal_tolerance,
+            imputed_confidence=imputed_confidence,
+        )
+        if completed:
+            frame_records = _records_by_frame(
+                [completed.get((record.frame_index, record.joint_name), record) for record in records]
+            )
+
+    by_key = _records_by_key(
+        [completed.get((record.frame_index, record.joint_name), record) for record in records]
+    )
 
     for proximal, middle, distal in LIMB_CHAINS:
         _complete_distal_joint(
@@ -250,6 +278,148 @@ def _missing_runs(
     return runs
 
 
+def _rescue_low_confidence_records(
+    by_key: dict[str, list[PoseRecord]],
+    frame_records: dict[int, dict[str, PoseRecord]],
+    output: dict[tuple[int, str], PoseRecord],
+    segment_lengths: dict[tuple[str, str], float],
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+    rescue_min_confidence: float,
+    rescue_temporal_only_min_confidence: float,
+    limb_tolerance_ratio: float,
+    temporal_tolerance: float,
+    imputed_confidence: float,
+) -> None:
+    for joint_records in by_key.values():
+        for record in joint_records:
+            if record.joint_name not in COMPLETABLE_JOINTS:
+                continue
+            if record.x is None or record.y is None:
+                continue
+            if _usable(record, confidence_threshold, threshold_config):
+                continue
+            score = pose_score(record)
+            if score is not None and score < rescue_min_confidence:
+                continue
+            biomechanical_ok = _biomechanically_plausible(
+                record=record,
+                frame_records=frame_records,
+                segment_lengths=segment_lengths,
+                confidence_threshold=confidence_threshold,
+                threshold_config=threshold_config,
+                limb_tolerance_ratio=limb_tolerance_ratio,
+            )
+            temporal_ok = _temporally_plausible(
+                record=record,
+                joint_records=joint_records,
+                confidence_threshold=confidence_threshold,
+                threshold_config=threshold_config,
+                temporal_tolerance=temporal_tolerance,
+            )
+            temporal_only_ok = (
+                score is None or score >= rescue_temporal_only_min_confidence
+            ) and temporal_ok
+            if not biomechanical_ok and not temporal_only_ok:
+                continue
+            output[(record.frame_index, record.joint_name)] = _imputed_record(
+                record,
+                (record.x, record.y),
+                imputed_confidence,
+                suffix="+rescued",
+            )
+
+
+def _biomechanically_plausible(
+    record: PoseRecord,
+    frame_records: dict[int, dict[str, PoseRecord]],
+    segment_lengths: dict[tuple[str, str], float],
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+    limb_tolerance_ratio: float,
+) -> bool:
+    constraints = _joint_segments(record.joint_name)
+    if not constraints:
+        return False
+    checks = 0
+    for first_name, second_name in constraints:
+        other_name = second_name if first_name == record.joint_name else first_name
+        other = frame_records.get(record.frame_index, {}).get(other_name)
+        if not _usable(other, confidence_threshold, threshold_config):
+            continue
+        expected = segment_lengths.get((first_name, second_name)) or segment_lengths.get((second_name, first_name))
+        if expected is None or expected <= 0:
+            continue
+        observed = _distance((record.x, record.y), (other.x, other.y))
+        lower = expected * max(0.0, 1.0 - limb_tolerance_ratio)
+        upper = expected * (1.0 + limb_tolerance_ratio)
+        if lower <= observed <= upper:
+            checks += 1
+    return checks > 0
+
+
+def _joint_segments(joint_name: str) -> list[tuple[str, str]]:
+    segments: list[tuple[str, str]] = []
+    for proximal, middle, distal in LIMB_CHAINS:
+        if joint_name == proximal:
+            segments.append((proximal, middle))
+        elif joint_name == middle:
+            segments.extend([(proximal, middle), (middle, distal)])
+        elif joint_name == distal:
+            segments.append((middle, distal))
+    return segments
+
+
+def _temporally_plausible(
+    record: PoseRecord,
+    joint_records: list[PoseRecord],
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+    temporal_tolerance: float,
+) -> bool:
+    before = _nearest_usable_record(
+        joint_records,
+        frame_index=record.frame_index,
+        direction=-1,
+        confidence_threshold=confidence_threshold,
+        threshold_config=threshold_config,
+    )
+    after = _nearest_usable_record(
+        joint_records,
+        frame_index=record.frame_index,
+        direction=1,
+        confidence_threshold=confidence_threshold,
+        threshold_config=threshold_config,
+    )
+    if before is None and after is None:
+        return True
+    if before is not None and after is not None and after.frame_index != before.frame_index:
+        alpha = (record.frame_index - before.frame_index) / (after.frame_index - before.frame_index)
+        expected = _lerp((before.x, before.y), (after.x, after.y), alpha)
+        return _distance((record.x, record.y), expected) <= temporal_tolerance
+    anchor = before if before is not None else after
+    frame_gap = abs(record.frame_index - anchor.frame_index)
+    return frame_gap <= 3 and _distance((record.x, record.y), (anchor.x, anchor.y)) <= temporal_tolerance
+
+
+def _nearest_usable_record(
+    records: list[PoseRecord],
+    frame_index: int,
+    direction: int,
+    confidence_threshold: float,
+    threshold_config: dict[str, object] | None,
+) -> PoseRecord | None:
+    candidates = records if direction > 0 else reversed(records)
+    for record in candidates:
+        if direction > 0 and record.frame_index <= frame_index:
+            continue
+        if direction < 0 and record.frame_index >= frame_index:
+            continue
+        if _usable(record, confidence_threshold, threshold_config):
+            return record
+    return None
+
+
 def _record_at(records: list[PoseRecord], frame_index: int) -> PoseRecord | None:
     for record in records:
         if record.frame_index == frame_index:
@@ -286,10 +456,15 @@ def _gap_for_joint(
     return int(config.get("default", default_gap))
 
 
-def _imputed_record(record: PoseRecord, point: tuple[float, float], confidence: float) -> PoseRecord:
+def _imputed_record(
+    record: PoseRecord,
+    point: tuple[float, float],
+    confidence: float,
+    suffix: str = "+imputed",
+) -> PoseRecord:
     x_value = min(max(float(point[0]), 0.0), 1.0)
     y_value = min(max(float(point[1]), 0.0), 1.0)
-    backend = record.backend if record.backend.endswith("+imputed") else f"{record.backend}+imputed"
+    backend = record.backend if record.backend.endswith(suffix) else f"{record.backend}{suffix}"
     return replace(
         record,
         x=x_value,

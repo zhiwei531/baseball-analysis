@@ -61,6 +61,79 @@ def test_complete_pose_records_leaves_long_gap_missing():
     assert all(record.x is None and record.y is None for record in wrists)
 
 
+def test_complete_pose_records_rescues_low_confidence_biomechanical_candidate():
+    records = []
+    for frame in range(5):
+        records.extend(
+            [
+                _record(frame, "right_elbow", 0.50 + frame * 0.01, 0.50),
+                _record(
+                    frame,
+                    "right_wrist",
+                    0.60 + frame * 0.01,
+                    0.50,
+                    confidence=0.08 if frame == 2 else 1.0,
+                ),
+            ]
+        )
+
+    completed = complete_pose_records(
+        records,
+        confidence_threshold=0.5,
+        max_gap_frames=0,
+        rescue_low_confidence=True,
+        rescue_min_confidence=0.03,
+        rescue_limb_tolerance_ratio=0.25,
+        rescue_temporal_tolerance=0.03,
+        imputed_confidence=0.62,
+    )
+    wrist = [
+        record
+        for record in completed
+        if record.joint_name == "right_wrist" and record.frame_index == 2
+    ][0]
+
+    assert wrist.x == 0.62
+    assert wrist.confidence == 0.62
+    assert wrist.backend == "test+rescued"
+
+
+def test_complete_pose_records_rejects_low_confidence_implausible_candidate():
+    records = []
+    for frame in range(5):
+        records.extend(
+            [
+                _record(frame, "right_elbow", 0.50 + frame * 0.01, 0.50),
+                _record(
+                    frame,
+                    "right_wrist",
+                    0.90 if frame == 2 else 0.60 + frame * 0.01,
+                    0.90 if frame == 2 else 0.50,
+                    confidence=0.08 if frame == 2 else 1.0,
+                ),
+            ]
+        )
+
+    completed = complete_pose_records(
+        records,
+        confidence_threshold=0.5,
+        max_gap_frames=0,
+        rescue_low_confidence=True,
+        rescue_min_confidence=0.03,
+        rescue_limb_tolerance_ratio=0.25,
+        rescue_temporal_tolerance=0.03,
+        imputed_confidence=0.62,
+    )
+    wrist = [
+        record
+        for record in completed
+        if record.joint_name == "right_wrist" and record.frame_index == 2
+    ][0]
+
+    assert wrist.confidence == 0.08
+    assert wrist.backend == "test"
+
+
 def _record(
     frame_index: int,
     joint_name: str,
