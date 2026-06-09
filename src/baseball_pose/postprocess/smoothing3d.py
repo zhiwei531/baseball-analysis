@@ -12,8 +12,22 @@ from scipy.signal import savgol_filter
 
 from baseball_pose.pose.quality import LIMB_SEGMENTS
 from baseball_pose.pose.quality import gap_for_joint, multiplier_for_joint, threshold_for_joint
-from baseball_pose.pose.schema import CANONICAL_JOINTS
 from baseball_pose.pose3d.schema import Pose3DRecord
+
+
+SMPL24_MARKER_JOINTS = frozenset(
+    {
+        "spine1",
+        "spine2",
+        "spine3",
+        "left_collar",
+        "right_collar",
+        "left_hand",
+        "right_hand",
+        "left_foot",
+        "right_foot",
+    }
+)
 
 
 def smooth_pose3d_records(
@@ -40,12 +54,16 @@ def smooth_pose3d_records(
     if limb_length_tolerance_ratio <= 0:
         raise ValueError("limb_length_tolerance_ratio must be positive.")
 
-    gated_records = _apply_limb_length_consistency_gate(
-        records,
-        confidence_threshold=confidence_threshold,
-        threshold_config=threshold_config,
-        tolerance_ratio=limb_length_tolerance_ratio,
-    )
+    is_smpl24_sequence = _is_smpl24_sequence(records)
+    if is_smpl24_sequence:
+        gated_records = records
+    else:
+        gated_records = _apply_limb_length_consistency_gate(
+            records,
+            confidence_threshold=confidence_threshold,
+            threshold_config=threshold_config,
+            tolerance_ratio=limb_length_tolerance_ratio,
+        )
     by_key = _records_by_key(gated_records)
     smoothed_by_identity: dict[tuple[int, str], Pose3DRecord] = {}
     for key_records in by_key.values():
@@ -61,6 +79,8 @@ def smooth_pose3d_records(
             max_gap_config=max_gap_config,
             jump_threshold_multiplier=jump_threshold_multiplier,
             joint_jump_config=joint_jump_config,
+            remove_jump_outliers=not is_smpl24_sequence,
+            apply_confidence_threshold=not is_smpl24_sequence,
         )
         for record in smoothed:
             smoothed_by_identity[(record.frame_index, record.joint_name)] = record
@@ -137,12 +157,15 @@ def _apply_limb_length_consistency_gate(
 def _records_by_key(records: list[Pose3DRecord]) -> dict[tuple[str, str, str], list[Pose3DRecord]]:
     grouped: dict[tuple[str, str, str], list[Pose3DRecord]] = defaultdict(list)
     for record in records:
-        if record.joint_name not in CANONICAL_JOINTS:
-            continue
         grouped[(record.clip_id, record.condition_id, record.joint_name)].append(record)
     for key_records in grouped.values():
         key_records.sort(key=lambda item: item.frame_index)
     return grouped
+
+
+def _is_smpl24_sequence(records: list[Pose3DRecord]) -> bool:
+    joint_names = {record.joint_name for record in records}
+    return len(joint_names & SMPL24_MARKER_JOINTS) >= 4
 
 
 def _smooth_joint_records(
@@ -158,21 +181,42 @@ def _smooth_joint_records(
     max_gap_config: dict[str, object] | None,
     jump_threshold_multiplier: float,
     joint_jump_config: dict[str, object] | None,
+    remove_jump_outliers: bool,
+    apply_confidence_threshold: bool,
 ) -> list[Pose3DRecord]:
     if not records:
         return []
 
     joint_name = records[0].joint_name
-    x_values = np.array([_confident_value(record, "x_3d", confidence_threshold, threshold_config) for record in records], dtype=float)
-    y_values = np.array([_confident_value(record, "y_3d", confidence_threshold, threshold_config) for record in records], dtype=float)
-    z_values = np.array([_confident_value(record, "z_3d", confidence_threshold, threshold_config) for record in records], dtype=float)
+    x_values = np.array(
+        [
+            _confident_value(record, "x_3d", confidence_threshold, threshold_config, apply_confidence_threshold)
+            for record in records
+        ],
+        dtype=float,
+    )
+    y_values = np.array(
+        [
+            _confident_value(record, "y_3d", confidence_threshold, threshold_config, apply_confidence_threshold)
+            for record in records
+        ],
+        dtype=float,
+    )
+    z_values = np.array(
+        [
+            _confident_value(record, "z_3d", confidence_threshold, threshold_config, apply_confidence_threshold)
+            for record in records
+        ],
+        dtype=float,
+    )
 
     joint_jump_threshold = multiplier_for_joint(
         joint_name,
         jump_threshold_multiplier,
         joint_jump_config if isinstance(joint_jump_config, dict) else None,
     )
-    x_values, y_values, z_values = _remove_jump_outliers(x_values, y_values, z_values, joint_jump_threshold)
+    if remove_jump_outliers:
+        x_values, y_values, z_values = _remove_jump_outliers(x_values, y_values, z_values, joint_jump_threshold)
     joint_gap = gap_for_joint(joint_name, max_gap_frames, max_gap_config if isinstance(max_gap_config, dict) else None)
     x_values = _interpolate_short_gaps(x_values, joint_gap)
     y_values = _interpolate_short_gaps(y_values, joint_gap)
@@ -238,11 +282,12 @@ def _confident_value(
     axis: str,
     confidence_threshold: float,
     threshold_config: dict[str, object] | None,
+    apply_confidence_threshold: bool = True,
 ) -> float:
     score = record.input_quality_score
     joint_threshold = threshold_for_joint(record.joint_name, confidence_threshold, threshold_config)
     value = getattr(record, axis)
-    if value is None or (score is not None and score < joint_threshold):
+    if value is None or (apply_confidence_threshold and score is not None and score < joint_threshold):
         return np.nan
     return float(value)
 

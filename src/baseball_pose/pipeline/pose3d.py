@@ -76,6 +76,7 @@ def lift_pose_sequence(plan: Pose3DPlan, clip: ClipMetadata, config: RuntimeConf
                 records,
                 pose2d_path=plan.input_pose_path,
                 pose3d_config=pose3d_config,
+                hard_gate=bool(pose3d_config.get("gate_with_2d_prior", False)),
             )
         write_pose3d_records(plan.output_pose3d_path, records)
         return len(records)
@@ -115,6 +116,7 @@ def lift_pose_sequence(plan: Pose3DPlan, clip: ClipMetadata, config: RuntimeConf
             records,
             pose2d_path=plan.input_pose_path,
             pose3d_config=pose3d_config,
+            hard_gate=bool(pose3d_config.get("gate_with_2d_prior", True)),
         )
 
     write_pose3d_records(plan.output_pose3d_path, records)
@@ -318,6 +320,7 @@ def _gate_pose3d_with_2d_prior(
     *,
     pose2d_path: Path,
     pose3d_config: dict[str, object],
+    hard_gate: bool = True,
 ):
     """Use the cleaned 2D pipeline as a trust prior for 3D joints."""
 
@@ -332,25 +335,12 @@ def _gate_pose3d_with_2d_prior(
     for record in records:
         prior = pose2d_by_key.get((record.frame_index, record.joint_name))
         if prior is None:
-            gated.append(
-                record.__class__(
-                    clip_id=record.clip_id,
-                    condition_id=record.condition_id,
-                    frame_index=record.frame_index,
-                    timestamp_sec=record.timestamp_sec,
-                    joint_name=record.joint_name,
-                    x_3d=nan,
-                    y_3d=nan,
-                    z_3d=nan,
-                    scale_mode=record.scale_mode,
-                    lift_backend=record.lift_backend,
-                    input_quality_score=None,
-                )
-            )
+            gated.append(record)
             continue
         threshold = threshold_for_joint(record.joint_name, default_threshold, threshold_config if isinstance(threshold_config, dict) else {})
         prior_score = pose_score(prior)
-        if prior.x is None or prior.y is None or (prior_score is not None and prior_score < threshold):
+        should_reject = prior.x is None or prior.y is None or (prior_score is not None and prior_score < threshold)
+        if hard_gate and should_reject:
             gated.append(
                 record.__class__(
                     clip_id=record.clip_id,

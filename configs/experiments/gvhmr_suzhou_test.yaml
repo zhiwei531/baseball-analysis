@@ -6,6 +6,7 @@ pose3d:
   root_joint: pelvis_center
   normalize_scale: true
   min_valid_joints: 8
+  gate_with_2d_prior: false
   confidence_threshold: 0.5
   confidence_thresholds:
     default: 0.5
