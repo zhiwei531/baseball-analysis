@@ -81,7 +81,13 @@ def draw_pose3d_preview(
 
     pelvis_center = _pelvis_center(points)
     body_scale = _body_scale(points)
-    normalized = _normalize_points(points, pelvis_center, body_scale if context is None else context.body_scale)
+    y_axis_sign = _vertical_axis_sign(points)
+    normalized = _normalize_points(
+        points,
+        pelvis_center,
+        body_scale if context is None else context.body_scale,
+        y_axis_sign=y_axis_sign,
+    )
     for idx, spec in enumerate(PROJECTIONS):
         panel = _panel_rect(idx)
         _draw_projection_panel(canvas, panel, spec, normalized, context)
@@ -170,6 +176,8 @@ def _normalize_points(
     points: dict[str, Pose3DRecord],
     pelvis_center: tuple[float, float, float],
     body_scale: float,
+    *,
+    y_axis_sign: float,
 ) -> dict[str, tuple[float, float, float]]:
     px, py, pz = pelvis_center
     scale = max(body_scale, 1e-6)
@@ -177,7 +185,7 @@ def _normalize_points(
     for joint_name, record in points.items():
         normalized[joint_name] = (
             (record.x_3d - px) / scale,
-            -(record.y_3d - py) / scale,
+            y_axis_sign * (record.y_3d - py) / scale,
             (record.z_3d - pz) / scale,
         )
     return normalized
@@ -241,8 +249,9 @@ def build_projection_context(records_by_frame: dict[int, list[Pose3DRecord]]) ->
             continue
         pelvis_center = _pelvis_center(points)
         body_scale = _body_scale(points)
+        y_axis_sign = _vertical_axis_sign(points)
         body_scales.append(body_scale)
-        centered_frames.append(_normalize_points(points, pelvis_center, 1.0))
+        centered_frames.append(_normalize_points(points, pelvis_center, 1.0, y_axis_sign=y_axis_sign))
     if not centered_frames:
         return None
 
@@ -297,6 +306,22 @@ def _body_scale(points: dict[str, Pose3DRecord]) -> float:
             )
         )
     return _median(candidates, fallback=1.0)
+
+
+def _vertical_axis_sign(points: dict[str, Pose3DRecord]) -> float:
+    upper_values: list[float] = []
+    lower_values: list[float] = []
+    for joint_name in ("head", "nose", "neck", "left_shoulder", "right_shoulder"):
+        record = points.get(joint_name)
+        if record:
+            upper_values.append(record.y_3d)
+    for joint_name in ("hip", "left_hip", "right_hip", "left_ankle", "right_ankle", "left_foot", "right_foot"):
+        record = points.get(joint_name)
+        if record:
+            lower_values.append(record.y_3d)
+    if not upper_values or not lower_values:
+        return 1.0
+    return 1.0 if _median(upper_values, fallback=0.0) >= _median(lower_values, fallback=0.0) else -1.0
 
 
 def _connections_for_points(points: dict[str, tuple[int, int]]):
