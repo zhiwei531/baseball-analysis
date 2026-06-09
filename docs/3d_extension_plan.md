@@ -187,41 +187,67 @@ CSV at the first integration step. A combined report layer can merge them later.
 
 ## Backend Strategy
 
-### Short-Term Recommendation
+### Current Recommendation
 
-Use a staged backend strategy:
+Use a video-HMR-first backend strategy:
 
-1. **MediaPipe world landmarks now**
-2. **temporal 3D lifting later**
+1. **GVHMR or WHAM-style video-HMR as the preferred 3D source**
+2. **the existing cleaned 2D pose as a trust/gating prior**
+3. **MediaPipe world landmarks or pure 2D-to-3D lifting only as baselines**
 
-The first real backend in the repo can be MediaPipe world landmarks because it
-is immediately compatible with the current 2D pose stack and gives a genuine
-relative 3D skeleton output. The longer-term target should still be a temporal
-3D lifting backend that consumes cleaned 2D joints rather than a full
-human-mesh-recovery model. That remains the best fit for the repo because:
+This is a better fit for the current Suzhou and benchmark findings. The main
+failure mode is not missing code around 3D; it is unreliable distal 2D joints
+during high-speed throwing and occlusion. A pure 2D-to-3D lifter would inherit
+and amplify those errors. A video-HMR backend can use image/video evidence,
+temporal context, and a body prior before the project applies its own 2D
+reprojection-style quality gate.
 
-- the repo already produces smoothed 2D sequences,
-- the project is single-view,
-- baseball actions are fast and benefit from sequence context,
-- the current reporting layer expects joint-level metrics more than dense mesh
-  outputs.
+The repo-level contract is intentionally narrow:
 
-The longer-term lifting backend should expose a narrow interface:
-
-```python
-lift_sequence(frames_2d) -> frames_3d
+```text
+external video-HMR output
+  -> normalized project 3D joint CSV
+  -> 2D prior gating
+  -> 3D smoothing / feature extraction / overlays
 ```
 
-### Why Not Start with HMR
+The current external adapter accepts CSV rows with:
 
-A mesh-recovery or pseudo-depth-heavy approach would add:
+```text
+frame_index,joint_name,x_3d,y_3d,z_3d
+```
 
-- much heavier dependencies,
-- less transparent failure analysis,
-- a larger domain gap between current 2D metrics and report outputs,
-- harder debugging when distal joints are already weak.
+Optional CSV fields are:
 
-For this repo, sequence-based 3D lifting is the better first research step.
+```text
+timestamp_sec,confidence,score,input_quality_score,scale_mode,lift_backend
+```
+
+NPZ import is also supported for arrays named `joints_3d`, `pred_joints_3d`,
+`world_joints`, or `joints`, with shape `[frames, joints, 3]`. NPZ inputs need
+either a `joint_names` array or `pose3d.external_joint_names` in config.
+
+The preferred Suzhou entrypoint is:
+
+```bash
+python -m baseball_pose.cli \
+  --config configs/experiments/gvhmr_suzhou_test.yaml \
+  lift-pose-3d \
+  --condition image_center_motion_grabcut_pose_complete_smooth
+```
+
+Expected external result location:
+
+```text
+data_full/suzhou_rtmpose_halpe26_test/external_pose3d/gvhmr/{clip_id}.csv
+```
+
+### Baseline Backends
+
+MediaPipe world landmarks remain useful as a lightweight baseline. MotionBERT
+or other 2D-to-3D lifters can be added later, but they should not be the main
+robustness path for pitching because they depend too heavily on already-noisy
+wrists and elbows.
 
 ## CLI Evolution
 
@@ -259,11 +285,12 @@ existing `pose` section. Suggested fields:
 ```yaml
 pose3d:
   enabled: false
-  backend: temporal_lifter_stub
+  backend: gvhmr
   input_condition_suffix: _smooth
   root_joint: pelvis_center
   normalize_scale: true
   min_valid_joints: 8
+  external_result_path: "{data_dir}/external_pose3d/{backend}/{clip_id}.csv"
 ```
 
 This keeps 2D config readable and lets 3D remain opt-in.
@@ -327,13 +354,13 @@ outputs for report claims.
 
 ## Recommended Implementation Order
 
-1. Add 3D path helpers, config hooks, and a 3D schema.
-2. Add a stub lifting backend and CLI skeleton without changing current 2D runs.
-3. Add a CSV writer/reader for 3D pose records.
-4. Add the first temporal 3D lifting backend behind the stub interface.
-5. Add a small set of 3D baseball metrics.
-6. Add simple 3D figures and extend the report payload.
-7. Validate on the current action-window clips before broadening to all inputs.
+1. Keep the current 2D pipeline as the automatic prior and quality gate.
+2. Add the external video-HMR import backend and Suzhou config.
+3. Run GVHMR/WHAM outside this repo and export joint CSV/NPZ files.
+4. Import those files with `lift-pose-3d`, then run 3D smoothing and overlays.
+5. Reject or mark joints whose 3D output conflicts with trusted 2D evidence.
+6. Add a small set of 3D baseball metrics.
+7. Validate batting and pitching clips separately before broadening to all inputs.
 
 ## Success Definition
 

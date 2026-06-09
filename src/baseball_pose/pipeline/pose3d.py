@@ -14,6 +14,7 @@ from baseball_pose.io.pose_csv import read_pose_records
 from baseball_pose.io.pose3d_csv import write_pose3d_records
 from baseball_pose.io.video import read_frame
 from baseball_pose.pose.quality import threshold_for_joint
+from baseball_pose.pose3d.external_video_hmr import read_external_video_hmr_records
 from baseball_pose.pose3d.mediapipe_world import MediaPipeWorldPoseEstimator
 from baseball_pose.pose.mediapipe_pose import _require_cv2
 from baseball_pose.pose.schema import pose_score
@@ -67,11 +68,20 @@ def build_pose3d_plan(
 def lift_pose_sequence(plan: Pose3DPlan, clip: ClipMetadata, config: RuntimeConfig) -> int:
     """Execute a real 3D backend for supported source conditions."""
 
+    pose3d_config = resolve_pose3d_config(config.raw, clip.clip_id)
+    if plan.backend in {"external_video_hmr", "gvhmr", "wham"}:
+        records = _lift_external_video_hmr(plan, clip, config, pose3d_config)
+        if plan.input_pose_path.exists():
+            records = _gate_pose3d_with_2d_prior(
+                records,
+                pose2d_path=plan.input_pose_path,
+                pose3d_config=pose3d_config,
+            )
+        write_pose3d_records(plan.output_pose3d_path, records)
+        return len(records)
+
     if plan.backend != "mediapipe_world":
-        raise NotImplementedError(
-            "The current real 3D backend is mediapipe_world. "
-            f"Unsupported configured backend: {plan.backend}"
-        )
+        raise NotImplementedError(f"Unsupported configured 3D backend: {plan.backend}")
     if plan.source_condition_id not in {"baseline_raw", "image_center_motion_grabcut_pose"}:
         raise NotImplementedError(
             "The first real 3D backend currently supports only baseline_raw and "
@@ -104,11 +114,88 @@ def lift_pose_sequence(plan: Pose3DPlan, clip: ClipMetadata, config: RuntimeConf
         records = _gate_pose3d_with_2d_prior(
             records,
             pose2d_path=plan.input_pose_path,
-            pose3d_config=resolve_pose3d_config(config.raw, clip.clip_id),
+            pose3d_config=pose3d_config,
         )
 
     write_pose3d_records(plan.output_pose3d_path, records)
     return len(records)
+
+
+def _lift_external_video_hmr(
+    plan: Pose3DPlan,
+    clip: ClipMetadata,
+    config: RuntimeConfig,
+    pose3d_config: dict[str, object],
+):
+    if not plan.input_frames_path.exists():
+        raise FileNotFoundError(
+            f"External 3D import requires existing sampled frames for {plan.source_condition_id}: "
+            f"{plan.input_frames_path}"
+        )
+    result_path = _external_video_hmr_result_path(
+        pose3d_config,
+        config=config,
+        clip_id=clip.clip_id,
+        input_condition_id=plan.input_condition_id,
+        source_condition_id=plan.source_condition_id,
+        output_condition_id=plan.output_condition_id,
+        backend=plan.backend,
+    )
+    return read_external_video_hmr_records(
+        result_path,
+        clip_id=clip.clip_id,
+        condition_id=plan.output_condition_id,
+        frames=read_frame_records(plan.input_frames_path),
+        backend_name=plan.backend,
+        scale_mode=str(pose3d_config.get("external_scale_mode", "external_video_hmr")),
+        joint_names=_string_list(pose3d_config.get("external_joint_names")),
+        joint_name_map=_string_map(pose3d_config.get("external_joint_name_map")),
+    )
+
+
+def _external_video_hmr_result_path(
+    pose3d_config: dict[str, object],
+    *,
+    config: RuntimeConfig,
+    clip_id: str,
+    input_condition_id: str,
+    source_condition_id: str,
+    output_condition_id: str,
+    backend: str,
+) -> Path:
+    template = str(
+        pose3d_config.get(
+            "external_result_path",
+            "{data_dir}/external_pose3d/{backend}/{clip_id}.csv",
+        )
+    )
+    return Path(
+        template.format(
+            data_dir=config.data_dir,
+            output_dir=config.output_dir,
+            clip_id=clip_id,
+            input_condition_id=input_condition_id,
+            source_condition_id=source_condition_id,
+            output_condition_id=output_condition_id,
+            backend=backend,
+        )
+    )
+
+
+def _string_list(value: object) -> list[str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError("pose3d.external_joint_names must be a list.")
+    return [str(item) for item in value]
+
+
+def _string_map(value: object) -> dict[str, str]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("pose3d.external_joint_name_map must be a mapping.")
+    return {str(key): str(mapped) for key, mapped in value.items()}
 
 
 def lift_pose_sequence_placeholder(plan: Pose3DPlan) -> None:
