@@ -105,7 +105,7 @@ completion:
     mid_limb: 6
     distal: 8
   imputed_confidence: 0.62
-  rescue_low_confidence: true
+  rescue_low_confidence: false
   rescue_min_confidence: 0.03
   rescue_temporal_only_min_confidence: 0.30
   rescue_limb_tolerance_ratio: 0.85
