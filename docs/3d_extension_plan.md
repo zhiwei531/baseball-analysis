@@ -242,6 +242,31 @@ Expected external result location:
 data_full/suzhou_rtmpose_halpe26_test/external_pose3d/gvhmr/{clip_id}.csv
 ```
 
+For one Suzhou clip, the intended handoff is:
+
+```bash
+# Run from the GVHMR environment.
+cd external/GVHMR
+python tools/demo/demo.py \
+  --video ../../../baseball-dataset-suzhou/IMG_8084.MOV \
+  --output_root ../../outputs_full/gvhmr_suzhou_raw \
+  -s
+
+cd ../..
+python scripts/export_gvhmr_joints.py \
+  --gvhmr-root external/GVHMR \
+  --result outputs_full/gvhmr_suzhou_raw/IMG_8084/hmr4d_results.pt \
+  --output data_full/suzhou_rtmpose_halpe26_test/external_pose3d/gvhmr/suzhou_img_8084.csv \
+  --clip-id suzhou_img_8084 \
+  --face-z
+
+python -m baseball_pose.cli \
+  --config configs/experiments/gvhmr_suzhou_test.yaml \
+  lift-pose-3d \
+  --clip-id suzhou_img_8084 \
+  --condition image_center_motion_grabcut_pose_complete_smooth
+```
+
 ### Baseline Backends
 
 MediaPipe world landmarks remain useful as a lightweight baseline. MotionBERT
