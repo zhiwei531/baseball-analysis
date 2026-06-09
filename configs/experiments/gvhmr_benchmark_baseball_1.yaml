@@ -1,0 +1,24 @@
+extends: rtmpose_benchmark_baseball_1.yaml
+
+pose3d:
+  enabled: true
+  backend: gvhmr
+  root_joint: pelvis_center
+  normalize_scale: true
+  min_valid_joints: 8
+  gate_with_2d_prior: false
+  confidence_threshold: 0.5
+  confidence_thresholds:
+    default: 0.5
+    torso: 0.45
+    mid_limb: 0.50
+    distal: 0.60
+  external_scale_mode: smpl_world
+  external_result_path: "{data_dir}/external_pose3d/{backend}/{clip_id}.csv"
+
+experiments:
+  name: gvhmr_benchmark_baseball_1
+  default_conditions:
+    - image_center_motion_grabcut_pose_complete_smooth
+  default_3d_conditions:
+    - image_center_motion_grabcut_pose_complete_smooth_3d
