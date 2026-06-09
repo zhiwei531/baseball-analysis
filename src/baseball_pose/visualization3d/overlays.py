@@ -29,6 +29,32 @@ PROJECTIONS = (
     ProjectionSpec(name="Top", axes=("x_3d", "z_3d")),
 )
 
+SMPL24_CONNECTIONS = (
+    ("hip", "spine1"),
+    ("spine1", "spine2"),
+    ("spine2", "spine3"),
+    ("spine3", "neck"),
+    ("neck", "head"),
+    ("hip", "left_hip"),
+    ("left_hip", "left_knee"),
+    ("left_knee", "left_ankle"),
+    ("left_ankle", "left_foot"),
+    ("hip", "right_hip"),
+    ("right_hip", "right_knee"),
+    ("right_knee", "right_ankle"),
+    ("right_ankle", "right_foot"),
+    ("spine3", "left_collar"),
+    ("left_collar", "left_shoulder"),
+    ("left_shoulder", "left_elbow"),
+    ("left_elbow", "left_wrist"),
+    ("left_wrist", "left_hand"),
+    ("spine3", "right_collar"),
+    ("right_collar", "right_shoulder"),
+    ("right_shoulder", "right_elbow"),
+    ("right_elbow", "right_wrist"),
+    ("right_wrist", "right_hand"),
+)
+
 
 def draw_pose3d_preview(
     source_image: Any,
@@ -100,10 +126,20 @@ def _draw_projection_panel(
     x0, y0, w, h = panel
     cv2.rectangle(canvas, (x0, y0), (x0 + w, y0 + h), (210, 210, 210), 2)
     cv2.putText(canvas, spec.name, (x0 + 12, y0 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (40, 40, 40), 2, cv2.LINE_AA)
+    cv2.putText(
+        canvas,
+        f"SMPL24 valid {len(points)}/24",
+        (x0 + w - 190, y0 + 24),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (90, 90, 90),
+        1,
+        cv2.LINE_AA,
+    )
 
     bounds = None if context is None else context.bounds_by_projection.get(spec.name)
     projected = _project_points(points, spec.axes, x0 + 26, y0 + 36, w - 52, h - 52, bounds=bounds)
-    for start, end in POSE_CONNECTIONS:
+    for start, end in _connections_for_points(projected):
         if start in projected and end in projected:
             cv2.line(canvas, projected[start], projected[end], (36, 180, 255), 2, cv2.LINE_AA)
     for joint_name, pt in projected.items():
@@ -112,6 +148,9 @@ def _draw_projection_panel(
 
 
 def _pelvis_center(points: dict[str, Pose3DRecord]) -> tuple[float, float, float]:
+    root = points.get("hip")
+    if root:
+        return (root.x_3d, root.y_3d, root.z_3d)
     left = points.get("left_hip")
     right = points.get("right_hip")
     if left and right:
@@ -167,7 +206,7 @@ def _project_points(
         min_x, max_x, min_y, max_y = bounds
     range_x = max(max_x - min_x, 1e-5)
     range_y = max(max_y - min_y, 1e-5)
-    scale = min(w / range_x, h / range_y) * 0.82
+    scale = min(w / range_x, h / range_y) * 1.05
     center_x = (min_x + max_x) / 2
     center_y = (min_y + max_y) / 2
     mapped: dict[str, tuple[int, int]] = {}
@@ -190,7 +229,7 @@ def _is_finite_record(record: Pose3DRecord) -> bool:
 
 
 def build_projection_context(records_by_frame: dict[int, list[Pose3DRecord]]) -> ProjectionContext | None:
-    normalized_frames: list[dict[str, tuple[float, float, float]]] = []
+    centered_frames: list[dict[str, tuple[float, float, float]]] = []
     body_scales: list[float] = []
     for frame_records in records_by_frame.values():
         points = {
@@ -203,8 +242,8 @@ def build_projection_context(records_by_frame: dict[int, list[Pose3DRecord]]) ->
         pelvis_center = _pelvis_center(points)
         body_scale = _body_scale(points)
         body_scales.append(body_scale)
-        normalized_frames.append(_normalize_points(points, pelvis_center, body_scale))
-    if not normalized_frames:
+        centered_frames.append(_normalize_points(points, pelvis_center, 1.0))
+    if not centered_frames:
         return None
 
     stable_scale = _median(body_scales, fallback=1.0)
@@ -214,10 +253,10 @@ def build_projection_context(records_by_frame: dict[int, list[Pose3DRecord]]) ->
         ys: list[float] = []
         ax0 = {"x_3d": 0, "y_3d": 1, "z_3d": 2}[spec.axes[0]]
         ax1 = {"x_3d": 0, "y_3d": 1, "z_3d": 2}[spec.axes[1]]
-        for points in normalized_frames:
+        for points in centered_frames:
             for values in points.values():
-                xs.append(values[ax0])
-                ys.append(values[ax1])
+                xs.append(values[ax0] / stable_scale)
+                ys.append(values[ax1] / stable_scale)
         if not xs or not ys:
             continue
         bounds_by_projection[spec.name] = _robust_bounds(xs, ys)
@@ -258,6 +297,14 @@ def _body_scale(points: dict[str, Pose3DRecord]) -> float:
             )
         )
     return _median(candidates, fallback=1.0)
+
+
+def _connections_for_points(points: dict[str, tuple[int, int]]):
+    joint_names = set(points)
+    smpl_hits = sum(1 for joint in ("spine1", "spine2", "spine3", "left_collar", "right_collar") if joint in joint_names)
+    if smpl_hits >= 2:
+        return SMPL24_CONNECTIONS
+    return POSE_CONNECTIONS
 
 
 def _median(values: list[float], *, fallback: float) -> float:
