@@ -21,6 +21,7 @@ class ProjectionSpec:
 class ProjectionContext:
     body_scale: float
     bounds_by_projection: dict[str, tuple[float, float, float, float]]
+    iso_bounds: tuple[float, float, float, float] | None = None
 
 
 PROJECTIONS = (
@@ -62,7 +63,7 @@ def draw_pose3d_preview(
     *,
     context: ProjectionContext | None = None,
 ) -> Any:
-    """Draw original frame plus three orthographic 3D skeleton projections."""
+    """Draw original frame plus one 3D-style skeleton coordinate view."""
 
     cv2 = _require_cv2()
     import numpy as np
@@ -88,9 +89,7 @@ def draw_pose3d_preview(
         body_scale if context is None else context.body_scale,
         y_axis_sign=y_axis_sign,
     )
-    for idx, spec in enumerate(PROJECTIONS):
-        panel = _panel_rect(idx)
-        _draw_projection_panel(canvas, panel, spec, normalized, context)
+    _draw_spatial_panel(canvas, _spatial_panel_rect(), normalized, context)
 
     return canvas
 
@@ -112,13 +111,17 @@ def _draw_source_frame(canvas, source_image) -> None:
 
 def _draw_projection_header(canvas) -> None:
     cv2 = _require_cv2()
-    cv2.putText(canvas, "3D Skeleton Views", (690, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (20, 20, 20), 2, cv2.LINE_AA)
+    cv2.putText(canvas, "3D Skeleton Space", (690, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (20, 20, 20), 2, cv2.LINE_AA)
 
 
 def _panel_rect(index: int) -> tuple[int, int, int, int]:
     x = 660
     y = 60 + index * 210
     return (x, y, 560, 180)
+
+
+def _spatial_panel_rect() -> tuple[int, int, int, int]:
+    return (660, 60, 560, 620)
 
 
 def _draw_projection_panel(
@@ -151,6 +154,51 @@ def _draw_projection_panel(
     for joint_name, pt in projected.items():
         color = (80, 220, 120) if "wrist" not in joint_name else (80, 120, 255)
         cv2.circle(canvas, pt, 4, color, -1, cv2.LINE_AA)
+
+
+def _draw_spatial_panel(
+    canvas,
+    panel,
+    points: dict[str, tuple[float, float, float]],
+    context: ProjectionContext | None,
+) -> None:
+    cv2 = _require_cv2()
+    x0, y0, w, h = panel
+    cv2.rectangle(canvas, (x0, y0), (x0 + w, y0 + h), (210, 210, 210), 2)
+    cv2.putText(canvas, "Isometric", (x0 + 14, y0 + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (40, 40, 40), 2, cv2.LINE_AA)
+    cv2.putText(
+        canvas,
+        f"SMPL24 valid {len(points)}/24",
+        (x0 + w - 190, y0 + 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (90, 90, 90),
+        1,
+        cv2.LINE_AA,
+    )
+
+    bounds = context.iso_bounds if context is not None and context.iso_bounds is not None else _isometric_bounds(points)
+    projected = _project_isometric_points(points, x0 + 46, y0 + 58, w - 92, h - 96, bounds=bounds)
+    scale = _isometric_pixel_scale(bounds, w - 92, h - 96)
+    center = _isometric_screen_center(bounds, x0 + 46, y0 + 58, w - 92, h - 96)
+    _draw_isometric_grid(canvas, center, scale)
+    _draw_isometric_axes(canvas, center, scale)
+
+    ordered_connections = sorted(
+        _connections_for_points(projected),
+        key=lambda pair: _connection_depth(points, pair),
+        reverse=True,
+    )
+    for start, end in ordered_connections:
+        if start in projected and end in projected:
+            cv2.line(canvas, projected[start], projected[end], (36, 180, 255), 3, cv2.LINE_AA)
+    for joint_name, pt in sorted(projected.items(), key=lambda item: points[item[0]][2], reverse=True):
+        color = (80, 220, 120)
+        if "wrist" in joint_name or "hand" in joint_name:
+            color = (80, 120, 255)
+        elif joint_name in {"hip", "neck", "head"}:
+            color = (80, 200, 80)
+        cv2.circle(canvas, pt, 5, color, -1, cv2.LINE_AA)
 
 
 def _pelvis_center(points: dict[str, Pose3DRecord]) -> tuple[float, float, float]:
@@ -225,6 +273,117 @@ def _project_points(
     return mapped
 
 
+def _project_isometric_points(
+    points: dict[str, tuple[float, float, float]],
+    x0: int,
+    y0: int,
+    w: int,
+    h: int,
+    *,
+    bounds: tuple[float, float, float, float],
+) -> dict[str, tuple[int, int]]:
+    scale = _isometric_pixel_scale(bounds, w, h)
+    center_x, center_y = _isometric_screen_center(bounds, x0, y0, w, h)
+    mapped: dict[str, tuple[int, int]] = {}
+    for joint_name, values in points.items():
+        iso_x, iso_y = _isometric_project(values)
+        mapped[joint_name] = (
+            int(center_x + iso_x * scale),
+            int(center_y - iso_y * scale),
+        )
+    return mapped
+
+
+def _isometric_project(values: tuple[float, float, float]) -> tuple[float, float]:
+    x, y, z = values
+    return (x - 0.68 * z, y - 0.36 * z)
+
+
+def _isometric_bounds(points: dict[str, tuple[float, float, float]]) -> tuple[float, float, float, float]:
+    xs: list[float] = []
+    ys: list[float] = []
+    for values in points.values():
+        iso_x, iso_y = _isometric_project(values)
+        xs.append(iso_x)
+        ys.append(iso_y)
+    return _robust_bounds(xs, ys)
+
+
+def _isometric_pixel_scale(bounds: tuple[float, float, float, float], w: int, h: int) -> float:
+    min_x, max_x, min_y, max_y = bounds
+    range_x = max(max_x - min_x, 1e-5)
+    range_y = max(max_y - min_y, 1e-5)
+    return min(w / range_x, h / range_y) * 0.86
+
+
+def _isometric_screen_center(
+    bounds: tuple[float, float, float, float],
+    x0: int,
+    y0: int,
+    w: int,
+    h: int,
+) -> tuple[float, float]:
+    min_x, max_x, min_y, max_y = bounds
+    return (
+        x0 + w / 2 - ((min_x + max_x) / 2) * _isometric_pixel_scale(bounds, w, h),
+        y0 + h / 2 + ((min_y + max_y) / 2) * _isometric_pixel_scale(bounds, w, h),
+    )
+
+
+def _draw_isometric_axes(canvas, origin: tuple[float, float], scale: float) -> None:
+    cv2 = _require_cv2()
+    axis_length = 0.9
+    axes = (
+        ("X", (axis_length, 0.0, 0.0), (70, 70, 220)),
+        ("Y", (0.0, axis_length, 0.0), (70, 170, 70)),
+        ("Z", (0.0, 0.0, axis_length), (220, 110, 70)),
+    )
+    ox, oy = origin
+    for label, vector, color in axes:
+        iso_x, iso_y = _isometric_project(vector)
+        end = (int(ox + iso_x * scale), int(oy - iso_y * scale))
+        cv2.arrowedLine(canvas, (int(ox), int(oy)), end, color, 2, cv2.LINE_AA, tipLength=0.12)
+        cv2.putText(canvas, label, (end[0] + 6, end[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2, cv2.LINE_AA)
+
+
+def _draw_isometric_grid(canvas, origin: tuple[float, float], scale: float) -> None:
+    cv2 = _require_cv2()
+    ox, oy = origin
+    grid_color = (230, 230, 230)
+    extent = 1.6
+    step = 0.4
+    values = [round(-extent + idx * step, 2) for idx in range(int((extent * 2) / step) + 1)]
+    for x in values:
+        start = _isometric_project((x, 0.0, -extent))
+        end = _isometric_project((x, 0.0, extent))
+        cv2.line(
+            canvas,
+            (int(ox + start[0] * scale), int(oy - start[1] * scale)),
+            (int(ox + end[0] * scale), int(oy - end[1] * scale)),
+            grid_color,
+            1,
+            cv2.LINE_AA,
+        )
+    for z in values:
+        start = _isometric_project((-extent, 0.0, z))
+        end = _isometric_project((extent, 0.0, z))
+        cv2.line(
+            canvas,
+            (int(ox + start[0] * scale), int(oy - start[1] * scale)),
+            (int(ox + end[0] * scale), int(oy - end[1] * scale)),
+            grid_color,
+            1,
+            cv2.LINE_AA,
+        )
+
+
+def _connection_depth(points: dict[str, tuple[float, float, float]], pair: tuple[str, str]) -> float:
+    start, end = pair
+    if start not in points or end not in points:
+        return 0.0
+    return (points[start][2] + points[end][2]) / 2
+
+
 def _is_finite_record(record: Pose3DRecord) -> bool:
     return (
         record.x_3d is not None
@@ -257,6 +416,8 @@ def build_projection_context(records_by_frame: dict[int, list[Pose3DRecord]]) ->
 
     stable_scale = _median(body_scales, fallback=1.0)
     bounds_by_projection: dict[str, tuple[float, float, float, float]] = {}
+    iso_xs: list[float] = []
+    iso_ys: list[float] = []
     for spec in PROJECTIONS:
         xs: list[float] = []
         ys: list[float] = []
@@ -269,7 +430,15 @@ def build_projection_context(records_by_frame: dict[int, list[Pose3DRecord]]) ->
         if not xs or not ys:
             continue
         bounds_by_projection[spec.name] = _robust_bounds(xs, ys)
-    return ProjectionContext(body_scale=stable_scale, bounds_by_projection=bounds_by_projection)
+    for points in centered_frames:
+        for values in points.values():
+            iso_x, iso_y = _isometric_project(
+                (values[0] / stable_scale, values[1] / stable_scale, values[2] / stable_scale)
+            )
+            iso_xs.append(iso_x)
+            iso_ys.append(iso_y)
+    iso_bounds = _robust_bounds(iso_xs, iso_ys) if iso_xs and iso_ys else None
+    return ProjectionContext(body_scale=stable_scale, bounds_by_projection=bounds_by_projection, iso_bounds=iso_bounds)
 
 
 def _body_scale(points: dict[str, Pose3DRecord]) -> float:
