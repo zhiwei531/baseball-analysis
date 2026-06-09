@@ -56,6 +56,14 @@ SMPL24_CONNECTIONS = (
     ("right_wrist", "right_hand"),
 )
 
+TORSO_COLOR = (120, 110, 180)
+HEAD_COLOR = (80, 180, 80)
+LEFT_ARM_COLOR = (230, 130, 40)
+RIGHT_ARM_COLOR = (70, 70, 230)
+LEFT_LEG_COLOR = (220, 170, 70)
+RIGHT_LEG_COLOR = (70, 160, 240)
+CENTER_JOINT_COLOR = (90, 200, 90)
+
 
 def draw_pose3d_preview(
     source_image: Any,
@@ -183,6 +191,7 @@ def _draw_spatial_panel(
     center = _isometric_screen_center(bounds, x0 + 46, y0 + 58, w - 92, h - 96)
     _draw_isometric_grid(canvas, center, scale)
     _draw_isometric_axes(canvas, (x0 + w - 120, y0 + h - 76), scale * 0.38)
+    _draw_skeleton_legend(canvas, x0 + 18, y0 + h - 112)
 
     ordered_connections = sorted(
         _connections_for_points(projected),
@@ -191,14 +200,9 @@ def _draw_spatial_panel(
     )
     for start, end in ordered_connections:
         if start in projected and end in projected:
-            cv2.line(canvas, projected[start], projected[end], (36, 180, 255), 3, cv2.LINE_AA)
+            cv2.line(canvas, projected[start], projected[end], _connection_color(start, end), 3, cv2.LINE_AA)
     for joint_name, pt in sorted(projected.items(), key=lambda item: points[item[0]][2], reverse=True):
-        color = (80, 220, 120)
-        if "wrist" in joint_name or "hand" in joint_name:
-            color = (80, 120, 255)
-        elif joint_name in {"hip", "neck", "head"}:
-            color = (80, 200, 80)
-        cv2.circle(canvas, pt, 5, color, -1, cv2.LINE_AA)
+        cv2.circle(canvas, pt, 5, _joint_color(joint_name), -1, cv2.LINE_AA)
 
 
 def _pelvis_center(points: dict[str, Pose3DRecord]) -> tuple[float, float, float]:
@@ -347,6 +351,20 @@ def _draw_isometric_axes(canvas, origin: tuple[float, float], scale: float) -> N
         cv2.putText(canvas, label, (end[0] + 6, end[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2, cv2.LINE_AA)
 
 
+def _draw_skeleton_legend(canvas, x: int, y: int) -> None:
+    cv2 = _require_cv2()
+    items = (
+        ("L arm", LEFT_ARM_COLOR),
+        ("R arm", RIGHT_ARM_COLOR),
+        ("L leg", LEFT_LEG_COLOR),
+        ("R leg", RIGHT_LEG_COLOR),
+    )
+    for index, (label, color) in enumerate(items):
+        y_pos = y + index * 18
+        cv2.line(canvas, (x, y_pos - 4), (x + 24, y_pos - 4), color, 3, cv2.LINE_AA)
+        cv2.putText(canvas, label, (x + 32, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (75, 75, 75), 1, cv2.LINE_AA)
+
+
 def _draw_isometric_grid(canvas, origin: tuple[float, float], scale: float) -> None:
     cv2 = _require_cv2()
     ox, oy = origin
@@ -405,6 +423,37 @@ def _connection_depth(points: dict[str, tuple[float, float, float]], pair: tuple
     if start not in points or end not in points:
         return 0.0
     return (points[start][2] + points[end][2]) / 2
+
+
+def _connection_color(start: str, end: str) -> tuple[int, int, int]:
+    joint_names = {start, end}
+    if any(joint.startswith("left_") for joint in joint_names):
+        if joint_names & {"left_hip", "left_knee", "left_ankle", "left_foot"}:
+            return LEFT_LEG_COLOR
+        return LEFT_ARM_COLOR
+    if any(joint.startswith("right_") for joint in joint_names):
+        if joint_names & {"right_hip", "right_knee", "right_ankle", "right_foot"}:
+            return RIGHT_LEG_COLOR
+        return RIGHT_ARM_COLOR
+    if joint_names & {"head", "neck"}:
+        return HEAD_COLOR
+    return TORSO_COLOR
+
+
+def _joint_color(joint_name: str) -> tuple[int, int, int]:
+    if joint_name in {"hip", "spine1", "spine2", "spine3"}:
+        return CENTER_JOINT_COLOR
+    if joint_name in {"neck", "head"}:
+        return HEAD_COLOR
+    if joint_name.startswith("left_"):
+        if joint_name in {"left_hip", "left_knee", "left_ankle", "left_foot"}:
+            return LEFT_LEG_COLOR
+        return LEFT_ARM_COLOR
+    if joint_name.startswith("right_"):
+        if joint_name in {"right_hip", "right_knee", "right_ankle", "right_foot"}:
+            return RIGHT_LEG_COLOR
+        return RIGHT_ARM_COLOR
+    return TORSO_COLOR
 
 
 def _is_finite_record(record: Pose3DRecord) -> bool:
