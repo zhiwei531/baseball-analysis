@@ -182,7 +182,7 @@ def _draw_spatial_panel(
     scale = _isometric_pixel_scale(bounds, w - 92, h - 96)
     center = _isometric_screen_center(bounds, x0 + 46, y0 + 58, w - 92, h - 96)
     _draw_isometric_grid(canvas, center, scale)
-    _draw_isometric_axes(canvas, center, scale)
+    _draw_isometric_axes(canvas, (x0 + 92, y0 + h - 86), scale * 0.42)
 
     ordered_connections = sorted(
         _connections_for_points(projected),
@@ -313,7 +313,7 @@ def _isometric_pixel_scale(bounds: tuple[float, float, float, float], w: int, h:
     min_x, max_x, min_y, max_y = bounds
     range_x = max(max_x - min_x, 1e-5)
     range_y = max(max_y - min_y, 1e-5)
-    return min(w / range_x, h / range_y) * 0.86
+    return min(w / range_x, h / range_y) * 0.68
 
 
 def _isometric_screen_center(
