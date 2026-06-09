@@ -245,17 +245,25 @@ data_full/suzhou_rtmpose_halpe26_test/external_pose3d/gvhmr/{clip_id}.csv
 For one Suzhou clip, the intended handoff is:
 
 ```bash
-# Run from the GVHMR environment.
+# Build a GVHMR input from the project-sampled frames. Do not pass the raw
+# iPhone MOV directly; rewriting MOV can drop rotation/display metadata.
+python scripts/build_gvhmr_input_from_frames.py \
+  --frames-csv data_full/suzhou_rtmpose_halpe26_test/interim/frames/suzhou_img_8084/image_center_motion_grabcut_pose.csv \
+  --output outputs_full/gvhmr_suzhou_inputs/suzhou_img_8084_from_2d_frames.mp4 \
+  --fps 30
+
 cd external/GVHMR
 python tools/demo/demo.py \
-  --video ../../../baseball-dataset-suzhou/IMG_8084.MOV \
-  --output_root ../../outputs_full/gvhmr_suzhou_raw \
-  -s
+  --video ../../outputs_full/gvhmr_suzhou_inputs/suzhou_img_8084_from_2d_frames.mp4 \
+  --output_root ../../outputs_full/gvhmr_suzhou_from_2d_frames \
+  -s \
+  --cpu \
+  --skip_render
 
 cd ../..
 python scripts/export_gvhmr_joints.py \
   --gvhmr-root external/GVHMR \
-  --result outputs_full/gvhmr_suzhou_raw/IMG_8084/hmr4d_results.pt \
+  --result outputs_full/gvhmr_suzhou_from_2d_frames/suzhou_img_8084_from_2d_frames/hmr4d_results.pt \
   --output data_full/suzhou_rtmpose_halpe26_test/external_pose3d/gvhmr/suzhou_img_8084.csv \
   --clip-id suzhou_img_8084 \
   --face-z
