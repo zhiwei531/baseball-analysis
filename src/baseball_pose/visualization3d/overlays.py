@@ -182,7 +182,7 @@ def _draw_spatial_panel(
     scale = _isometric_pixel_scale(bounds, w - 92, h - 96)
     center = _isometric_screen_center(bounds, x0 + 46, y0 + 58, w - 92, h - 96)
     _draw_isometric_grid(canvas, center, scale)
-    _draw_isometric_axes(canvas, (x0 + 92, y0 + h - 86), scale * 0.42)
+    _draw_isometric_axes(canvas, (x0 + w - 120, y0 + h - 76), scale * 0.38)
 
     ordered_connections = sorted(
         _connections_for_points(projected),
@@ -349,32 +349,51 @@ def _draw_isometric_axes(canvas, origin: tuple[float, float], scale: float) -> N
 def _draw_isometric_grid(canvas, origin: tuple[float, float], scale: float) -> None:
     cv2 = _require_cv2()
     ox, oy = origin
-    grid_color = (230, 230, 230)
+    grid_color = (218, 218, 218)
+    edge_color = (190, 190, 190)
     extent = 1.6
     step = 0.4
     values = [round(-extent + idx * step, 2) for idx in range(int((extent * 2) / step) + 1)]
+
+    def map_point(point: tuple[float, float, float]) -> tuple[int, int]:
+        iso_x, iso_y = _isometric_project(point)
+        return (int(ox + iso_x * scale), int(oy - iso_y * scale))
+
+    def line(start: tuple[float, float, float], end: tuple[float, float, float], color, thickness: int = 1) -> None:
+        cv2.line(canvas, map_point(start), map_point(end), color, thickness, cv2.LINE_AA)
+
+    y_floor = -2.0
+    y_max = 1.8
     for x in values:
-        start = _isometric_project((x, 0.0, -extent))
-        end = _isometric_project((x, 0.0, extent))
-        cv2.line(
-            canvas,
-            (int(ox + start[0] * scale), int(oy - start[1] * scale)),
-            (int(ox + end[0] * scale), int(oy - end[1] * scale)),
-            grid_color,
-            1,
-            cv2.LINE_AA,
-        )
+        line((x, y_floor, -extent), (x, y_floor, extent), grid_color)
+        line((x, y_floor, extent), (x, y_max, extent), grid_color)
     for z in values:
-        start = _isometric_project((-extent, 0.0, z))
-        end = _isometric_project((extent, 0.0, z))
-        cv2.line(
-            canvas,
-            (int(ox + start[0] * scale), int(oy - start[1] * scale)),
-            (int(ox + end[0] * scale), int(oy - end[1] * scale)),
-            grid_color,
-            1,
-            cv2.LINE_AA,
-        )
+        line((-extent, y_floor, z), (extent, y_floor, z), grid_color)
+        line((-extent, y_floor, z), (-extent, y_max, z), grid_color)
+    y_values = [round(y_floor + idx * step, 2) for idx in range(int((y_max - y_floor) / step) + 1)]
+    for y in y_values:
+        if y < y_floor or y > y_max:
+            continue
+        line((-extent, y, extent), (extent, y, extent), grid_color)
+        line((-extent, y, -extent), (-extent, y, extent), grid_color)
+
+    corners = (
+        (-extent, y_floor, -extent),
+        (extent, y_floor, -extent),
+        (extent, y_floor, extent),
+        (-extent, y_floor, extent),
+    )
+    for start, end in zip(corners, corners[1:] + corners[:1]):
+        line(start, end, edge_color, 1)
+    line((-extent, y_floor, extent), (-extent, y_max, extent), edge_color, 1)
+    line((extent, y_floor, extent), (extent, y_max, extent), edge_color, 1)
+    line((-extent, y_max, extent), (extent, y_max, extent), edge_color, 1)
+    line((-extent, y_floor, -extent), (-extent, y_max, -extent), edge_color, 1)
+    line((-extent, y_max, -extent), (-extent, y_max, extent), edge_color, 1)
+
+    cv2.putText(canvas, "X", map_point((extent + 0.18, y_floor, 0.0)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (130, 130, 130), 1, cv2.LINE_AA)
+    cv2.putText(canvas, "Y", map_point((-extent, y_max + 0.15, -extent)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (130, 130, 130), 1, cv2.LINE_AA)
+    cv2.putText(canvas, "Z", map_point((-extent, y_floor, extent + 0.18)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (130, 130, 130), 1, cv2.LINE_AA)
 
 
 def _connection_depth(points: dict[str, tuple[float, float, float]], pair: tuple[str, str]) -> float:
