@@ -127,14 +127,13 @@ def _shared_body_metrics(
     hip_sep = _at(frames, event_frame, _hip_shoulder_sep)
     lead_knee = _joint_angle(frames[landing_frame], f"{lead_side}_hip", f"{lead_side}_knee", f"{lead_side}_ankle")
     trunk = _at(frames, event_frame, _trunk_tilt)
-    transfer = _weight_transfer(frames, event_frame)
     head_stability = _head_stability(frames)
     return [
         _metric(clip_id, action_type, "Hip-Shoulder Sep", hip_sep, "deg", "available", "3d_pose", event_frame, "SMPL24 hip/shoulder lines projected to horizontal plane."),
         _metric(clip_id, action_type, "Lead Knee Angle", lead_knee, "deg", "available", "3d_pose", landing_frame, f"Lead side inferred as {lead_side}; value is anatomical knee angle, not flexion-only label."),
         _metric(clip_id, action_type, "Trunk Tilt", trunk, "deg", "available", "3d_pose", event_frame, "Torso vector relative to reconstructed vertical axis."),
-        _metric(clip_id, action_type, "Weight Transfer", transfer, "%", "proxy", "3d_pose", event_frame, "COM proxy is hip center shift along inferred stride direction."),
-        _metric(clip_id, action_type, "Head Stability", head_stability, "%", "proxy", "3d_pose", event_frame, "Score from head drift perpendicular to stride line; no SlyMask reference scale."),
+        _unavailable(clip_id, action_type, "Weight Transfer", "Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer."),
+        _metric(clip_id, action_type, "Head Stability", head_stability, "%", "proxy", "3d_pose", event_frame, "Root-relative head drift score; no SlyMask reference scale."),
         MetricRow(clip_id, action_type, "Dominant Side", dominant_side, "", "proxy", "3d_pose", str(event_frame), "Inferred from larger hand peak speed."),
         MetricRow(clip_id, action_type, "Lead Side", lead_side, "", "proxy", "3d_pose", str(landing_frame), "Inferred from foot position along stride direction."),
     ]
@@ -357,8 +356,8 @@ def _head_stability(frames: dict[int, dict[str, np.ndarray]]) -> float | None:
     perpendicular = np.array([-direction[1], direction[0]])
     heads = []
     for pts in frames.values():
-        if "head" in pts:
-            heads.append(_project_horizontal(pts["head"]))
+        if "head" in pts and "hip" in pts:
+            heads.append(_project_horizontal(pts["head"] - pts["hip"]))
     if len(heads) < 2:
         return None
     projected = [float(np.dot(pt, perpendicular)) for pt in heads]
@@ -581,7 +580,7 @@ def _unavailable(clip_id: str, action_type: str, name: str, reason: str) -> Metr
 def _write_csv(path: Path, rows: Iterable[MetricRow]) -> None:
     fieldnames = list(MetricRow.__dataclass_fields__)
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow(row.__dict__)
@@ -635,7 +634,7 @@ def _write_markdown(path: Path, rows: list[MetricRow]) -> None:
         "",
         "### Usable only as proxy",
         "",
-        "- Weight Transfer / Head Stability: these rely on inferred stride direction and a simple hip-center/head-drift model. They are useful for automation experiments, but should not be treated as validated coaching scores yet.",
+        "- Head Stability: uses root-relative head drift against an inferred stride direction. It is useful for automation experiments, but should not be treated as a validated coaching score yet.",
         "- Stride Angle / Foot Direction: the outputs are geometric, but landing-frame and toe-direction inference are approximate. SMPL24 has a foot marker, not a real toe orientation model.",
         "- Swing Speed / Estimated Bat Speed / Attack Angle: current values come from the 2D object tracker. They are useful for debugging bat tracking, but without calibration they cannot be reported as km/h or true 3D attack angle.",
         "- Wrist Snap / Fingertip Speed: SMPL24 has wrist/hand joints but no fingertip joints, so these are hand/wrist proxies only.",
@@ -644,9 +643,15 @@ def _write_markdown(path: Path, rows: list[MetricRow]) -> None:
         "",
         "- SlyMask-style percentiles and reliability percentages cannot be reproduced from our pipeline alone because we do not have their reference population or reliability model.",
         "- Contact Time is unavailable for the current batting benchmark because there is no ball track and no bat-ball impact event detector.",
-        "- Values pinned near 0% or 100% for Weight Transfer should be treated as a warning sign, not as a coaching result. The current COM proxy can saturate when stride direction or event timing is imperfect.",
+        "- Weight Transfer is now marked unavailable. The GVHMR global hip/root track is not a calibrated field-coordinate COM trajectory, so previous 0%/100% values were a calculation-definition problem, not a trustworthy biomechanics finding.",
         "- `benchmark_pitch_vertical_09` has landing-frame 0, so its stride/lead-knee/foot-direction landing metrics are likely not meaningful; the clip starts too late or the automatic landing detector lacks enough pre-landing frames.",
         "- `benchmark_hit_horizontal_06` reports Wrist/Hand Speed near zero at the bat peak-speed frame, which means bat peak and body wrist-speed event are not aligned. That metric is not reliable for this clip without better contact/release event logic.",
+        "",
+        "### Motion-phase handling caveat",
+        "",
+        "- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed after the early preparation portion; batting contact is bat peak-speed frame when a bat track exists; landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.",
+        "- That means preparation or ending frames can still leak into metrics when the clip starts late, ends late, or the object/body peak-speed proxy does not match the real biomechanical event.",
+        "- Phase-dependent metrics should be upgraded with explicit phase classifiers before being used as coaching-grade outputs: front-foot landing, max external rotation/acceleration, release/contact, and follow-through.",
         "",
         "### Concrete suspicious outputs in this run",
         "",
