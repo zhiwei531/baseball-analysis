@@ -26,20 +26,17 @@ Capability boundary: SlyMask-style percentile and reliability scores require a p
 - SlyMask-style percentiles and reliability percentages cannot be reproduced from our pipeline alone because we do not have their reference population or reliability model.
 - Contact Time is unavailable for the current batting benchmark because there is no ball track and no bat-ball impact event detector.
 - Weight Transfer is now marked unavailable. The GVHMR global hip/root track is not a calibrated field-coordinate COM trajectory, so previous 0%/100% values were a calculation-definition problem, not a trustworthy biomechanics finding.
-- `benchmark_hit_horizontal_06` reports Wrist/Hand Speed near zero at the bat peak-speed frame, which means bat peak and body wrist-speed event are not aligned. That metric is not reliable for this clip without better contact/release event logic.
 
 ### Motion-phase handling caveat
 
-- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is normalized bat-speed peak when a bat track exists; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.
+- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is dominant-hand 3D speed peak inside the middle 35%-75% of the clip; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.
 - Range-style body metrics now use the landing-to-event phase window instead of the full clip, so non-batting ending motion such as the running segment in `benchmark_hit_horizontal_06` is not included in Hip Rotation or Head Stability.
 - That means preparation or ending frames can still leak into metrics when the clip starts late, ends late, or the object/body peak-speed proxy does not match the real biomechanical event.
 - Phase-dependent metrics should be upgraded with explicit phase classifiers before being used as coaching-grade outputs: front-foot landing, max external rotation/acceleration, release/contact, and follow-through.
 
 ### Concrete suspicious outputs in this run
 
-- benchmark_hit_vertical_02: Attack Angle is -57.185 deg from image-plane bat tracking; this is not a credible true attack angle.
-- benchmark_hit_horizontal_06: Attack Angle is 164.369 deg from image-plane bat tracking; this is not a credible true attack angle.
-- benchmark_hit_horizontal_06: Wrist/Hand Speed is 0.134 3d_unit/s at bat normalized-speed frame, indicating event mismatch.
+- benchmark_hit_horizontal_06: Attack Angle is -174.757 deg from image-plane bat tracking; this is not a credible true attack angle.
 
 ## benchmark_pitch_vertical_10
 
@@ -87,34 +84,34 @@ Capability boundary: SlyMask-style percentile and reliability scores require a p
 
 | metric | value | unit | status | source | frame | reason |
 |---|---:|---|---|---|---:|---|
-| Hip-Shoulder Sep | 51.075 | deg | available | 3d_pose | 106 | SMPL24 hip/shoulder lines projected to horizontal plane. |
-| Lead Knee Angle | 132.274 | deg | available | 3d_pose | 73 | Lead side inferred as left; value is anatomical knee angle, not flexion-only label. |
-| Trunk Tilt | 22.455 | deg | available | 3d_pose | 106 | Torso vector relative to reconstructed vertical axis. |
+| Hip-Shoulder Sep | 4.238 | deg | available | 3d_pose | 74 | SMPL24 hip/shoulder lines projected to horizontal plane. |
+| Lead Knee Angle | 129.599 | deg | available | 3d_pose | 69 | Lead side inferred as left; value is anatomical knee angle, not flexion-only label. |
+| Trunk Tilt | 15.498 | deg | available | 3d_pose | 74 | Torso vector relative to reconstructed vertical axis. |
 | Weight Transfer | N/A |  | unavailable | none | N/A | Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer. |
-| Head Stability | 97.827 | % | proxy | 3d_pose | 106 | Root-relative head drift score; no SlyMask reference scale. |
-| Dominant Side | right |  | proxy | 3d_pose | 106 | Inferred from larger hand peak speed. |
-| Lead Side | left |  | proxy | 3d_pose | 73 | Inferred from foot position along stride direction. |
-| Swing Speed | 8.041 | norm/s | proxy | object_2d | 106 | SlyMask percentile is unavailable; this is normalized 2D bat speed. |
-| Estimated Bat Speed | 5920.921 | px/s | proxy | object_2d | 106 | No camera calibration/bat scale, so km/h cannot be recovered. |
-| Hip Rotation | 41.769 | deg | available | 3d_pose | 106 | Range of pelvis yaw over the landing-to-event phase window. |
-| Attack Angle | -57.185 | deg | proxy | object_2d | 106 | Image-plane bat angle at peak bat speed; not true 3D attack angle. |
-| Wrist/Hand Speed | 1.460 | 3d_unit/s | proxy | 3d_pose | 106 | Useful internal body-speed proxy; SlyMask swing percentile needs a reference database. |
+| Head Stability | 98.596 | % | proxy | 3d_pose | 74 | Root-relative head drift score; no SlyMask reference scale. |
+| Dominant Side | right |  | proxy | 3d_pose | 74 | Inferred from larger hand peak speed. |
+| Lead Side | left |  | proxy | 3d_pose | 69 | Inferred from foot position along stride direction. |
+| Swing Speed | 2.338 | norm/s | proxy | object_2d | 74 | SlyMask percentile is unavailable; this is normalized 2D bat speed. |
+| Estimated Bat Speed | 1692.456 | px/s | proxy | object_2d | 74 | No camera calibration/bat scale, so km/h cannot be recovered. |
+| Hip Rotation | 40.519 | deg | available | 3d_pose | 74 | Range of pelvis yaw over the landing-to-event phase window. |
+| Attack Angle | 43.452 | deg | proxy | object_2d | 74 | Image-plane bat angle at body-event frame; not true 3D attack angle. |
+| Wrist/Hand Speed | 2.515 | 3d_unit/s | proxy | 3d_pose | 74 | Useful internal body-speed proxy; SlyMask swing percentile needs a reference database. |
 | Contact Time | N/A |  | unavailable | none | N/A | No ball track in batting benchmark and no bat-ball impact event detector; cannot determine physical contact duration. |
 
 ## benchmark_hit_horizontal_06
 
 | metric | value | unit | status | source | frame | reason |
 |---|---:|---|---|---|---:|---|
-| Hip-Shoulder Sep | 4.009 | deg | available | 3d_pose | 81 | SMPL24 hip/shoulder lines projected to horizontal plane. |
-| Lead Knee Angle | 157.620 | deg | available | 3d_pose | 71 | Lead side inferred as left; value is anatomical knee angle, not flexion-only label. |
-| Trunk Tilt | 2.393 | deg | available | 3d_pose | 81 | Torso vector relative to reconstructed vertical axis. |
+| Hip-Shoulder Sep | 20.263 | deg | available | 3d_pose | 134 | SMPL24 hip/shoulder lines projected to horizontal plane. |
+| Lead Knee Angle | 131.790 | deg | available | 3d_pose | 130 | Lead side inferred as left; value is anatomical knee angle, not flexion-only label. |
+| Trunk Tilt | 13.221 | deg | available | 3d_pose | 134 | Torso vector relative to reconstructed vertical axis. |
 | Weight Transfer | N/A |  | unavailable | none | N/A | Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer. |
-| Head Stability | 99.153 | % | proxy | 3d_pose | 81 | Root-relative head drift score; no SlyMask reference scale. |
-| Dominant Side | right |  | proxy | 3d_pose | 81 | Inferred from larger hand peak speed. |
-| Lead Side | left |  | proxy | 3d_pose | 71 | Inferred from foot position along stride direction. |
-| Swing Speed | 8.064 | norm/s | proxy | object_2d | 81 | SlyMask percentile is unavailable; this is normalized 2D bat speed. |
-| Estimated Bat Speed | 6159.601 | px/s | proxy | object_2d | 81 | No camera calibration/bat scale, so km/h cannot be recovered. |
-| Hip Rotation | 2.638 | deg | available | 3d_pose | 81 | Range of pelvis yaw over the landing-to-event phase window. |
-| Attack Angle | 164.369 | deg | proxy | object_2d | 81 | Image-plane bat angle at peak bat speed; not true 3D attack angle. |
-| Wrist/Hand Speed | 0.134 | 3d_unit/s | proxy | 3d_pose | 81 | Useful internal body-speed proxy; SlyMask swing percentile needs a reference database. |
+| Head Stability | 99.293 | % | proxy | 3d_pose | 134 | Root-relative head drift score; no SlyMask reference scale. |
+| Dominant Side | right |  | proxy | 3d_pose | 134 | Inferred from larger hand peak speed. |
+| Lead Side | left |  | proxy | 3d_pose | 130 | Inferred from foot position along stride direction. |
+| Swing Speed | 2.297 | norm/s | proxy | object_2d | 134 | SlyMask percentile is unavailable; this is normalized 2D bat speed. |
+| Estimated Bat Speed | 2856.713 | px/s | proxy | object_2d | 134 | No camera calibration/bat scale, so km/h cannot be recovered. |
+| Hip Rotation | 49.349 | deg | available | 3d_pose | 134 | Range of pelvis yaw over the landing-to-event phase window. |
+| Attack Angle | -174.757 | deg | proxy | object_2d | 134 | Image-plane bat angle at body-event frame; not true 3D attack angle. |
+| Wrist/Hand Speed | 3.064 | 3d_unit/s | proxy | 3d_pose | 134 | Useful internal body-speed proxy; SlyMask swing percentile needs a reference database. |
 | Contact Time | N/A |  | unavailable | none | N/A | No ball track in batting benchmark and no bat-ball impact event detector; cannot determine physical contact duration. |

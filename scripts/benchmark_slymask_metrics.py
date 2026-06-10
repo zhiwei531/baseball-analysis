@@ -195,7 +195,7 @@ def _batting_metrics(
         _metric(clip_id, "batting", "Swing Speed", bat_speed_norm, "norm/s", "proxy" if bat_speed_norm is not None else "unavailable", "object_2d", contact_frame, "SlyMask percentile is unavailable; this is normalized 2D bat speed.") if bat_speed_norm is not None else _unavailable(clip_id, "batting", "Swing Speed", "No valid bat track after confidence/speed filtering."),
         _metric(clip_id, "batting", "Estimated Bat Speed", bat_speed, "px/s", "proxy" if bat_speed is not None else "unavailable", "object_2d", contact_frame, "No camera calibration/bat scale, so km/h cannot be recovered.") if bat_speed is not None else _unavailable(clip_id, "batting", "Estimated Bat Speed", "No valid bat track after confidence/speed filtering."),
         _metric(clip_id, "batting", "Hip Rotation", hip_rotation, "deg", "available", "3d_pose", contact_frame, "Range of pelvis yaw over the landing-to-event phase window."),
-        _metric(clip_id, "batting", "Attack Angle", attack_angle, "deg", "proxy" if attack_angle is not None else "unavailable", "object_2d", contact_frame, "Image-plane bat angle at peak bat speed; not true 3D attack angle.") if attack_angle is not None else _unavailable(clip_id, "batting", "Attack Angle", "No valid bat angle at peak-speed/contact proxy frame."),
+        _metric(clip_id, "batting", "Attack Angle", attack_angle, "deg", "proxy" if attack_angle is not None else "unavailable", "object_2d", contact_frame, "Image-plane bat angle at body-event frame; not true 3D attack angle.") if attack_angle is not None else _unavailable(clip_id, "batting", "Attack Angle", "No valid bat angle at body-event frame."),
         _metric(clip_id, "batting", "Wrist/Hand Speed", wrist_speed, "3d_unit/s", "proxy", "3d_pose", contact_frame, "Useful internal body-speed proxy; SlyMask swing percentile needs a reference database."),
         _unavailable(clip_id, "batting", "Contact Time", "No ball track in batting benchmark and no bat-ball impact event detector; cannot determine physical contact duration."),
     ]
@@ -240,9 +240,9 @@ def _event_frame(
     object_rows: list[dict[str, str]],
 ) -> int:
     if action_type == "batting":
-        bat_peak_frame = _object_peak_frame(object_rows, "bat_speed_norm_s")
-        if bat_peak_frame in frames:
-            return bat_peak_frame
+        body_peak_frame = _batting_body_event_frame(frames)
+        if body_peak_frame is not None:
+            return body_peak_frame
     joint = "right_hand" if _dominant_side(frames) == "right" else "left_hand"
     speeds = _speeds_by_frame(frames, joint)
     if not speeds:
@@ -252,6 +252,25 @@ def _event_frame(
         candidates = ordered
     else:
         candidates = ordered[int(len(ordered) * 0.20) :]
+    return max(candidates, key=lambda item: item[1])[0]
+
+
+def _batting_body_event_frame(frames: dict[int, dict[str, np.ndarray]]) -> int | None:
+    side = _dominant_side(frames)
+    speeds = _speeds_by_frame(frames, f"{side}_hand")
+    if not speeds:
+        return None
+    frame_ids = sorted(frames)
+    # Ignore early setup and late run/follow-through for long benchmark batting clips.
+    start_frame = frame_ids[int(len(frame_ids) * 0.35)]
+    end_frame = frame_ids[int(len(frame_ids) * 0.75)]
+    candidates = [
+        (frame_index, speed)
+        for frame_index, speed in speeds.items()
+        if start_frame <= frame_index <= end_frame
+    ]
+    if not candidates:
+        candidates = list(speeds.items())
     return max(candidates, key=lambda item: item[1])[0]
 
 
@@ -674,11 +693,10 @@ def _write_markdown(path: Path, rows: list[MetricRow]) -> None:
         "- SlyMask-style percentiles and reliability percentages cannot be reproduced from our pipeline alone because we do not have their reference population or reliability model.",
         "- Contact Time is unavailable for the current batting benchmark because there is no ball track and no bat-ball impact event detector.",
         "- Weight Transfer is now marked unavailable. The GVHMR global hip/root track is not a calibrated field-coordinate COM trajectory, so previous 0%/100% values were a calculation-definition problem, not a trustworthy biomechanics finding.",
-        "- `benchmark_hit_horizontal_06` reports Wrist/Hand Speed near zero at the bat peak-speed frame, which means bat peak and body wrist-speed event are not aligned. That metric is not reliable for this clip without better contact/release event logic.",
         "",
         "### Motion-phase handling caveat",
         "",
-        "- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is normalized bat-speed peak when a bat track exists; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.",
+        "- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is dominant-hand 3D speed peak inside the middle 35%-75% of the clip; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.",
         "- Range-style body metrics now use the landing-to-event phase window instead of the full clip, so non-batting ending motion such as the running segment in `benchmark_hit_horizontal_06` is not included in Hip Rotation or Head Stability.",
         "- That means preparation or ending frames can still leak into metrics when the clip starts late, ends late, or the object/body peak-speed proxy does not match the real biomechanical event.",
         "- Phase-dependent metrics should be upgraded with explicit phase classifiers before being used as coaching-grade outputs: front-foot landing, max external rotation/acceleration, release/contact, and follow-through.",
