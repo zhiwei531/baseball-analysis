@@ -46,6 +46,15 @@ class MetricRow:
     reason: str
 
 
+@dataclass(frozen=True)
+class PhaseSelection:
+    start_frame: int
+    event_frame: int
+    end_frame: int
+    landing_frame: int
+    method: str
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", default="data_full/benchmark_rtmpose_test")
@@ -85,7 +94,7 @@ def _clip_metrics(data_dir: Path, clip_id: str) -> list[MetricRow]:
         / clip_id
         / f"{CONDITION_2D}.csv"
     )
-    frames = _read_pose3d_frames(pose3d_path)
+    frames, timestamps = _read_pose3d_frames(pose3d_path)
     object_rows = _read_object_rows(object_path)
     if not frames:
         return [
@@ -102,16 +111,29 @@ def _clip_metrics(data_dir: Path, clip_id: str) -> list[MetricRow]:
             )
         ]
 
-    event_frame = _event_frame(frames, action_type, object_rows)
-    landing_frame = _landing_frame(frames, event_frame, action_type)
+    phase = _select_motion_phase(frames, action_type)
+    event_frame = phase.event_frame
+    landing_frame = phase.landing_frame
     dominant_side = _dominant_side(frames)
     lead_side = _lead_side(frames, landing_frame)
-    rows = _shared_body_metrics(clip_id, action_type, frames, event_frame, landing_frame, dominant_side, lead_side)
+    rows = _phase_metric_rows(clip_id, action_type, phase, timestamps)
+    rows.extend(
+        _shared_body_metrics(
+            clip_id,
+            action_type,
+            frames,
+            event_frame,
+            landing_frame,
+            phase.start_frame,
+            dominant_side,
+            lead_side,
+        )
+    )
 
     if action_type == "pitching":
         rows.extend(_pitching_metrics(clip_id, frames, object_rows, event_frame, landing_frame, dominant_side, lead_side))
     else:
-        rows.extend(_batting_metrics(clip_id, frames, object_rows, event_frame, landing_frame, dominant_side, lead_side))
+        rows.extend(_batting_metrics(clip_id, frames, object_rows, event_frame, landing_frame, phase.start_frame, dominant_side, lead_side))
     return rows
 
 
@@ -121,10 +143,11 @@ def _shared_body_metrics(
     frames: dict[int, dict[str, np.ndarray]],
     event_frame: int,
     landing_frame: int,
+    phase_start_frame: int,
     dominant_side: str,
     lead_side: str,
 ) -> list[MetricRow]:
-    phase_frames = _phase_window(frames, landing_frame, event_frame)
+    phase_frames = _phase_window(frames, phase_start_frame, event_frame)
     hip_sep = _at(frames, event_frame, _hip_shoulder_sep)
     lead_knee = _joint_angle(frames[landing_frame], f"{lead_side}_hip", f"{lead_side}_knee", f"{lead_side}_ankle")
     trunk = _at(frames, event_frame, _trunk_tilt)
@@ -181,11 +204,12 @@ def _batting_metrics(
     object_rows: list[dict[str, str]],
     contact_frame: int,
     landing_frame: int,
+    phase_start_frame: int,
     side: str,
     lead_side: str,
 ) -> list[MetricRow]:
     del lead_side
-    phase_frames = _phase_window(frames, landing_frame, contact_frame)
+    phase_frames = _phase_window(frames, phase_start_frame, contact_frame)
     hip_rotation = _rotation_range(phase_frames, _hip_yaw)
     bat_speed = _object_at_frame(object_rows, contact_frame, "bat_speed_px_s")
     bat_speed_norm = _object_at_frame(object_rows, contact_frame, "bat_speed_norm_s")
@@ -194,7 +218,7 @@ def _batting_metrics(
     rows = [
         _metric(clip_id, "batting", "Swing Speed", bat_speed_norm, "norm/s", "proxy" if bat_speed_norm is not None else "unavailable", "object_2d", contact_frame, "SlyMask percentile is unavailable; this is normalized 2D bat speed.") if bat_speed_norm is not None else _unavailable(clip_id, "batting", "Swing Speed", "No valid bat track after confidence/speed filtering."),
         _metric(clip_id, "batting", "Estimated Bat Speed", bat_speed, "px/s", "proxy" if bat_speed is not None else "unavailable", "object_2d", contact_frame, "No camera calibration/bat scale, so km/h cannot be recovered.") if bat_speed is not None else _unavailable(clip_id, "batting", "Estimated Bat Speed", "No valid bat track after confidence/speed filtering."),
-        _metric(clip_id, "batting", "Hip Rotation", hip_rotation, "deg", "available", "3d_pose", contact_frame, "Range of pelvis yaw over the landing-to-event phase window."),
+        _metric(clip_id, "batting", "Hip Rotation", hip_rotation, "deg", "available", "3d_pose", contact_frame, "Range of pelvis yaw over the body-motion phase window."),
         _metric(clip_id, "batting", "Attack Angle", attack_angle, "deg", "proxy" if attack_angle is not None else "unavailable", "object_2d", contact_frame, "Image-plane bat angle at body-event frame; not true 3D attack angle.") if attack_angle is not None else _unavailable(clip_id, "batting", "Attack Angle", "No valid bat angle at body-event frame."),
         _metric(clip_id, "batting", "Wrist/Hand Speed", wrist_speed, "3d_unit/s", "proxy", "3d_pose", contact_frame, "Useful internal body-speed proxy; SlyMask swing percentile needs a reference database."),
         _unavailable(clip_id, "batting", "Contact Time", "No ball track in batting benchmark and no bat-ball impact event detector; cannot determine physical contact duration."),
@@ -202,14 +226,63 @@ def _batting_metrics(
     return rows
 
 
-def _read_pose3d_frames(path: Path) -> dict[int, dict[str, np.ndarray]]:
+def _phase_metric_rows(
+    clip_id: str,
+    action_type: str,
+    phase: PhaseSelection,
+    timestamps: dict[int, float],
+) -> list[MetricRow]:
+    return [
+        MetricRow(
+            clip_id,
+            action_type,
+            "Motion Phase Start",
+            _timestamp_value(timestamps, phase.start_frame),
+            "s",
+            "proxy",
+            "3d_pose",
+            str(phase.start_frame),
+            phase.method,
+        ),
+        MetricRow(
+            clip_id,
+            action_type,
+            "Motion Phase Event",
+            _timestamp_value(timestamps, phase.event_frame),
+            "s",
+            "proxy",
+            "3d_pose",
+            str(phase.event_frame),
+            phase.method,
+        ),
+        MetricRow(
+            clip_id,
+            action_type,
+            "Motion Phase End",
+            _timestamp_value(timestamps, phase.end_frame),
+            "s",
+            "proxy",
+            "3d_pose",
+            str(phase.end_frame),
+            phase.method,
+        ),
+    ]
+
+
+def _timestamp_value(timestamps: dict[int, float], frame: int) -> str:
+    return f"{timestamps.get(frame, frame / 30.0):.3f}"
+
+
+def _read_pose3d_frames(path: Path) -> tuple[dict[int, dict[str, np.ndarray]], dict[int, float]]:
     if not path.exists():
-        return {}
+        return {}, {}
     records = read_pose3d_records(path)
     frames: dict[int, dict[str, np.ndarray]] = {}
+    timestamps: dict[int, float] = {}
     for record in records:
         frames.setdefault(record.frame_index, {})[record.joint_name] = _xyz(record)
-    return frames
+        timestamps.setdefault(record.frame_index, record.timestamp_sec)
+    return frames, timestamps
 
 
 def _read_object_rows(path: Path) -> list[dict[str, str]]:
@@ -234,44 +307,104 @@ def _phase_window(
     return window or frames
 
 
-def _event_frame(
-    frames: dict[int, dict[str, np.ndarray]],
-    action_type: str,
-    object_rows: list[dict[str, str]],
-) -> int:
+def _select_motion_phase(frames: dict[int, dict[str, np.ndarray]], action_type: str) -> PhaseSelection:
     if action_type == "batting":
-        body_peak_frame = _batting_body_event_frame(frames)
-        if body_peak_frame is not None:
-            return body_peak_frame
-    joint = "right_hand" if _dominant_side(frames) == "right" else "left_hand"
-    speeds = _speeds_by_frame(frames, joint)
-    if not speeds:
-        return sorted(frames)[len(frames) // 2]
-    ordered = sorted(speeds.items())
-    if action_type == "pitching":
-        candidates = ordered
-    else:
-        candidates = ordered[int(len(ordered) * 0.20) :]
-    return max(candidates, key=lambda item: item[1])[0]
+        return _select_batting_motion_phase(frames)
+    return _select_pitching_motion_phase(frames)
 
 
-def _batting_body_event_frame(frames: dict[int, dict[str, np.ndarray]]) -> int | None:
+def _select_batting_motion_phase(frames: dict[int, dict[str, np.ndarray]]) -> PhaseSelection:
+    scores = _body_motion_scores(frames)
+    frame_ids = sorted(frames)
+    if not scores:
+        fallback = frame_ids[len(frame_ids) // 2]
+        return PhaseSelection(fallback, fallback, fallback, fallback, "Fallback midpoint; no body-motion score available.")
+    start_limit = frame_ids[int(len(frame_ids) * 0.35)]
+    end_limit = frame_ids[int(len(frame_ids) * 0.75)]
+    candidates = [(frame, score) for frame, score in scores.items() if start_limit <= frame <= end_limit]
+    if not candidates:
+        candidates = list(scores.items())
+    event_frame, event_score = max(candidates, key=lambda item: item[1])
+    start_frame = _motion_boundary(scores, event_frame, -1, threshold=0.25, limit=start_limit)
+    end_frame = _motion_boundary(scores, event_frame, 1, threshold=0.25, limit=end_limit)
+    landing_frame = _landing_frame(frames, event_frame, "batting")
+    method = (
+        "Body-motion composite only: max of dominant hand/wrist speed plus hip/shoulder yaw velocity "
+        "inside the middle 35%-75% clip window; object tracker is not used for phase selection."
+    )
+    return PhaseSelection(start_frame, event_frame, end_frame, landing_frame, method)
+
+
+def _select_pitching_motion_phase(frames: dict[int, dict[str, np.ndarray]]) -> PhaseSelection:
     side = _dominant_side(frames)
     speeds = _speeds_by_frame(frames, f"{side}_hand")
-    if not speeds:
-        return None
     frame_ids = sorted(frames)
-    # Ignore early setup and late run/follow-through for long benchmark batting clips.
-    start_frame = frame_ids[int(len(frame_ids) * 0.35)]
-    end_frame = frame_ids[int(len(frame_ids) * 0.75)]
-    candidates = [
-        (frame_index, speed)
-        for frame_index, speed in speeds.items()
-        if start_frame <= frame_index <= end_frame
-    ]
-    if not candidates:
-        candidates = list(speeds.items())
-    return max(candidates, key=lambda item: item[1])[0]
+    if not speeds:
+        fallback = frame_ids[len(frame_ids) // 2]
+        return PhaseSelection(fallback, fallback, fallback, fallback, "Fallback midpoint; no hand speed available.")
+    event_frame = max(speeds.items(), key=lambda item: item[1])[0]
+    landing_frame = _landing_frame(frames, event_frame, "pitching")
+    end_frame = _motion_boundary(_normalize_scores(speeds), event_frame, 1, threshold=0.25, limit=frame_ids[-1])
+    method = "Body-motion only: release proxy is dominant-hand 3D speed peak; object tracker is not used for phase selection."
+    return PhaseSelection(landing_frame, event_frame, end_frame, landing_frame, method)
+
+
+def _body_motion_scores(frames: dict[int, dict[str, np.ndarray]]) -> dict[int, float]:
+    left_hand = _speeds_by_frame(frames, "left_hand")
+    right_hand = _speeds_by_frame(frames, "right_hand")
+    left_wrist = _speeds_by_frame(frames, "left_wrist")
+    right_wrist = _speeds_by_frame(frames, "right_wrist")
+    hip_velocity = _angular_velocity_by_frame(frames, _hip_yaw)
+    shoulder_velocity = _angular_velocity_by_frame(frames, _shoulder_yaw)
+    hand_speed = {
+        frame: max(
+            left_hand.get(frame, 0.0),
+            right_hand.get(frame, 0.0),
+            left_wrist.get(frame, 0.0),
+            right_wrist.get(frame, 0.0),
+        )
+        for frame in set(left_hand) | set(right_hand) | set(left_wrist) | set(right_wrist)
+    }
+    hand_norm = _normalize_scores(hand_speed)
+    hip_norm = _normalize_scores({frame: abs(value) for frame, value in hip_velocity.items()})
+    shoulder_norm = _normalize_scores({frame: abs(value) for frame, value in shoulder_velocity.items()})
+    score_frames = set(hand_norm) | set(hip_norm) | set(shoulder_norm)
+    return {
+        frame: hand_norm.get(frame, 0.0) + 0.4 * shoulder_norm.get(frame, 0.0) + 0.25 * hip_norm.get(frame, 0.0)
+        for frame in score_frames
+    }
+
+
+def _motion_boundary(scores: dict[int, float], event_frame: int, direction: int, threshold: float, limit: int) -> int:
+    if event_frame not in scores:
+        return event_frame
+    peak = scores[event_frame]
+    cutoff = peak * threshold
+    frames = sorted(scores)
+    current = event_frame
+    while True:
+        next_frame = current + direction
+        if direction < 0 and next_frame < limit:
+            return current
+        if direction > 0 and next_frame > limit:
+            return current
+        if next_frame not in scores:
+            return current
+        if scores[next_frame] < cutoff:
+            return current
+        current = next_frame
+
+
+def _normalize_scores(values: dict[int, float]) -> dict[int, float]:
+    if not values:
+        return {}
+    positive = np.array([max(0.0, value) for value in values.values()], dtype=float)
+    scale = float(np.percentile(positive, 90))
+    if scale <= 1e-9:
+        scale = float(np.max(positive))
+    if scale <= 1e-9:
+        return {frame: 0.0 for frame in values}
+    return {frame: min(1.5, max(0.0, value) / scale) for frame, value in values.items()}
 
 
 def _landing_frame(frames: dict[int, dict[str, np.ndarray]], event_frame: int, action_type: str) -> int:
@@ -342,12 +475,37 @@ def _hip_yaw(frame: dict[str, np.ndarray]) -> float | None:
     return _segment_yaw(frame, "left_hip", "right_hip")
 
 
+def _shoulder_yaw(frame: dict[str, np.ndarray]) -> float | None:
+    return _segment_yaw(frame, "left_shoulder", "right_shoulder")
+
+
 def _segment_yaw(frame: dict[str, np.ndarray], a: str, b: str) -> float | None:
     try:
         vec = frame[b] - frame[a]
     except KeyError:
         return None
     return math.degrees(math.atan2(float(vec[2]), float(vec[0])))
+
+
+def _angular_velocity_by_frame(
+    frames: dict[int, dict[str, np.ndarray]],
+    getter,
+) -> dict[int, float]:
+    result: dict[int, float] = {}
+    frame_ids = sorted(frames)
+    previous_angle: float | None = None
+    previous_frame: int | None = None
+    for frame in frame_ids:
+        angle = getter(frames[frame])
+        if angle is None:
+            continue
+        if previous_angle is not None and previous_frame is not None:
+            dt = _timestamp_delta(previous_frame, frame, frame_ids)
+            if dt > 0:
+                result[frame] = _signed_delta(previous_angle, angle) / dt
+        previous_angle = angle
+        previous_frame = frame
+    return result
 
 
 def _stride_angle(frame: dict[str, np.ndarray]) -> float | None:
@@ -696,8 +854,8 @@ def _write_markdown(path: Path, rows: list[MetricRow]) -> None:
         "",
         "### Motion-phase handling caveat",
         "",
-        "- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is dominant-hand 3D speed peak inside the middle 35%-75% of the clip; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.",
-        "- Range-style body metrics now use the landing-to-event phase window instead of the full clip, so non-batting ending motion such as the running segment in `benchmark_hit_horizontal_06` is not included in Hip Rotation or Head Stability.",
+        "- The current script does not use object tracker outputs for phase selection. Pitching release is selected from dominant-hand 3D speed. Batting event is selected from a body-motion composite: hand/wrist speed plus hip and shoulder yaw velocity inside the middle 35%-75% of the clip.",
+        "- Range-style body metrics now use the selected body-motion phase window instead of the full clip, so non-batting ending motion such as the running segment in `benchmark_hit_horizontal_06` is not included in Hip Rotation or Head Stability.",
         "- That means preparation or ending frames can still leak into metrics when the clip starts late, ends late, or the object/body peak-speed proxy does not match the real biomechanical event.",
         "- Phase-dependent metrics should be upgraded with explicit phase classifiers before being used as coaching-grade outputs: front-foot landing, max external rotation/acceleration, release/contact, and follow-through.",
         "",
