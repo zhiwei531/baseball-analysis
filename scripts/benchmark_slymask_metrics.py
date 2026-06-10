@@ -103,7 +103,7 @@ def _clip_metrics(data_dir: Path, clip_id: str) -> list[MetricRow]:
         ]
 
     event_frame = _event_frame(frames, action_type, object_rows)
-    landing_frame = _landing_frame(frames, event_frame)
+    landing_frame = _landing_frame(frames, event_frame, action_type)
     dominant_side = _dominant_side(frames)
     lead_side = _lead_side(frames, landing_frame)
     rows = _shared_body_metrics(clip_id, action_type, frames, event_frame, landing_frame, dominant_side, lead_side)
@@ -232,19 +232,21 @@ def _event_frame(
         return sorted(frames)[len(frames) // 2]
     ordered = sorted(speeds.items())
     if action_type == "pitching":
-        candidates = ordered[int(len(ordered) * 0.35) :]
+        candidates = ordered
     else:
         candidates = ordered[int(len(ordered) * 0.20) :]
     return max(candidates, key=lambda item: item[1])[0]
 
 
-def _landing_frame(frames: dict[int, dict[str, np.ndarray]], event_frame: int) -> int:
+def _landing_frame(frames: dict[int, dict[str, np.ndarray]], event_frame: int, action_type: str) -> int:
     stride = _ankle_separations(frames)
     if not stride:
         return event_frame
     prior = [(frame, value) for frame, value in stride.items() if frame <= event_frame]
     if not prior:
         prior = list(stride.items())
+    if action_type == "pitching":
+        return max(prior, key=lambda item: item[1])[0]
     max_sep = max(value for _, value in prior)
     threshold = max_sep * 0.9
     for frame, value in sorted(prior):
@@ -644,12 +646,11 @@ def _write_markdown(path: Path, rows: list[MetricRow]) -> None:
         "- SlyMask-style percentiles and reliability percentages cannot be reproduced from our pipeline alone because we do not have their reference population or reliability model.",
         "- Contact Time is unavailable for the current batting benchmark because there is no ball track and no bat-ball impact event detector.",
         "- Weight Transfer is now marked unavailable. The GVHMR global hip/root track is not a calibrated field-coordinate COM trajectory, so previous 0%/100% values were a calculation-definition problem, not a trustworthy biomechanics finding.",
-        "- `benchmark_pitch_vertical_09` has landing-frame 0, so its stride/lead-knee/foot-direction landing metrics are likely not meaningful; the clip starts too late or the automatic landing detector lacks enough pre-landing frames.",
         "- `benchmark_hit_horizontal_06` reports Wrist/Hand Speed near zero at the bat peak-speed frame, which means bat peak and body wrist-speed event are not aligned. That metric is not reliable for this clip without better contact/release event logic.",
         "",
         "### Motion-phase handling caveat",
         "",
-        "- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed after the early preparation portion; batting contact is bat peak-speed frame when a bat track exists; landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.",
+        "- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is bat peak-speed frame when a bat track exists; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.",
         "- That means preparation or ending frames can still leak into metrics when the clip starts late, ends late, or the object/body peak-speed proxy does not match the real biomechanical event.",
         "- Phase-dependent metrics should be upgraded with explicit phase classifiers before being used as coaching-grade outputs: front-foot landing, max external rotation/acceleration, release/contact, and follow-through.",
         "",

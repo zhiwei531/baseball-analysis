@@ -26,21 +26,16 @@ Capability boundary: SlyMask-style percentile and reliability scores require a p
 - SlyMask-style percentiles and reliability percentages cannot be reproduced from our pipeline alone because we do not have their reference population or reliability model.
 - Contact Time is unavailable for the current batting benchmark because there is no ball track and no bat-ball impact event detector.
 - Weight Transfer is now marked unavailable. The GVHMR global hip/root track is not a calibrated field-coordinate COM trajectory, so previous 0%/100% values were a calculation-definition problem, not a trustworthy biomechanics finding.
-- `benchmark_pitch_vertical_09` has landing-frame 0, so its stride/lead-knee/foot-direction landing metrics are likely not meaningful; the clip starts too late or the automatic landing detector lacks enough pre-landing frames.
 - `benchmark_hit_horizontal_06` reports Wrist/Hand Speed near zero at the bat peak-speed frame, which means bat peak and body wrist-speed event are not aligned. That metric is not reliable for this clip without better contact/release event logic.
 
 ### Motion-phase handling caveat
 
-- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed after the early preparation portion; batting contact is bat peak-speed frame when a bat track exists; landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.
+- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is bat peak-speed frame when a bat track exists; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.
 - That means preparation or ending frames can still leak into metrics when the clip starts late, ends late, or the object/body peak-speed proxy does not match the real biomechanical event.
 - Phase-dependent metrics should be upgraded with explicit phase classifiers before being used as coaching-grade outputs: front-foot landing, max external rotation/acceleration, release/contact, and follow-through.
 
 ### Concrete suspicious outputs in this run
 
-- benchmark_pitch_vertical_09: Lead Knee Angle uses frame 0 as landing frame, so this landing-phase metric is weak.
-- benchmark_pitch_vertical_09: Stride Angle uses frame 0 as landing frame, so this landing-phase metric is weak.
-- benchmark_pitch_vertical_09: Stride Length uses frame 0 as landing frame, so this landing-phase metric is weak.
-- benchmark_pitch_vertical_09: Foot Direction uses frame 0 as landing frame, so this landing-phase metric is weak.
 - benchmark_hit_vertical_02: Attack Angle is -57.185 deg from image-plane bat tracking; this is not a credible true attack angle.
 - benchmark_hit_horizontal_06: Wrist/Hand Speed is 0.130 3d_unit/s at bat peak-speed frame, indicating event mismatch.
 
@@ -48,43 +43,43 @@ Capability boundary: SlyMask-style percentile and reliability scores require a p
 
 | metric | value | unit | status | source | frame | reason |
 |---|---:|---|---|---|---:|---|
-| Hip-Shoulder Sep | 28.738 | deg | available | 3d_pose | 27 | SMPL24 hip/shoulder lines projected to horizontal plane. |
-| Lead Knee Angle | 120.714 | deg | available | 3d_pose | 18 | Lead side inferred as left; value is anatomical knee angle, not flexion-only label. |
-| Trunk Tilt | 30.171 | deg | available | 3d_pose | 27 | Torso vector relative to reconstructed vertical axis. |
+| Hip-Shoulder Sep | 8.543 | deg | available | 3d_pose | 24 | SMPL24 hip/shoulder lines projected to horizontal plane. |
+| Lead Knee Angle | 126.939 | deg | available | 3d_pose | 22 | Lead side inferred as left; value is anatomical knee angle, not flexion-only label. |
+| Trunk Tilt | 18.941 | deg | available | 3d_pose | 24 | Torso vector relative to reconstructed vertical axis. |
 | Weight Transfer | N/A |  | unavailable | none | N/A | Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer. |
-| Head Stability | 55.572 | % | proxy | 3d_pose | 27 | Root-relative head drift score; no SlyMask reference scale. |
-| Dominant Side | right |  | proxy | 3d_pose | 27 | Inferred from larger hand peak speed. |
-| Lead Side | left |  | proxy | 3d_pose | 18 | Inferred from foot position along stride direction. |
-| Elbow Bend | 78.177 | deg | available | 3d_pose | 27 | Throwing side inferred by peak hand speed. |
-| Arm Abduction | 144.806 | deg | available | 3d_pose | 27 | Upper arm angle relative to torso axis. |
-| Stride Angle | 3.118 | deg | proxy | 3d_pose | 18 | Angle between foot line and hip line at inferred landing frame. |
-| Stride Length | 0.594 | height_ratio | proxy | 3d_pose | 18 | Foot separation normalized by reconstructed body-height proxy. |
-| Foot Direction | 54.868 | deg | proxy | 3d_pose | 18 | SMPL24 has foot marker but no toe; this approximates toe direction from ankle-to-foot vector. |
-| Wrist Snap | 8.018 | deg | proxy | 3d_pose | 27 | Uses elbow-wrist-hand angle change; no fingertip joint is available. |
-| Arm Speed | 3.339 | 3d_unit/s | proxy | 3d_pose | 27 | Raw wrist speed at release proxy; percentile needs a normative database. |
-| Fingertip Speed | 3.629 | 3d_unit/s | proxy | 3d_pose | 27 | SMPL24 hand joint is used because fingertip joints are unavailable. |
-| Ball Speed | 1619.559 | px/s | proxy | object_2d | 27 | 2D ball speed without camera calibration; not physical mph/km/h. |
+| Head Stability | 55.572 | % | proxy | 3d_pose | 24 | Root-relative head drift score; no SlyMask reference scale. |
+| Dominant Side | right |  | proxy | 3d_pose | 24 | Inferred from larger hand peak speed. |
+| Lead Side | left |  | proxy | 3d_pose | 22 | Inferred from foot position along stride direction. |
+| Elbow Bend | 68.069 | deg | available | 3d_pose | 24 | Throwing side inferred by peak hand speed. |
+| Arm Abduction | 143.617 | deg | available | 3d_pose | 24 | Upper arm angle relative to torso axis. |
+| Stride Angle | 29.352 | deg | proxy | 3d_pose | 22 | Angle between foot line and hip line at inferred landing frame. |
+| Stride Length | 0.635 | height_ratio | proxy | 3d_pose | 22 | Foot separation normalized by reconstructed body-height proxy. |
+| Foot Direction | 30.874 | deg | proxy | 3d_pose | 22 | SMPL24 has foot marker but no toe; this approximates toe direction from ankle-to-foot vector. |
+| Wrist Snap | 13.127 | deg | proxy | 3d_pose | 24 | Uses elbow-wrist-hand angle change; no fingertip joint is available. |
+| Arm Speed | 4.115 | 3d_unit/s | proxy | 3d_pose | 24 | Raw wrist speed at release proxy; percentile needs a normative database. |
+| Fingertip Speed | 4.258 | 3d_unit/s | proxy | 3d_pose | 24 | SMPL24 hand joint is used because fingertip joints are unavailable. |
+| Ball Speed | 1619.559 | px/s | proxy | object_2d | 24 | 2D ball speed without camera calibration; not physical mph/km/h. |
 
 ## benchmark_pitch_vertical_09
 
 | metric | value | unit | status | source | frame | reason |
 |---|---:|---|---|---|---:|---|
-| Hip-Shoulder Sep | 54.699 | deg | available | 3d_pose | 19 | SMPL24 hip/shoulder lines projected to horizontal plane. |
-| Lead Knee Angle | 160.739 | deg | available | 3d_pose | 0 | Lead side inferred as left; value is anatomical knee angle, not flexion-only label. |
-| Trunk Tilt | 39.922 | deg | available | 3d_pose | 19 | Torso vector relative to reconstructed vertical axis. |
+| Hip-Shoulder Sep | 7.241 | deg | available | 3d_pose | 10 | SMPL24 hip/shoulder lines projected to horizontal plane. |
+| Lead Knee Angle | 139.372 | deg | available | 3d_pose | 5 | Lead side inferred as left; value is anatomical knee angle, not flexion-only label. |
+| Trunk Tilt | 13.435 | deg | available | 3d_pose | 10 | Torso vector relative to reconstructed vertical axis. |
 | Weight Transfer | N/A |  | unavailable | none | N/A | Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer. |
-| Head Stability | 30.155 | % | proxy | 3d_pose | 19 | Root-relative head drift score; no SlyMask reference scale. |
-| Dominant Side | right |  | proxy | 3d_pose | 19 | Inferred from larger hand peak speed. |
-| Lead Side | left |  | proxy | 3d_pose | 0 | Inferred from foot position along stride direction. |
-| Elbow Bend | 122.727 | deg | available | 3d_pose | 19 | Throwing side inferred by peak hand speed. |
-| Arm Abduction | 113.470 | deg | available | 3d_pose | 19 | Upper arm angle relative to torso axis. |
-| Stride Angle | 18.956 | deg | proxy | 3d_pose | 0 | Angle between foot line and hip line at inferred landing frame. |
-| Stride Length | 0.573 | height_ratio | proxy | 3d_pose | 0 | Foot separation normalized by reconstructed body-height proxy. |
-| Foot Direction | 23.024 | deg | proxy | 3d_pose | 0 | SMPL24 has foot marker but no toe; this approximates toe direction from ankle-to-foot vector. |
-| Wrist Snap | 10.437 | deg | proxy | 3d_pose | 19 | Uses elbow-wrist-hand angle change; no fingertip joint is available. |
-| Arm Speed | 2.477 | 3d_unit/s | proxy | 3d_pose | 19 | Raw wrist speed at release proxy; percentile needs a normative database. |
-| Fingertip Speed | 2.672 | 3d_unit/s | proxy | 3d_pose | 19 | SMPL24 hand joint is used because fingertip joints are unavailable. |
-| Ball Speed | 2190.378 | px/s | proxy | object_2d | 19 | 2D ball speed without camera calibration; not physical mph/km/h. |
+| Head Stability | 30.155 | % | proxy | 3d_pose | 10 | Root-relative head drift score; no SlyMask reference scale. |
+| Dominant Side | right |  | proxy | 3d_pose | 10 | Inferred from larger hand peak speed. |
+| Lead Side | left |  | proxy | 3d_pose | 5 | Inferred from foot position along stride direction. |
+| Elbow Bend | 92.035 | deg | available | 3d_pose | 10 | Throwing side inferred by peak hand speed. |
+| Arm Abduction | 122.099 | deg | available | 3d_pose | 10 | Upper arm angle relative to torso axis. |
+| Stride Angle | 29.349 | deg | proxy | 3d_pose | 5 | Angle between foot line and hip line at inferred landing frame. |
+| Stride Length | 0.595 | height_ratio | proxy | 3d_pose | 5 | Foot separation normalized by reconstructed body-height proxy. |
+| Foot Direction | 8.117 | deg | proxy | 3d_pose | 5 | SMPL24 has foot marker but no toe; this approximates toe direction from ankle-to-foot vector. |
+| Wrist Snap | 24.405 | deg | proxy | 3d_pose | 10 | Uses elbow-wrist-hand angle change; no fingertip joint is available. |
+| Arm Speed | 5.261 | 3d_unit/s | proxy | 3d_pose | 10 | Raw wrist speed at release proxy; percentile needs a normative database. |
+| Fingertip Speed | 5.401 | 3d_unit/s | proxy | 3d_pose | 10 | SMPL24 hand joint is used because fingertip joints are unavailable. |
+| Ball Speed | 2190.378 | px/s | proxy | object_2d | 10 | 2D ball speed without camera calibration; not physical mph/km/h. |
 
 ## benchmark_hit_vertical_02
 
