@@ -124,10 +124,11 @@ def _shared_body_metrics(
     dominant_side: str,
     lead_side: str,
 ) -> list[MetricRow]:
+    phase_frames = _phase_window(frames, landing_frame, event_frame)
     hip_sep = _at(frames, event_frame, _hip_shoulder_sep)
     lead_knee = _joint_angle(frames[landing_frame], f"{lead_side}_hip", f"{lead_side}_knee", f"{lead_side}_ankle")
     trunk = _at(frames, event_frame, _trunk_tilt)
-    head_stability = _head_stability(frames)
+    head_stability = _head_stability(phase_frames)
     return [
         _metric(clip_id, action_type, "Hip-Shoulder Sep", hip_sep, "deg", "available", "3d_pose", event_frame, "SMPL24 hip/shoulder lines projected to horizontal plane."),
         _metric(clip_id, action_type, "Lead Knee Angle", lead_knee, "deg", "available", "3d_pose", landing_frame, f"Lead side inferred as {lead_side}; value is anatomical knee angle, not flexion-only label."),
@@ -184,15 +185,16 @@ def _batting_metrics(
     lead_side: str,
 ) -> list[MetricRow]:
     del lead_side
-    hip_rotation = _rotation_range(frames, _hip_yaw)
-    bat_speed = _object_peak(object_rows, "bat_speed_px_s")
-    bat_speed_norm = _object_peak(object_rows, "bat_speed_norm_s")
-    attack_angle = _object_at_peak(object_rows, "bat_speed_px_s", "bat_angle_deg")
+    phase_frames = _phase_window(frames, landing_frame, contact_frame)
+    hip_rotation = _rotation_range(phase_frames, _hip_yaw)
+    bat_speed = _object_at_frame(object_rows, contact_frame, "bat_speed_px_s")
+    bat_speed_norm = _object_at_frame(object_rows, contact_frame, "bat_speed_norm_s")
+    attack_angle = _object_at_frame(object_rows, contact_frame, "bat_angle_deg")
     wrist_speed = _joint_speed(frames, f"{side}_wrist", contact_frame)
     rows = [
         _metric(clip_id, "batting", "Swing Speed", bat_speed_norm, "norm/s", "proxy" if bat_speed_norm is not None else "unavailable", "object_2d", contact_frame, "SlyMask percentile is unavailable; this is normalized 2D bat speed.") if bat_speed_norm is not None else _unavailable(clip_id, "batting", "Swing Speed", "No valid bat track after confidence/speed filtering."),
         _metric(clip_id, "batting", "Estimated Bat Speed", bat_speed, "px/s", "proxy" if bat_speed is not None else "unavailable", "object_2d", contact_frame, "No camera calibration/bat scale, so km/h cannot be recovered.") if bat_speed is not None else _unavailable(clip_id, "batting", "Estimated Bat Speed", "No valid bat track after confidence/speed filtering."),
-        _metric(clip_id, "batting", "Hip Rotation", hip_rotation, "deg", "available", "3d_pose", contact_frame, "Range of pelvis yaw over the clip."),
+        _metric(clip_id, "batting", "Hip Rotation", hip_rotation, "deg", "available", "3d_pose", contact_frame, "Range of pelvis yaw over the landing-to-event phase window."),
         _metric(clip_id, "batting", "Attack Angle", attack_angle, "deg", "proxy" if attack_angle is not None else "unavailable", "object_2d", contact_frame, "Image-plane bat angle at peak bat speed; not true 3D attack angle.") if attack_angle is not None else _unavailable(clip_id, "batting", "Attack Angle", "No valid bat angle at peak-speed/contact proxy frame."),
         _metric(clip_id, "batting", "Wrist/Hand Speed", wrist_speed, "3d_unit/s", "proxy", "3d_pose", contact_frame, "Useful internal body-speed proxy; SlyMask swing percentile needs a reference database."),
         _unavailable(clip_id, "batting", "Contact Time", "No ball track in batting benchmark and no bat-ball impact event detector; cannot determine physical contact duration."),
@@ -217,13 +219,28 @@ def _read_object_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def _phase_window(
+    frames: dict[int, dict[str, np.ndarray]],
+    start_frame: int,
+    end_frame: int,
+) -> dict[int, dict[str, np.ndarray]]:
+    start = min(start_frame, end_frame)
+    end = max(start_frame, end_frame)
+    window = {
+        frame_index: points
+        for frame_index, points in frames.items()
+        if start <= frame_index <= end
+    }
+    return window or frames
+
+
 def _event_frame(
     frames: dict[int, dict[str, np.ndarray]],
     action_type: str,
     object_rows: list[dict[str, str]],
 ) -> int:
     if action_type == "batting":
-        bat_peak_frame = _object_peak_frame(object_rows, "bat_speed_px_s")
+        bat_peak_frame = _object_peak_frame(object_rows, "bat_speed_norm_s")
         if bat_peak_frame in frames:
             return bat_peak_frame
     joint = "right_hand" if _dominant_side(frames) == "right" else "left_hand"
@@ -496,6 +513,17 @@ def _object_peak_frame(rows: list[dict[str, str]], field: str) -> int | None:
     return None if best is None else best[1]
 
 
+def _object_at_frame(rows: list[dict[str, str]], frame: int, field: str) -> float | None:
+    for row in rows:
+        try:
+            row_frame = int(row["frame_index"])
+        except (KeyError, ValueError):
+            continue
+        if row_frame == frame:
+            return _float(row.get(field))
+    return None
+
+
 def _object_at_peak(rows: list[dict[str, str]], peak_field: str, target_field: str) -> float | None:
     best: tuple[float, float] | None = None
     for row in rows:
@@ -602,7 +630,7 @@ def _suspicious_output_lines(rows: list[MetricRow]) -> list[str]:
             )
         if row.metric_name == "Wrist/Hand Speed" and value is not None and value < 0.5:
             lines.append(
-                f"- {row.clip_id}: Wrist/Hand Speed is {row.value} 3d_unit/s at bat peak-speed frame, indicating event mismatch."
+                f"- {row.clip_id}: Wrist/Hand Speed is {row.value} 3d_unit/s at bat normalized-speed frame, indicating event mismatch."
             )
         if row.metric_name == "Attack Angle" and value is not None and abs(value) > 45.0:
             lines.append(
@@ -650,7 +678,8 @@ def _write_markdown(path: Path, rows: list[MetricRow]) -> None:
         "",
         "### Motion-phase handling caveat",
         "",
-        "- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is bat peak-speed frame when a bat track exists; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.",
+        "- The current script does not perform full phase segmentation. It uses event proxies: pitching release is dominant-hand peak speed; pitching landing is the maximum ankle-separation frame before release; batting contact is normalized bat-speed peak when a bat track exists; batting landing is the first frame before the event where ankle separation reaches 90% of its pre-event maximum.",
+        "- Range-style body metrics now use the landing-to-event phase window instead of the full clip, so non-batting ending motion such as the running segment in `benchmark_hit_horizontal_06` is not included in Hip Rotation or Head Stability.",
         "- That means preparation or ending frames can still leak into metrics when the clip starts late, ends late, or the object/body peak-speed proxy does not match the real biomechanical event.",
         "- Phase-dependent metrics should be upgraded with explicit phase classifiers before being used as coaching-grade outputs: front-foot landing, max external rotation/acceleration, release/contact, and follow-through.",
         "",

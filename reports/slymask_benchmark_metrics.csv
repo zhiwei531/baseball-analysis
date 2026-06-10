@@ -3,7 +3,7 @@ benchmark_pitch_vertical_10,pitching,Hip-Shoulder Sep,8.543,deg,available,3d_pos
 benchmark_pitch_vertical_10,pitching,Lead Knee Angle,126.939,deg,available,3d_pose,22,"Lead side inferred as left; value is anatomical knee angle, not flexion-only label."
 benchmark_pitch_vertical_10,pitching,Trunk Tilt,18.941,deg,available,3d_pose,24,Torso vector relative to reconstructed vertical axis.
 benchmark_pitch_vertical_10,pitching,Weight Transfer,,,unavailable,none,,Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer.
-benchmark_pitch_vertical_10,pitching,Head Stability,55.572,%,proxy,3d_pose,24,Root-relative head drift score; no SlyMask reference scale.
+benchmark_pitch_vertical_10,pitching,Head Stability,92.928,%,proxy,3d_pose,24,Root-relative head drift score; no SlyMask reference scale.
 benchmark_pitch_vertical_10,pitching,Dominant Side,right,,proxy,3d_pose,24,Inferred from larger hand peak speed.
 benchmark_pitch_vertical_10,pitching,Lead Side,left,,proxy,3d_pose,22,Inferred from foot position along stride direction.
 benchmark_pitch_vertical_10,pitching,Elbow Bend,68.069,deg,available,3d_pose,24,Throwing side inferred by peak hand speed.
@@ -19,7 +19,7 @@ benchmark_pitch_vertical_09,pitching,Hip-Shoulder Sep,7.241,deg,available,3d_pos
 benchmark_pitch_vertical_09,pitching,Lead Knee Angle,139.372,deg,available,3d_pose,5,"Lead side inferred as left; value is anatomical knee angle, not flexion-only label."
 benchmark_pitch_vertical_09,pitching,Trunk Tilt,13.435,deg,available,3d_pose,10,Torso vector relative to reconstructed vertical axis.
 benchmark_pitch_vertical_09,pitching,Weight Transfer,,,unavailable,none,,Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer.
-benchmark_pitch_vertical_09,pitching,Head Stability,30.155,%,proxy,3d_pose,10,Root-relative head drift score; no SlyMask reference scale.
+benchmark_pitch_vertical_09,pitching,Head Stability,73.196,%,proxy,3d_pose,10,Root-relative head drift score; no SlyMask reference scale.
 benchmark_pitch_vertical_09,pitching,Dominant Side,right,,proxy,3d_pose,10,Inferred from larger hand peak speed.
 benchmark_pitch_vertical_09,pitching,Lead Side,left,,proxy,3d_pose,5,Inferred from foot position along stride direction.
 benchmark_pitch_vertical_09,pitching,Elbow Bend,92.035,deg,available,3d_pose,10,Throwing side inferred by peak hand speed.
@@ -35,25 +35,25 @@ benchmark_hit_vertical_02,batting,Hip-Shoulder Sep,51.075,deg,available,3d_pose,
 benchmark_hit_vertical_02,batting,Lead Knee Angle,132.274,deg,available,3d_pose,73,"Lead side inferred as left; value is anatomical knee angle, not flexion-only label."
 benchmark_hit_vertical_02,batting,Trunk Tilt,22.455,deg,available,3d_pose,106,Torso vector relative to reconstructed vertical axis.
 benchmark_hit_vertical_02,batting,Weight Transfer,,,unavailable,none,,Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer.
-benchmark_hit_vertical_02,batting,Head Stability,89.882,%,proxy,3d_pose,106,Root-relative head drift score; no SlyMask reference scale.
+benchmark_hit_vertical_02,batting,Head Stability,97.827,%,proxy,3d_pose,106,Root-relative head drift score; no SlyMask reference scale.
 benchmark_hit_vertical_02,batting,Dominant Side,right,,proxy,3d_pose,106,Inferred from larger hand peak speed.
 benchmark_hit_vertical_02,batting,Lead Side,left,,proxy,3d_pose,73,Inferred from foot position along stride direction.
 benchmark_hit_vertical_02,batting,Swing Speed,8.041,norm/s,proxy,object_2d,106,SlyMask percentile is unavailable; this is normalized 2D bat speed.
 benchmark_hit_vertical_02,batting,Estimated Bat Speed,5920.921,px/s,proxy,object_2d,106,"No camera calibration/bat scale, so km/h cannot be recovered."
-benchmark_hit_vertical_02,batting,Hip Rotation,83.922,deg,available,3d_pose,106,Range of pelvis yaw over the clip.
+benchmark_hit_vertical_02,batting,Hip Rotation,41.769,deg,available,3d_pose,106,Range of pelvis yaw over the landing-to-event phase window.
 benchmark_hit_vertical_02,batting,Attack Angle,-57.185,deg,proxy,object_2d,106,Image-plane bat angle at peak bat speed; not true 3D attack angle.
 benchmark_hit_vertical_02,batting,Wrist/Hand Speed,1.460,3d_unit/s,proxy,3d_pose,106,Useful internal body-speed proxy; SlyMask swing percentile needs a reference database.
 benchmark_hit_vertical_02,batting,Contact Time,,,unavailable,none,,No ball track in batting benchmark and no bat-ball impact event detector; cannot determine physical contact duration.
-benchmark_hit_horizontal_06,batting,Hip-Shoulder Sep,2.436,deg,available,3d_pose,110,SMPL24 hip/shoulder lines projected to horizontal plane.
+benchmark_hit_horizontal_06,batting,Hip-Shoulder Sep,4.009,deg,available,3d_pose,81,SMPL24 hip/shoulder lines projected to horizontal plane.
 benchmark_hit_horizontal_06,batting,Lead Knee Angle,157.620,deg,available,3d_pose,71,"Lead side inferred as left; value is anatomical knee angle, not flexion-only label."
-benchmark_hit_horizontal_06,batting,Trunk Tilt,3.052,deg,available,3d_pose,110,Torso vector relative to reconstructed vertical axis.
+benchmark_hit_horizontal_06,batting,Trunk Tilt,2.393,deg,available,3d_pose,81,Torso vector relative to reconstructed vertical axis.
 benchmark_hit_horizontal_06,batting,Weight Transfer,,,unavailable,none,,Current GVHMR output is not calibrated to field/world translation; hip/root drift should not be interpreted as COM transfer.
-benchmark_hit_horizontal_06,batting,Head Stability,64.386,%,proxy,3d_pose,110,Root-relative head drift score; no SlyMask reference scale.
-benchmark_hit_horizontal_06,batting,Dominant Side,right,,proxy,3d_pose,110,Inferred from larger hand peak speed.
+benchmark_hit_horizontal_06,batting,Head Stability,99.153,%,proxy,3d_pose,81,Root-relative head drift score; no SlyMask reference scale.
+benchmark_hit_horizontal_06,batting,Dominant Side,right,,proxy,3d_pose,81,Inferred from larger hand peak speed.
 benchmark_hit_horizontal_06,batting,Lead Side,left,,proxy,3d_pose,71,Inferred from foot position along stride direction.
-benchmark_hit_horizontal_06,batting,Swing Speed,8.064,norm/s,proxy,object_2d,110,SlyMask percentile is unavailable; this is normalized 2D bat speed.
-benchmark_hit_horizontal_06,batting,Estimated Bat Speed,7309.942,px/s,proxy,object_2d,110,"No camera calibration/bat scale, so km/h cannot be recovered."
-benchmark_hit_horizontal_06,batting,Hip Rotation,146.795,deg,available,3d_pose,110,Range of pelvis yaw over the clip.
-benchmark_hit_horizontal_06,batting,Attack Angle,-4.272,deg,proxy,object_2d,110,Image-plane bat angle at peak bat speed; not true 3D attack angle.
-benchmark_hit_horizontal_06,batting,Wrist/Hand Speed,0.130,3d_unit/s,proxy,3d_pose,110,Useful internal body-speed proxy; SlyMask swing percentile needs a reference database.
+benchmark_hit_horizontal_06,batting,Swing Speed,8.064,norm/s,proxy,object_2d,81,SlyMask percentile is unavailable; this is normalized 2D bat speed.
+benchmark_hit_horizontal_06,batting,Estimated Bat Speed,6159.601,px/s,proxy,object_2d,81,"No camera calibration/bat scale, so km/h cannot be recovered."
+benchmark_hit_horizontal_06,batting,Hip Rotation,2.638,deg,available,3d_pose,81,Range of pelvis yaw over the landing-to-event phase window.
+benchmark_hit_horizontal_06,batting,Attack Angle,164.369,deg,proxy,object_2d,81,Image-plane bat angle at peak bat speed; not true 3D attack angle.
+benchmark_hit_horizontal_06,batting,Wrist/Hand Speed,0.134,3d_unit/s,proxy,3d_pose,81,Useful internal body-speed proxy; SlyMask swing percentile needs a reference database.
 benchmark_hit_horizontal_06,batting,Contact Time,,,unavailable,none,,No ball track in batting benchmark and no bat-ball impact event detector; cannot determine physical contact duration.
