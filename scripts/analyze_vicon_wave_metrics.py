@@ -39,12 +39,32 @@ class TrialMetrics:
     bat4_speed_kmh: float
     hand_speed_kmh: float
     hand_marker: str
+    wrist_speed_kmh: float
+    wrist_marker: str
     hip_rotation_deg: float | None
     hip_shoulder_sep_deg: float | None
+    weight_transfer_pct: float | None
     lead_knee_angle_deg: float | None
     trunk_tilt_deg: float | None
     head_stability_pct: float | None
     attack_angle_deg: float
+    stride_angle_deg: float | None
+    stride_length_ratio: float | None
+    foot_direction_deg: float | None
+    elbow_bend_deg: float | None
+    arm_abduction_deg: float | None
+    wrist_snap_deg: float | None
+
+
+@dataclass(frozen=True)
+class MetricDetail:
+    trial: str
+    family: str
+    metric: str
+    value: str
+    unit: str
+    status: str
+    method_or_reason: str
 
 
 def main() -> None:
@@ -63,9 +83,12 @@ def main() -> None:
             continue
         trials.append(analyze_trial(path))
 
+    details = [row for trial in trials for row in metric_details(trial)]
     write_summary_csv(output_dir / "vicon_slymask_metrics.csv", trials)
+    write_detail_csv(output_dir / "vicon_slymask_metric_detail.csv", details)
     write_report(output_dir / "vicon_slymask_metrics.md", trials)
     print(output_dir / "vicon_slymask_metrics.csv")
+    print(output_dir / "vicon_slymask_metric_detail.csv")
     print(output_dir / "vicon_slymask_metrics.md")
 
 
@@ -81,8 +104,10 @@ def analyze_trial(path: Path) -> TrialMetrics:
     bat1_speed = marker_speed_at_frame(frames, bat1, event_frame, sample_rate_hz)
     bat4_speed = marker_speed_at_frame(frames, bat4, event_frame, sample_rate_hz)
     hand_marker, hand_speed = best_hand_speed_at_frame(frames, prefix, event_frame, sample_rate_hz)
+    wrist_marker, wrist_speed = best_wrist_speed_at_frame(frames, prefix, event_frame)
 
     phase_frames = [item for item in frames if phase_start <= item.frame <= phase_end]
+    phase_start_data = frame_by_id(frames, phase_start)
     return TrialMetrics(
         trial=path.stem,
         sample_rate_hz=sample_rate_hz,
@@ -99,12 +124,21 @@ def analyze_trial(path: Path) -> TrialMetrics:
         bat4_speed_kmh=bat4_speed,
         hand_speed_kmh=hand_speed,
         hand_marker=hand_marker,
+        wrist_speed_kmh=wrist_speed,
+        wrist_marker=wrist_marker,
         hip_rotation_deg=rotation_range(phase_frames, hip_yaw),
         hip_shoulder_sep_deg=hip_shoulder_sep(event.markers, prefix),
+        weight_transfer_pct=weight_transfer_proxy(phase_start_data.markers, event.markers, prefix),
         lead_knee_angle_deg=lead_knee_angle(event.markers, prefix),
         trunk_tilt_deg=trunk_tilt(event.markers, prefix),
         head_stability_pct=head_stability(phase_frames, prefix),
         attack_angle_deg=bat_axis_angle(event.markers[bat1], event.markers[bat4]),
+        stride_angle_deg=stride_angle(event.markers, prefix),
+        stride_length_ratio=stride_length_ratio(event.markers, prefix),
+        foot_direction_deg=foot_direction(event.markers, prefix),
+        elbow_bend_deg=elbow_bend(event.markers, prefix),
+        arm_abduction_deg=arm_abduction(event.markers, prefix),
+        wrist_snap_deg=wrist_snap_proxy(phase_start_data.markers, event.markers, prefix, hand_marker),
     )
 
 
@@ -237,6 +271,18 @@ def best_hand_speed_at_frame(
     return max(speeds, key=lambda item: item[1])
 
 
+def best_wrist_speed_at_frame(frames: list[FrameData], prefix: str, frame_id: int) -> tuple[str, float]:
+    speeds = []
+    for marker in ("LWRA", "LWRB", "RWRA", "RWRB"):
+        full_name = f"{prefix}:{marker}"
+        speed = marker_speed_at_frame(frames, full_name, frame_id, 0.0)
+        if not math.isnan(speed):
+            speeds.append((marker, speed))
+    if not speeds:
+        return "", float("nan")
+    return max(speeds, key=lambda item: item[1])
+
+
 def bat_axis_angle(bat1: np.ndarray, bat4: np.ndarray) -> float:
     vector = bat1 - bat4
     horizontal = math.hypot(float(vector[0]), float(vector[1]))
@@ -309,6 +355,111 @@ def head_stability(frames: list[FrameData], prefix: str) -> float | None:
     return max(0.0, min(100.0, 100.0 * (1.0 - drift / denominator)))
 
 
+def weight_transfer_proxy(
+    start_markers: dict[str, np.ndarray],
+    event_markers: dict[str, np.ndarray],
+    prefix: str,
+) -> float | None:
+    start_pelvis = pelvis_midpoint(start_markers, prefix)
+    event_pelvis = pelvis_midpoint(event_markers, prefix)
+    left_ankle = event_markers.get(f"{prefix}:LANK")
+    right_ankle = event_markers.get(f"{prefix}:RANK")
+    if start_pelvis is None or event_pelvis is None or left_ankle is None or right_ankle is None:
+        return None
+    stance_width = float(np.linalg.norm(left_ankle[:2] - right_ankle[:2]))
+    if stance_width <= 1e-9:
+        return None
+    pelvis_shift = float(np.linalg.norm(event_pelvis[:2] - start_pelvis[:2]))
+    return 100.0 * pelvis_shift / stance_width
+
+
+def stride_angle(markers: dict[str, np.ndarray], prefix: str) -> float | None:
+    left_ankle = markers.get(f"{prefix}:LANK")
+    right_ankle = markers.get(f"{prefix}:RANK")
+    left_hip = marker_mean(markers, prefix, ("LASI", "LPSI"))
+    right_hip = marker_mean(markers, prefix, ("RASI", "RPSI"))
+    if left_ankle is None or right_ankle is None or left_hip is None or right_hip is None:
+        return None
+    return planar_axis_angle(left_ankle - right_ankle, left_hip - right_hip)
+
+
+def stride_length_ratio(markers: dict[str, np.ndarray], prefix: str) -> float | None:
+    left_ankle = markers.get(f"{prefix}:LANK")
+    right_ankle = markers.get(f"{prefix}:RANK")
+    height = body_height_proxy(markers, prefix)
+    if left_ankle is None or right_ankle is None or height is None or height <= 1e-9:
+        return None
+    return float(np.linalg.norm(left_ankle[:2] - right_ankle[:2]) / height)
+
+
+def foot_direction(markers: dict[str, np.ndarray], prefix: str) -> float | None:
+    left_toe = markers.get(f"{prefix}:LTOE")
+    left_heel = markers.get(f"{prefix}:LHEE")
+    left_ankle = markers.get(f"{prefix}:LANK")
+    right_ankle = markers.get(f"{prefix}:RANK")
+    if left_toe is None or left_heel is None or left_ankle is None or right_ankle is None:
+        return None
+    return planar_axis_angle(left_toe - left_heel, left_ankle - right_ankle)
+
+
+def elbow_bend(markers: dict[str, np.ndarray], prefix: str) -> float | None:
+    return joint_angle(markers, prefix, "RSHO", "RELB", "RWRA")
+
+
+def arm_abduction(markers: dict[str, np.ndarray], prefix: str) -> float | None:
+    shoulder_mid = marker_mean(markers, prefix, ("LSHO", "RSHO"))
+    hip_mid = pelvis_midpoint(markers, prefix)
+    elbow = markers.get(f"{prefix}:RELB")
+    shoulder = markers.get(f"{prefix}:RSHO")
+    if shoulder_mid is None or hip_mid is None or elbow is None or shoulder is None:
+        return None
+    torso_axis = shoulder_mid - hip_mid
+    upper_arm = elbow - shoulder
+    return angle_between(upper_arm, torso_axis)
+
+
+def wrist_snap_proxy(
+    start_markers: dict[str, np.ndarray],
+    event_markers: dict[str, np.ndarray],
+    prefix: str,
+    hand_marker: str,
+) -> float | None:
+    side = hand_marker[0] if hand_marker and hand_marker[0] in ("L", "R") else "R"
+    start_angle = wrist_finger_angle(start_markers, prefix, side)
+    event_angle = wrist_finger_angle(event_markers, prefix, side)
+    if start_angle is None or event_angle is None:
+        return None
+    return abs(event_angle - start_angle)
+
+
+def wrist_finger_angle(markers: dict[str, np.ndarray], prefix: str, side: str) -> float | None:
+    elbow = markers.get(f"{prefix}:{side}ELB")
+    finger = markers.get(f"{prefix}:{side}FIN")
+    wrist = marker_mean(markers, prefix, (f"{side}WRA", f"{side}WRB"))
+    if elbow is None or finger is None or wrist is None:
+        return None
+    return angle_between(elbow - wrist, finger - wrist)
+
+
+def pelvis_midpoint(markers: dict[str, np.ndarray], prefix: str) -> np.ndarray | None:
+    return marker_mean(markers, prefix, ("LASI", "RASI", "LPSI", "RPSI"))
+
+
+def body_height_proxy(markers: dict[str, np.ndarray], prefix: str) -> float | None:
+    head = marker_mean(markers, prefix, ("LFHD", "RFHD", "LBHD", "RBHD"))
+    feet = marker_mean(markers, prefix, ("LANK", "RANK", "LHEE", "RHEE", "LTOE", "RTOE"))
+    if head is None or feet is None:
+        return None
+    return float(abs(head[2] - feet[2]))
+
+
+def planar_axis_angle(a: np.ndarray, b: np.ndarray) -> float | None:
+    angle = angle_between(np.array((a[0], a[1], 0.0)), np.array((b[0], b[1], 0.0)))
+    if angle is None:
+        return None
+    return min(angle, 180.0 - angle)
+
+
 def marker_mean(markers: dict[str, np.ndarray], prefix: str, names: Iterable[str]) -> np.ndarray | None:
     points = [markers[f"{prefix}:{name}"] for name in names if f"{prefix}:{name}" in markers]
     if not points:
@@ -340,6 +491,67 @@ def format_optional(value: float | None, digits: int = 3) -> str:
     return f"{value:.{digits}f}"
 
 
+def metric_details(trial: TrialMetrics) -> list[MetricDetail]:
+    rows = [
+        detail(trial, "Swing Analysis", "Estimated Bat Speed", trial.bat1_speed_kmh, "km/h", "direct", "3D speed of bat1 at selected swing event; bat4 is also reported in the summary because barrel marker identity is ambiguous."),
+        detail(trial, "Swing Analysis", "Swing Speed", trial.bat1_speed_kmh, "km/h", "raw_only", "Raw bat endpoint speed is available; SlyMask-style percentile needs a reference population."),
+        detail(trial, "Swing Analysis", "Hip Rotation", trial.hip_rotation_deg, "deg", "direct", "Pelvis yaw range over the selected high-speed swing window."),
+        detail(trial, "Swing Analysis", "Hip-Shoulder Sep", trial.hip_shoulder_sep_deg, "deg", "direct", "Absolute yaw difference between pelvis axis and shoulder axis at the event frame."),
+        detail(trial, "Swing Analysis", "Weight Transfer", trial.weight_transfer_pct, "%", "proxy", "Pelvis midpoint translation from phase start to event, normalized by ankle stance width; not a full COM model."),
+        detail(trial, "Swing Analysis", "Lead Knee Angle", trial.lead_knee_angle_deg, "deg", "direct", "Left lead-knee angle from LASI-LKNE-LANK."),
+        detail(trial, "Swing Analysis", "Trunk Tilt", trial.trunk_tilt_deg, "deg", "direct", "Torso midpoint vector relative to vertical Z axis."),
+        unavailable(trial, "Swing Analysis", "Contact Time", "ms", "No ball-contact label, bat-ball impact event, or ball marker exists in this CSV."),
+        detail(trial, "Swing Analysis", "Attack Angle", trial.attack_angle_deg, "deg", "proxy", "Bat axis angle relative to the horizontal plane at selected event; true attack angle needs a contact-frame definition."),
+        detail(trial, "Swing Analysis", "Head Stability", trial.head_stability_pct, "%", "proxy", "Head midpoint drift relative to pelvis midpoint over the selected swing window."),
+        detail(trial, "Motion Metrics", "Elbow Bend", trial.elbow_bend_deg, "deg", "direct_batting_context", "Right elbow angle from RSHO-RELB-RWRA; SlyMask's pitching acceleration interpretation is not directly applicable to this batting dataset."),
+        detail(trial, "Motion Metrics", "Arm Abduction", trial.arm_abduction_deg, "deg", "direct_batting_context", "Right upper-arm angle relative to torso axis; pitching arm-slot interpretation is not directly applicable."),
+        detail(trial, "Motion Metrics", "Trunk Lean", trial.trunk_tilt_deg, "deg", "direct_batting_context", "Same torso-vs-vertical geometry as Trunk Tilt, measured at swing event instead of pitching release."),
+        detail(trial, "Motion Metrics", "Stride Angle", trial.stride_angle_deg, "deg", "proxy", "Planar angle between ankle stance line and pelvis axis at event; pitching front-foot-landing definition is unavailable."),
+        detail(trial, "Motion Metrics", "Lead Knee", trial.lead_knee_angle_deg, "deg", "direct_batting_context", "Left lead-knee angle from LASI-LKNE-LANK; measured at swing event."),
+        detail(trial, "Motion Metrics", "Hip-Shoulder Sep", trial.hip_shoulder_sep_deg, "deg", "direct_batting_context", "Same pelvis-shoulder yaw separation as batting metric, measured at swing event."),
+        detail(trial, "Motion Metrics", "Arm Speed", trial.wrist_speed_kmh, "km/h", "raw_only", f"Fastest wrist marker at event is {trial.wrist_marker}; percentile needs a reference population."),
+        detail(trial, "Motion Metrics", "Stride Length", trial.stride_length_ratio, "body heights", "proxy", "Ankle stance distance divided by head-to-foot height proxy; pitching stride event definition is unavailable."),
+        detail(trial, "Motion Metrics", "Weight Transfer", trial.weight_transfer_pct, "%", "proxy", "Same pelvis-shift proxy as batting Weight Transfer; not a validated COM transfer metric."),
+        detail(trial, "Motion Metrics", "Head Stability", trial.head_stability_pct, "%", "proxy", "Head drift relative to pelvis over the swing window; SlyMask stride-line definition is unavailable."),
+        detail(trial, "Motion Metrics", "Foot Direction", trial.foot_direction_deg, "deg", "proxy", "Left heel-to-toe direction relative to stance line at event; home-plate target direction is unavailable."),
+        detail(trial, "Motion Metrics", "Wrist Snap", trial.wrist_snap_deg, "deg", "proxy", "Change in elbow-wrist-finger angle from phase start to event using the fastest hand side."),
+        detail(trial, "Motion Metrics", "Fingertip Speed", trial.hand_speed_kmh, "km/h", "raw_only", f"Fastest hand/finger marker at event is {trial.hand_marker}; percentile needs a reference population."),
+    ]
+    return rows
+
+
+def detail(
+    trial: TrialMetrics,
+    family: str,
+    metric: str,
+    value: float | None,
+    unit: str,
+    status: str,
+    method: str,
+) -> MetricDetail:
+    return MetricDetail(
+        trial=trial.trial,
+        family=family,
+        metric=metric,
+        value=format_optional(value, 3),
+        unit=unit,
+        status=status if format_optional(value, 3) else "unavailable",
+        method_or_reason=method if format_optional(value, 3) else f"Required marker data was missing or invalid. {method}",
+    )
+
+
+def unavailable(trial: TrialMetrics, family: str, metric: str, unit: str, reason: str) -> MetricDetail:
+    return MetricDetail(
+        trial=trial.trial,
+        family=family,
+        metric=metric,
+        value="",
+        unit=unit,
+        status="unavailable",
+        method_or_reason=reason,
+    )
+
+
 def write_summary_csv(path: Path, trials: list[TrialMetrics]) -> None:
     fields = list(TrialMetrics.__dataclass_fields__)
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -347,6 +559,15 @@ def write_summary_csv(path: Path, trials: list[TrialMetrics]) -> None:
         writer.writeheader()
         for trial in trials:
             writer.writerow({field: getattr(trial, field) for field in fields})
+
+
+def write_detail_csv(path: Path, details: list[MetricDetail]) -> None:
+    fields = list(MetricDetail.__dataclass_fields__)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in details:
+            writer.writerow({field: getattr(row, field) for field in fields})
 
 
 def write_report(path: Path, trials: list[TrialMetrics]) -> None:
@@ -386,26 +607,23 @@ def write_report(path: Path, trials: list[TrialMetrics]) -> None:
             "",
             "Reference comparison: `0506Coach_wave` matches the requested bat angle (`-27.1 deg`). Its fastest endpoint `bat1` is `131.7 km/h`; the opposite endpoint `bat4` is `87.9 km/h`, closer to the requested `95 km/h`. The best hand/finger marker at the same frame is `LFIN = 39.4 km/h`, matching the requested wrist/hand-speed reference better than wrist markers.",
             "",
-            "## SlyMask Metric Coverage",
+            "## Complete SlyMask Metric Table",
             "",
-            "| metric | computable from Vicon? | method / limitation |",
-            "|---|---|---|",
-            "| Estimated Bat Speed | yes | Direct 3D marker speed; report both `bat1` and `bat4` because marker-to-barrel definition is ambiguous. |",
-            "| Swing Speed | yes, raw only | Raw km/h available; SlyMask percentile requires a reference population. |",
-            "| Hip Rotation | yes | Pelvis yaw range from LASI/RASI/LPSI/RPSI over swing window. |",
-            "| Hip-Shoulder Sep | yes | Absolute yaw difference between pelvis line and shoulder line at event frame. |",
-            "| Lead Knee Angle | yes | Left lead-knee anatomical angle proxy from LASI-LKNE-LANK. |",
-            "| Trunk Tilt | yes | Torso vector relative to vertical Z axis. |",
-            "| Head Stability | proxy | Head midpoint drift relative to pelvis midpoint over swing window. |",
-            "| Attack Angle | proxy | Bat axis angle relative to horizontal plane; true ball-contact attack angle still needs contact definition. |",
-            "| Contact Time | no | No ball-contact labels or ball marker. |",
-            "| Weight Transfer | partial/proxy | Pelvis translation exists, but a validated COM model is not implemented here. |",
-            "| Pitching-only metrics | not applicable | Dataset is batting swing, not pitching. |",
-            "| Wrist Snap / Fingertip Speed | partial | Finger markers exist; true wrist-snap amplitude needs a formal wrist/hand segment definition. |",
-            "| Elbow Bend | technically yes | Elbow angle can be computed from shoulder-elbow-wrist markers, but the SlyMask text defines it for pitching acceleration; this dataset is batting. |",
-            "| Arm Abduction | technically yes | Upper-arm angle relative to torso can be computed, but pitching arm-slot interpretation is not applicable. |",
-            "| Arm Speed | yes, raw only | Wrist/hand marker speed is available; SlyMask percentile requires a reference population. |",
-            "| Stride Angle / Stride Length / Foot Direction | partial | Feet and pelvis markers exist; definitions are pitching-specific and require a validated phase/event definition. |",
+            "Status meanings: `direct` is a direct 3D marker geometry calculation; `raw_only` means the physical value exists but SlyMask's percentile/rating needs a reference population; `proxy` means the value is computable but the app's exact event or target definition is missing; `direct_batting_context` means the geometry is direct, but SlyMask describes the metric for pitching while these Vicon files are batting swings.",
+            "",
+            "The SlyMask categorical labels (`Good`, `Attention`, `Deviate`) and reliability percentages are not reproduced here because they require proprietary thresholds, a reference population, and the app's internal confidence model. This report focuses on whether the underlying physical metric can be extracted automatically from the Vicon CSV.",
+            "",
+            "| trial | family | metric | value | unit | status | method / reason |",
+            "|---|---|---|---:|---|---|---|",
+        ]
+    )
+    for row in [item for trial in trials for item in metric_details(trial)]:
+        lines.append(
+            f"| {row.trial} | {row.family} | {row.metric} | {row.value} | {row.unit} | "
+            f"{row.status} | {row.method_or_reason} |"
+        )
+    lines.extend(
+        [
             "",
             "## Body Metrics at Event",
             "",
