@@ -1,0 +1,20 @@
+metric,task_context,three_d435_capability,phone_cv_capability,note
+Estimated Bat Speed,batting,possible if bat is reconstructed/tracked in 3D; otherwise RGB/object proxy,2D proxy only without calibration,D435 can recover metric scale only when bat endpoints are segmented/tracked in calibrated 3D.
+Swing Speed,batting,3D bat endpoint speed or wrist/hand speed proxy,2D pixel/normalized proxy,D435 is better for physical speed; phone needs scale/camera calibration.
+Hip Rotation,batting,reliable 3D pelvis yaw range,view-dependent 2D/monocular 3D proxy,D435 reduces perspective ambiguity.
+Hip-Shoulder Sep,both,reliable 3D hip/shoulder yaw difference,usable but orientation drift/view dependent,"Clear geometry for both, stronger with depth."
+Weight Transfer,both,pelvis/COM trajectory proxy; better if fused with force plate,not reliable from monocular video,D435 gives metric 3D displacement but not true force transfer.
+Lead Knee Angle,both,reliable 3D anatomical angle,usable when view is favorable; poor with side occlusion,Depth resolves side/front projection ambiguity.
+Trunk Tilt / Lean,both,reliable 3D torso-vs-vertical angle,usable but camera-pitch dependent,Needs gravity/vertical definition in both systems.
+Contact Time,batting,not reliable unless ball and bat contact are visible/tracked at high fps,not reliable,D435 frame rate may still be too low for short bat-ball contact.
+Attack Angle,batting,3D bat-axis angle if bat endpoints are tracked,often image-plane angle only,D435 helps only after robust bat segmentation/tracking.
+Head Stability,both,3D head drift relative to pelvis/stride line,2D/root-relative proxy,D435 provides metric displacement but still needs phase definition.
+Elbow Bend,pitching,reliable 3D joint angle,usable but occlusion/view dependent,Clear three-point joint angle.
+Arm Abduction,pitching,reliable 3D upper-arm vs torso angle,often inaccurate from side/back views,Depth strongly improves arm-slot interpretation.
+Stride Angle,pitching,3D foot/hip geometry at landing,"2D proxy, sensitive to camera angle",D435 needs landing-frame detector.
+Stride Length,pitching,metric foot displacement or height-normalized length,height-normalized 2D proxy,D435 can output real distance in mm if calibrated.
+Foot Direction,pitching,possible if foot/toe orientation is visible in RGB/depth,often poor without toe keypoints,D435 still needs a toe/foot orientation model.
+Wrist Snap,pitching,wrist-hand angle change proxy; fingertip model preferred,wrist/hand proxy only,D435 depth helps but does not create missing fingertip landmarks.
+Arm Speed,pitching,3D wrist/hand speed,monocular unit speed or pixel speed,D435 provides metric speed after synchronization/calibration.
+Fingertip Speed,pitching,possible with fingertip keypoints or hand model,usually unavailable/proxy,D435 RGB/depth alone needs a hand-pose model.
+Ball Speed,pitching,possible but difficult: small fast ball needs high fps and robust detection,2D px/s proxy without calibration,D435 is not a dedicated high-speed ball-tracking system.
