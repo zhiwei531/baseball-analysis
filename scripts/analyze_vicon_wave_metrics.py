@@ -5,11 +5,18 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
+
+os.environ.setdefault("MPLCONFIGDIR", "/private/tmp/baseball_mpl_cache")
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 DEFAULT_INPUT_DIR = Path("../Vicon_Wave_250506(1)")
@@ -84,6 +91,7 @@ def main() -> None:
         trials.append(analyze_trial(path))
 
     details = [row for trial in trials for row in metric_details(trial)]
+    write_visualizations(input_dir, output_dir, trials)
     write_summary_csv(output_dir / "vicon_slymask_metrics.csv", trials)
     write_detail_csv(output_dir / "vicon_slymask_metric_detail.csv", details)
     write_report(output_dir / "vicon_slymask_metrics.md", trials)
@@ -236,6 +244,14 @@ def marker_speed_series(frames: list[FrameData], marker_name: str) -> list[tuple
             continue
         speed_kmh = np.linalg.norm(current.markers[marker_name] - previous.markers[marker_name]) / dt * 0.0036
         rows.append((current.frame, current.timestamp_sec, float(speed_kmh)))
+    return rows
+
+
+def bat_angle_series(frames: list[FrameData], bat1: str, bat4: str) -> list[tuple[int, float, float]]:
+    rows = []
+    for frame in frames:
+        if bat1 in frame.markers and bat4 in frame.markers:
+            rows.append((frame.frame, frame.timestamp_sec, bat_axis_angle(frame.markers[bat1], frame.markers[bat4])))
     return rows
 
 
@@ -552,6 +568,104 @@ def unavailable(trial: TrialMetrics, family: str, metric: str, unit: str, reason
     )
 
 
+def raw_data_source(row: MetricDetail) -> str:
+    sources = {
+        ("Swing Analysis", "Estimated Bat Speed"): "`bat1/bat4` 3D coordinates, frame timestamps",
+        ("Swing Analysis", "Swing Speed"): "`bat1/bat4` 3D coordinates, frame timestamps",
+        ("Swing Analysis", "Hip Rotation"): "`LASI/RASI/LPSI/RPSI` pelvis markers",
+        ("Swing Analysis", "Hip-Shoulder Sep"): "`LASI/RASI/LPSI/RPSI`, `LSHO/RSHO`",
+        ("Swing Analysis", "Weight Transfer"): "`LASI/RASI/LPSI/RPSI`, `LANK/RANK`",
+        ("Swing Analysis", "Lead Knee Angle"): "`LASI/LKNE/LANK`",
+        ("Swing Analysis", "Trunk Tilt"): "`LSHO/RSHO`, `LASI/RASI/LPSI/RPSI`, vertical `Z`",
+        ("Swing Analysis", "Contact Time"): "Missing ball marker or bat-ball contact label",
+        ("Swing Analysis", "Attack Angle"): "`bat1/bat4` 3D coordinates",
+        ("Swing Analysis", "Head Stability"): "`LFHD/RFHD/LBHD/RBHD`, pelvis markers",
+        ("Motion Metrics", "Elbow Bend"): "`RSHO/RELB/RWRA`",
+        ("Motion Metrics", "Arm Abduction"): "`RSHO/RELB`, shoulder midpoint, pelvis midpoint",
+        ("Motion Metrics", "Trunk Lean"): "`LSHO/RSHO`, pelvis markers, vertical `Z`",
+        ("Motion Metrics", "Stride Angle"): "`LANK/RANK`, pelvis axis markers",
+        ("Motion Metrics", "Lead Knee"): "`LASI/LKNE/LANK`",
+        ("Motion Metrics", "Hip-Shoulder Sep"): "`LASI/RASI/LPSI/RPSI`, `LSHO/RSHO`",
+        ("Motion Metrics", "Arm Speed"): "`LWRA/LWRB/RWRA/RWRB` 3D coordinates, frame timestamps",
+        ("Motion Metrics", "Stride Length"): "`LANK/RANK`, head and foot height proxy markers",
+        ("Motion Metrics", "Weight Transfer"): "`LASI/RASI/LPSI/RPSI`, `LANK/RANK`",
+        ("Motion Metrics", "Head Stability"): "`LFHD/RFHD/LBHD/RBHD`, pelvis markers",
+        ("Motion Metrics", "Foot Direction"): "`LTOE/LHEE`, `LANK/RANK`",
+        ("Motion Metrics", "Wrist Snap"): "`LELB/RELB`, wrist pair, `LFIN/RFIN`",
+        ("Motion Metrics", "Fingertip Speed"): "`LFIN/RFIN` 3D coordinates, frame timestamps",
+    }
+    return sources.get((row.family, row.metric), "")
+
+
+def write_visualizations(input_dir: Path, output_dir: Path, trials: list[TrialMetrics]) -> None:
+    figure_dir = output_dir / "figures"
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    trial_lookup = {trial.trial: trial for trial in trials}
+    loaded_trials = []
+    for path in sorted(input_dir.glob("*.csv")):
+        if path.name.startswith("._") or path.stem not in trial_lookup:
+            continue
+        sample_rate_hz, frames = load_vicon_csv(path)
+        del sample_rate_hz
+        loaded_trials.append((trial_lookup[path.stem], frames))
+    plot_bat_angle_time(figure_dir / "vicon_bat_angle_time.png", loaded_trials)
+    plot_speed_time(figure_dir / "vicon_speed_time.png", loaded_trials)
+
+
+def plot_bat_angle_time(path: Path, loaded_trials: list[tuple[TrialMetrics, list[FrameData]]]) -> None:
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=160)
+    for trial, frames in loaded_trials:
+        bat1 = f"{trial.prefix}:bat1"
+        bat4 = f"{trial.prefix}:bat4"
+        series = bat_angle_series(frames, bat1, bat4)
+        if not series:
+            continue
+        times = [time for _, time, _ in series]
+        angles = [angle for _, _, angle in series]
+        ax.plot(times, angles, label=trial.trial)
+        ax.axvspan(trial.phase_start_sec, trial.phase_end_sec, alpha=0.10)
+        ax.axvline(trial.event_sec, linestyle="--", linewidth=1)
+    ax.axhline(-27.0, color="black", linestyle=":", linewidth=1, label="-27 deg reference")
+    ax.set_title("Bat Axis Angle Over Time")
+    ax.set_xlabel("time (s)")
+    ax.set_ylabel("bat angle vs horizontal (deg)")
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
+def plot_speed_time(path: Path, loaded_trials: list[tuple[TrialMetrics, list[FrameData]]]) -> None:
+    fig, axes = plt.subplots(len(loaded_trials), 1, figsize=(10, 4 * max(1, len(loaded_trials))), dpi=160, sharex=False)
+    if len(loaded_trials) == 1:
+        axes = [axes]
+    for ax, (trial, frames) in zip(axes, loaded_trials):
+        for marker, label, linestyle in (
+            ("bat1", "bat1 speed", "-"),
+            ("bat4", "bat4 speed", "--"),
+            (trial.wrist_marker, f"{trial.wrist_marker} speed", ":"),
+        ):
+            full_name = f"{trial.prefix}:{marker}"
+            series = marker_speed_series(frames, full_name)
+            if not series:
+                continue
+            times = [time for _, time, _ in series]
+            speeds = [speed for _, _, speed in series]
+            ax.plot(times, speeds, linestyle=linestyle, label=label)
+        ax.axvspan(trial.phase_start_sec, trial.phase_end_sec, alpha=0.10, label="swing window")
+        ax.axvline(trial.event_sec, linestyle="--", linewidth=1, color="black", label="event frame")
+        ax.set_title(trial.trial)
+        ax.set_xlabel("time (s)")
+        ax.set_ylabel("speed (km/h)")
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+    fig.suptitle("Bat and Wrist Speed Over Time", y=0.995)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
 def write_summary_csv(path: Path, trials: list[TrialMetrics]) -> None:
     fields = list(TrialMetrics.__dataclass_fields__)
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -562,12 +676,23 @@ def write_summary_csv(path: Path, trials: list[TrialMetrics]) -> None:
 
 
 def write_detail_csv(path: Path, details: list[MetricDetail]) -> None:
-    fields = list(MetricDetail.__dataclass_fields__)
+    fields = ["trial", "family", "metric", "value", "unit", "status", "raw_data_source", "method_or_reason"]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in details:
-            writer.writerow({field: getattr(row, field) for field in fields})
+            writer.writerow(
+                {
+                    "trial": row.trial,
+                    "family": row.family,
+                    "metric": row.metric,
+                    "value": row.value,
+                    "unit": row.unit,
+                    "status": row.status,
+                    "raw_data_source": raw_data_source(row).replace("`", ""),
+                    "method_or_reason": row.method_or_reason,
+                }
+            )
 
 
 def write_report(path: Path, trials: list[TrialMetrics]) -> None:
@@ -591,39 +716,54 @@ def write_report(path: Path, trials: list[TrialMetrics]) -> None:
         "- Body markers include head (`LFHD/RFHD/LBHD/RBHD`), shoulders, elbows, wrists, pelvis (`LASI/RASI/LPSI/RPSI`), knees, ankles, heels, toes, and finger markers.",
         "- Bat markers are `bat1`, `bat2`, `bat3`, `bat4`; the longest and most stable axis is `bat1-bat4` at about `293 mm`.",
         "",
-        "## Required Parameters",
+        "## 1. Metric Feasibility vs Vicon Raw Data",
         "",
-        "| trial | event time (s) | bat angle (deg) | bat1 speed (km/h) | bat4 speed (km/h) | best hand marker | hand speed (km/h) | swing time (s) |",
-        "|---|---:|---:|---:|---:|---|---:|---:|",
+        "Status meanings: `direct` is a direct 3D marker geometry calculation; `raw_only` means the physical value exists but SlyMask's percentile/rating needs a reference population; `proxy` means the value is computable but the app's exact event or target definition is missing; `direct_batting_context` means the geometry is direct, but SlyMask describes the metric for pitching while these Vicon files are batting swings.",
+        "",
+        "The SlyMask categorical labels (`Good`, `Attention`, `Deviate`) and reliability percentages are not reproduced here because they require proprietary thresholds, a reference population, and the app's internal confidence model. This report focuses on whether the underlying physical metric can be extracted automatically from the Vicon CSV.",
+        "",
+        "| trial | family | metric | value | unit | status | Vicon raw data | calculation / reason |",
+        "|---|---|---|---:|---|---|---|---|",
     ]
-    for trial in trials:
-        lines.append(
-            f"| {trial.trial} | {trial.event_sec:.3f} | {trial.bat_axis_angle_deg:.1f} | "
-            f"{trial.bat1_speed_kmh:.1f} | {trial.bat4_speed_kmh:.1f} | {trial.hand_marker} | "
-            f"{trial.hand_speed_kmh:.1f} | {trial.swing_time_sec:.3f} |"
-        )
-    lines.extend(
-        [
-            "",
-            "Reference comparison: `0506Coach_wave` matches the requested bat angle (`-27.1 deg`). Its fastest endpoint `bat1` is `131.7 km/h`; the opposite endpoint `bat4` is `87.9 km/h`, closer to the requested `95 km/h`. The best hand/finger marker at the same frame is `LFIN = 39.4 km/h`, matching the requested wrist/hand-speed reference better than wrist markers.",
-            "",
-            "## Complete SlyMask Metric Table",
-            "",
-            "Status meanings: `direct` is a direct 3D marker geometry calculation; `raw_only` means the physical value exists but SlyMask's percentile/rating needs a reference population; `proxy` means the value is computable but the app's exact event or target definition is missing; `direct_batting_context` means the geometry is direct, but SlyMask describes the metric for pitching while these Vicon files are batting swings.",
-            "",
-            "The SlyMask categorical labels (`Good`, `Attention`, `Deviate`) and reliability percentages are not reproduced here because they require proprietary thresholds, a reference population, and the app's internal confidence model. This report focuses on whether the underlying physical metric can be extracted automatically from the Vicon CSV.",
-            "",
-            "| trial | family | metric | value | unit | status | method / reason |",
-            "|---|---|---|---:|---|---|---|",
-        ]
-    )
     for row in [item for trial in trials for item in metric_details(trial)]:
         lines.append(
             f"| {row.trial} | {row.family} | {row.metric} | {row.value} | {row.unit} | "
-            f"{row.status} | {row.method_or_reason} |"
+            f"{row.status} | {raw_data_source(row)} | {row.method_or_reason} |"
         )
     lines.extend(
         [
+            "",
+            "General formulas used in the table: joint angles use the vector dot product at the middle marker, `acos((BA dot BC) / (||BA|| ||BC||))`; marker speeds use 3D position differencing over adjacent frames; pelvis/shoulder rotations use planar yaw from left-right marker axes; normalization metrics use available body marker distances because the CSV has no explicit whole-body COM model.",
+            "",
+            "## 2. Specific Parameter Output and Validation",
+            "",
+            "Bat-head angle is computed from the selected bat axis `bat4 -> bat1`: `angle = atan2(Z_bat1 - Z_bat4, sqrt((X_bat1 - X_bat4)^2 + (Y_bat1 - Y_bat4)^2))`. The event frame is the frame whose bat-axis angle is closest to the provided `-27 deg` reference.",
+            "",
+            "Speed is computed by frame-to-frame 3D finite difference: `speed_km_h = ||P_t - P_(t-1)|| / delta_t * 0.0036`, where coordinates are in millimeters and `delta_t = 0.01 s` at `100 Hz`.",
+            "",
+            "Swing time is defined as the contiguous high-speed window around the event frame where `bat4` speed remains above `40%` of that trial's peak `bat4` speed. This operational definition is automatic and gives the Coach reference trial a `0.16 s` window.",
+            "",
+            "| trial | event time (s) | bat angle (deg) | bat1 speed (km/h) | bat4 speed (km/h) | best wrist marker | wrist speed (km/h) | best hand marker | hand speed (km/h) | swing start-end (s) | swing time (s) |",
+            "|---|---:|---:|---:|---:|---|---:|---|---:|---:|---:|",
+        ]
+    )
+    for trial in trials:
+        lines.append(
+            f"| {trial.trial} | {trial.event_sec:.3f} | {trial.bat_axis_angle_deg:.1f} | "
+            f"{trial.bat1_speed_kmh:.1f} | {trial.bat4_speed_kmh:.1f} | {trial.wrist_marker} | "
+            f"{trial.wrist_speed_kmh:.1f} | {trial.hand_marker} | {trial.hand_speed_kmh:.1f} | "
+            f"{trial.phase_start_sec:.3f}-{trial.phase_end_sec:.3f} | {trial.swing_time_sec:.3f} |"
+        )
+    lines.extend(
+        [
+            "",
+            "Reference comparison: `0506Coach_wave` matches the requested bat angle (`-27.1 deg`). Its fastest endpoint `bat1` is `131.7 km/h`; the opposite endpoint `bat4` is `87.9 km/h`, closer to the requested `95 km/h`. The best wrist marker at the same frame is `LWRA = 30.4 km/h`; the best hand/finger marker is `LFIN = 39.4 km/h`, matching the requested wrist/hand-speed reference better if the reference used a hand/finger marker rather than a strict wrist marker.",
+            "",
+            "## 4. Visualizations",
+            "",
+            "![Bat axis angle over time](figures/vicon_bat_angle_time.png)",
+            "",
+            "![Bat and wrist speed over time](figures/vicon_speed_time.png)",
             "",
             "## Body Metrics at Event",
             "",
