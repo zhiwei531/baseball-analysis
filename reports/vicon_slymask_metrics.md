@@ -17,6 +17,8 @@ Swing event is selected as the frame where the bat-axis angle is closest to `-27
 - Body markers include head (`LFHD/RFHD/LBHD/RBHD`), shoulders, elbows, wrists, pelvis (`LASI/RASI/LPSI/RPSI`), knees, ankles, heels, toes, and finger markers.
 - Bat markers are `bat1`, `bat2`, `bat3`, `bat4`; the longest and most stable axis is `bat1-bat4` at about `293 mm`.
 
+![Vicon CSV data structure](figures/vicon_csv_structure.png)
+
 ## 1. Metric Feasibility vs Vicon Raw Data
 
 Status meanings: `direct` is a direct 3D marker geometry calculation; `raw_only` means the physical value exists but SlyMask's percentile/rating needs a reference population; `proxy` means the value is computable but the app's exact event or target definition is missing; `direct_batting_context` means the geometry is direct, but SlyMask describes the metric for pitching while these Vicon files are batting swings.
@@ -73,6 +75,23 @@ The SlyMask categorical labels (`Good`, `Attention`, `Deviate`) and reliability 
 | Julian_wave02 | Motion Metrics | Fingertip Speed | 18.954 | km/h | raw_only | `LFIN/RFIN` 3D coordinates, frame timestamps | Fastest hand/finger marker at event is RFIN; percentile needs a reference population. |
 
 General formulas used in the table: joint angles use the vector dot product at the middle marker, `acos((BA dot BC) / (||BA|| ||BC||))`; marker speeds use 3D position differencing over adjacent frames; pelvis/shoulder rotations use planar yaw from left-right marker axes; normalization metrics use available body marker distances because the CSV has no explicit whole-body COM model.
+
+## Coverage Summary
+
+| trial | total SlyMask rows | direct geometry | raw value only | proxy | unavailable |
+|---|---:|---:|---:|---:|---:|
+| 0506Coach_wave | 23 | 10 | 3 | 9 | 1 |
+| Julian_wave02 | 23 | 10 | 3 | 9 | 1 |
+
+Interpretation: Vicon covers the body-geometry metrics well because it has calibrated 3D body markers, wrist/finger markers, timestamps, and explicit bat markers. It does not provide SlyMask's population percentiles, categorical labels, or reliability scores.
+
+Main limitations:
+
+- `Contact Time` remains unavailable: the CSV has no ball marker, no bat-ball impact label, and no contact interval annotation.
+- `Swing Speed`, `Arm Speed`, and `Fingertip Speed` can be output as raw physical speeds, but SlyMask-style percentiles need a reference population.
+- `Weight Transfer` is only a pelvis-shift proxy here because the CSV does not define a full-body COM model or force/pressure transfer.
+- `Attack Angle` is a bat-axis angle at the selected event; true attack angle still depends on a contact-frame definition.
+- Pitching-specific interpretations such as arm slot, stride landing, and release are geometrically computable in this batting Vicon dataset, but their SlyMask pitching semantics are not directly applicable.
 
 ## 2. Specific Parameter Output and Validation
 

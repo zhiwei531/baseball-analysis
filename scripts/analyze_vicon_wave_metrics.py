@@ -600,6 +600,7 @@ def raw_data_source(row: MetricDetail) -> str:
 def write_visualizations(input_dir: Path, output_dir: Path, trials: list[TrialMetrics]) -> None:
     figure_dir = output_dir / "figures"
     figure_dir.mkdir(parents=True, exist_ok=True)
+    plot_csv_structure(input_dir, figure_dir / "vicon_csv_structure.png")
     trial_lookup = {trial.trial: trial for trial in trials}
     loaded_trials = []
     for path in sorted(input_dir.glob("*.csv")):
@@ -610,6 +611,42 @@ def write_visualizations(input_dir: Path, output_dir: Path, trials: list[TrialMe
         loaded_trials.append((trial_lookup[path.stem], frames))
     plot_bat_angle_time(figure_dir / "vicon_bat_angle_time.png", loaded_trials)
     plot_speed_time(figure_dir / "vicon_speed_time.png", loaded_trials)
+
+
+def plot_csv_structure(input_dir: Path, path: Path) -> None:
+    csv_paths = [item for item in sorted(input_dir.glob("*.csv")) if not item.name.startswith("._")]
+    if not csv_paths:
+        return
+    rows = list(csv.reader(csv_paths[0].open("r", encoding="utf-8-sig", newline="")))
+    marker_names = [value.strip() for value in rows[2] if value.strip()]
+    body_markers = sorted({name.rsplit(":", 1)[1] for name in marker_names if ":" in name and not name.endswith(("bat1", "bat2", "bat3", "bat4"))})
+    bat_markers = [name for name in marker_names if name.endswith(("bat1", "bat2", "bat3", "bat4"))]
+    sample = [
+        ["Source CSV", csv_paths[0].name],
+        ["Row 1", rows[0][0]],
+        ["Row 2", f"{rows[1][0]} Hz sample rate"],
+        ["Row 3", f"{len(marker_names)} marker labels\nexamples: {', '.join(marker_names[:3])}"],
+        ["Row 4", "Frame, Sub Frame,\nthen repeated X,Y,Z coordinate fields"],
+        ["Row 5", "coordinate unit: mm"],
+        ["Body markers", f"{len(body_markers)} marker names\nexamples: {', '.join(body_markers[:10])}"],
+        ["Bat markers", ", ".join(marker.rsplit(':', 1)[1] for marker in bat_markers[:4])],
+    ]
+    fig, ax = plt.subplots(figsize=(14, 4.8), dpi=160)
+    ax.axis("off")
+    table = ax.table(cellText=sample, colLabels=["CSV element", "Observed structure"], cellLoc="left", loc="center")
+    table.auto_set_font_size(False)
+    table.set_fontsize(8)
+    table.scale(1, 1.7)
+    for (row, col), cell in table.get_celld().items():
+        if row == 0:
+            cell.set_text_props(weight="bold")
+            cell.set_facecolor("#d9eaf7")
+        elif col == 0:
+            cell.set_facecolor("#eef5fb")
+    ax.set_title("Vicon CSV Data Structure", pad=16)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
 
 
 def plot_bat_angle_time(path: Path, loaded_trials: list[tuple[TrialMetrics, list[FrameData]]]) -> None:
@@ -695,7 +732,43 @@ def write_detail_csv(path: Path, details: list[MetricDetail]) -> None:
             )
 
 
+def coverage_summary(details: list[MetricDetail]) -> list[str]:
+    by_trial: dict[str, list[MetricDetail]] = {}
+    for row in details:
+        by_trial.setdefault(row.trial, []).append(row)
+    lines = [
+        "## Coverage Summary",
+        "",
+        "| trial | total SlyMask rows | direct geometry | raw value only | proxy | unavailable |",
+        "|---|---:|---:|---:|---:|---:|",
+    ]
+    for trial, rows in by_trial.items():
+        direct_count = sum(row.status in {"direct", "direct_batting_context"} for row in rows)
+        raw_count = sum(row.status == "raw_only" for row in rows)
+        proxy_count = sum(row.status == "proxy" for row in rows)
+        unavailable_count = sum(row.status == "unavailable" for row in rows)
+        lines.append(
+            f"| {trial} | {len(rows)} | {direct_count} | {raw_count} | {proxy_count} | {unavailable_count} |"
+        )
+    lines.extend(
+        [
+            "",
+            "Interpretation: Vicon covers the body-geometry metrics well because it has calibrated 3D body markers, wrist/finger markers, timestamps, and explicit bat markers. It does not provide SlyMask's population percentiles, categorical labels, or reliability scores.",
+            "",
+            "Main limitations:",
+            "",
+            "- `Contact Time` remains unavailable: the CSV has no ball marker, no bat-ball impact label, and no contact interval annotation.",
+            "- `Swing Speed`, `Arm Speed`, and `Fingertip Speed` can be output as raw physical speeds, but SlyMask-style percentiles need a reference population.",
+            "- `Weight Transfer` is only a pelvis-shift proxy here because the CSV does not define a full-body COM model or force/pressure transfer.",
+            "- `Attack Angle` is a bat-axis angle at the selected event; true attack angle still depends on a contact-frame definition.",
+            "- Pitching-specific interpretations such as arm slot, stride landing, and release are geometrically computable in this batting Vicon dataset, but their SlyMask pitching semantics are not directly applicable.",
+        ]
+    )
+    return lines
+
+
 def write_report(path: Path, trials: list[TrialMetrics]) -> None:
+    details = [item for trial in trials for item in metric_details(trial)]
     lines = [
         "# Vicon Swing Metrics",
         "",
@@ -716,6 +789,8 @@ def write_report(path: Path, trials: list[TrialMetrics]) -> None:
         "- Body markers include head (`LFHD/RFHD/LBHD/RBHD`), shoulders, elbows, wrists, pelvis (`LASI/RASI/LPSI/RPSI`), knees, ankles, heels, toes, and finger markers.",
         "- Bat markers are `bat1`, `bat2`, `bat3`, `bat4`; the longest and most stable axis is `bat1-bat4` at about `293 mm`.",
         "",
+        "![Vicon CSV data structure](figures/vicon_csv_structure.png)",
+        "",
         "## 1. Metric Feasibility vs Vicon Raw Data",
         "",
         "Status meanings: `direct` is a direct 3D marker geometry calculation; `raw_only` means the physical value exists but SlyMask's percentile/rating needs a reference population; `proxy` means the value is computable but the app's exact event or target definition is missing; `direct_batting_context` means the geometry is direct, but SlyMask describes the metric for pitching while these Vicon files are batting swings.",
@@ -725,7 +800,7 @@ def write_report(path: Path, trials: list[TrialMetrics]) -> None:
         "| trial | family | metric | value | unit | status | Vicon raw data | calculation / reason |",
         "|---|---|---|---:|---|---|---|---|",
     ]
-    for row in [item for trial in trials for item in metric_details(trial)]:
+    for row in details:
         lines.append(
             f"| {row.trial} | {row.family} | {row.metric} | {row.value} | {row.unit} | "
             f"{row.status} | {raw_data_source(row)} | {row.method_or_reason} |"
@@ -734,6 +809,8 @@ def write_report(path: Path, trials: list[TrialMetrics]) -> None:
         [
             "",
             "General formulas used in the table: joint angles use the vector dot product at the middle marker, `acos((BA dot BC) / (||BA|| ||BC||))`; marker speeds use 3D position differencing over adjacent frames; pelvis/shoulder rotations use planar yaw from left-right marker axes; normalization metrics use available body marker distances because the CSV has no explicit whole-body COM model.",
+            "",
+            *coverage_summary(details),
             "",
             "## 2. Specific Parameter Output and Validation",
             "",
