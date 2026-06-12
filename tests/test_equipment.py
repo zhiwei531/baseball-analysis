@@ -6,6 +6,7 @@ from baseball_pose.equipment.detection import (
     _detect_ball_yolo,
     _detect_bat_yolo,
     _interpolate_object_records,
+    _resolve_yolo_device,
 )
 from baseball_pose.equipment.schema import ObjectTrackRecord
 from baseball_pose.io.object_csv import read_object_tracks, write_object_tracks
@@ -43,6 +44,10 @@ def test_motion_backend_does_not_require_yolo():
     assert _create_yolo_detector(EquipmentTrackingConfig(detector_backend="motion")) is None
 
 
+def test_yolo_auto_device_resolves_to_available_backend():
+    assert _resolve_yolo_device("auto") in {"cuda", "mps", "cpu", None}
+
+
 def test_yolo_bat_candidate_uses_baseball_bat_class_and_wrist_prior():
     config = EquipmentTrackingConfig(detector_backend="yolo")
     detections = [
@@ -65,6 +70,24 @@ def test_yolo_bat_candidate_uses_baseball_bat_class_and_wrist_prior():
     assert bat.confidence > 0.6
 
 
+def test_yolo_bat_candidate_does_not_require_pose_prior():
+    config = EquipmentTrackingConfig(detector_backend="yolo")
+    detections = [_YoloDetection(class_id=34, confidence=0.80, xyxy=(100.0, 80.0, 180.0, 96.0))]
+
+    bat = _detect_bat_yolo(
+        detections=detections,
+        wrist_points=[],
+        previous=None,
+        width=640,
+        height=480,
+        config=config,
+    )
+
+    assert bat is not None
+    assert bat.handle == (100.0, 88.0)
+    assert bat.barrel == (180.0, 88.0)
+
+
 def test_yolo_ball_candidate_uses_sports_ball_class_and_anchor():
     config = EquipmentTrackingConfig(detector_backend="yolo")
     detections = [
@@ -85,6 +108,23 @@ def test_yolo_ball_candidate_uses_sports_ball_class_and_anchor():
     assert ball.center == (305.0, 105.0)
     assert ball.radius_px == 5.0
     assert ball.confidence > 0.6
+
+
+def test_yolo_ball_candidate_does_not_require_pose_or_object_anchor():
+    config = EquipmentTrackingConfig(detector_backend="yolo")
+    detections = [_YoloDetection(class_id=32, confidence=0.70, xyxy=(300.0, 100.0, 310.0, 110.0))]
+
+    ball = _detect_ball_yolo(
+        detections=detections,
+        previous=None,
+        anchors=[],
+        width=640,
+        height=480,
+        config=config,
+    )
+
+    assert ball is not None
+    assert ball.center == (305.0, 105.0)
 
 
 def test_interpolate_object_records_fills_short_gap():

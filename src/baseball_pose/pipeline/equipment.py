@@ -97,7 +97,7 @@ def track_equipment_files(
                 frames_csv=frames_csv,
                 clip_id=clip_id,
                 condition_id=condition_id,
-                pose_csv=poses_csv if poses_csv.exists() else None,
+                pose_csv=poses_csv if clip_tracking_config.use_pose_priors and poses_csv.exists() else None,
                 config=clip_tracking_config,
             )
             output_path = object_track_path(config.data_dir, clip_id, condition_id)
