@@ -1,4 +1,11 @@
 from baseball_pose.equipment.features import extract_object_motion_features
+from baseball_pose.equipment.detection import (
+    EquipmentTrackingConfig,
+    _YoloDetection,
+    _create_yolo_detector,
+    _detect_ball_yolo,
+    _detect_bat_yolo,
+)
 from baseball_pose.equipment.schema import ObjectTrackRecord
 from baseball_pose.io.object_csv import read_object_tracks, write_object_tracks
 
@@ -28,6 +35,54 @@ def test_object_track_csv_round_trip(tmp_path):
     loaded = read_object_tracks(path)
 
     assert loaded == records
+
+
+def test_motion_backend_does_not_require_yolo():
+    assert _create_yolo_detector(EquipmentTrackingConfig(detector_backend="motion")) is None
+
+
+def test_yolo_bat_candidate_uses_baseball_bat_class_and_wrist_prior():
+    config = EquipmentTrackingConfig(detector_backend="yolo")
+    detections = [
+        _YoloDetection(class_id=32, confidence=0.95, xyxy=(10.0, 10.0, 20.0, 20.0)),
+        _YoloDetection(class_id=34, confidence=0.80, xyxy=(100.0, 80.0, 180.0, 96.0)),
+    ]
+
+    bat = _detect_bat_yolo(
+        detections=detections,
+        wrist_points=[(96.0, 88.0)],
+        previous=None,
+        width=640,
+        height=480,
+        config=config,
+    )
+
+    assert bat is not None
+    assert bat.handle == (100.0, 88.0)
+    assert bat.barrel == (180.0, 88.0)
+    assert bat.confidence > 0.6
+
+
+def test_yolo_ball_candidate_uses_sports_ball_class_and_anchor():
+    config = EquipmentTrackingConfig(detector_backend="yolo")
+    detections = [
+        _YoloDetection(class_id=34, confidence=0.95, xyxy=(100.0, 80.0, 180.0, 96.0)),
+        _YoloDetection(class_id=32, confidence=0.70, xyxy=(300.0, 100.0, 310.0, 110.0)),
+    ]
+
+    ball = _detect_ball_yolo(
+        detections=detections,
+        previous=None,
+        anchors=[(304.0, 106.0)],
+        width=640,
+        height=480,
+        config=config,
+    )
+
+    assert ball is not None
+    assert ball.center == (305.0, 105.0)
+    assert ball.radius_px == 5.0
+    assert ball.confidence > 0.6
 
 
 def _record(

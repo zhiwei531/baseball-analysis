@@ -16,6 +16,17 @@ from baseball_pose.pose.schema import PoseRecord, pose_score
 
 @dataclass(frozen=True)
 class EquipmentTrackingConfig:
+    detector_backend: str = "motion"
+    yolo_model_path: str | None = None
+    yolo_confidence: float = 0.25
+    yolo_image_size: int | None = None
+    yolo_device: str | None = None
+    yolo_bat_class_ids: tuple[int, ...] = (34,)
+    yolo_ball_class_ids: tuple[int, ...] = (32,)
+    yolo_bat_weight: float = 0.65
+    yolo_ball_weight: float = 0.70
+    yolo_bat_min_confidence: float = 0.18
+    yolo_ball_min_confidence: float = 0.18
     motion_backend: str = "background"
     motion_background_samples: int = 60
     motion_background_threshold: int = 28
@@ -62,6 +73,53 @@ class _BallCandidate:
     confidence: float
 
 
+@dataclass(frozen=True)
+class _YoloDetection:
+    class_id: int
+    confidence: float
+    xyxy: tuple[float, float, float, float]
+
+
+class _YoloObjectDetector:
+    def __init__(self, config: EquipmentTrackingConfig) -> None:
+        if config.yolo_model_path is None:
+            raise ValueError("equipment_tracking.yolo_model_path is required for YOLO object tracking.")
+        try:
+            from ultralytics import YOLO
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                "ultralytics is required for YOLO equipment detection. "
+                "Install ultralytics or use equipment_tracking.detector_backend: motion."
+            ) from exc
+
+        self._model = YOLO(config.yolo_model_path)
+        self._config = config
+
+    def detect(self, image) -> list[_YoloDetection]:
+        kwargs: dict[str, object] = {
+            "conf": self._config.yolo_confidence,
+            "verbose": False,
+        }
+        if self._config.yolo_image_size is not None:
+            kwargs["imgsz"] = self._config.yolo_image_size
+        if self._config.yolo_device is not None:
+            kwargs["device"] = self._config.yolo_device
+        result = self._model.predict(image, **kwargs)[0]
+        detections: list[_YoloDetection] = []
+        boxes = getattr(result, "boxes", None)
+        if boxes is None:
+            return detections
+        for cls, conf, xyxy in zip(boxes.cls.cpu().tolist(), boxes.conf.cpu().tolist(), boxes.xyxy.cpu().tolist()):
+            detections.append(
+                _YoloDetection(
+                    class_id=int(cls),
+                    confidence=float(conf),
+                    xyxy=tuple(float(value) for value in xyxy),
+                )
+            )
+        return detections
+
+
 def detect_equipment_tracks(
     frames_csv: str | Path,
     clip_id: str,
@@ -75,6 +133,7 @@ def detect_equipment_tracks(
     frames = read_frame_records(frames_csv)
     background_gray = _build_background_gray(frames, cfg)
     pose_by_frame = _pose_by_frame(pose_csv, cfg) if pose_csv is not None and Path(pose_csv).exists() else {}
+    yolo_detector = _create_yolo_detector(cfg)
     records: list[ObjectTrackRecord] = []
     previous_bat: _BatCandidate | None = None
     previous_ball: _BallCandidate | None = None
@@ -87,9 +146,16 @@ def detect_equipment_tracks(
         motion_mask = _motion_mask(gray, previous_gray, background_gray, cfg)
         height, width = image.shape[:2]
         wrist_points = _wrist_points(pose_by_frame.get(frame.frame_index, []), width, height, cfg)
+        yolo_detections = yolo_detector.detect(image) if yolo_detector is not None else []
 
-        bat = _detect_bat(image, motion_mask, wrist_points, previous_bat, cfg) if cfg.detect_bat else None
+        bat = None
         bat_source = "motion_line_wrist_prior"
+        if cfg.detect_bat and _uses_yolo(cfg):
+            bat = _detect_bat_yolo(yolo_detections, wrist_points, previous_bat, width, height, cfg)
+            bat_source = "yolo_baseball_bat"
+        if bat is None and cfg.detect_bat and _uses_motion(cfg):
+            bat = _detect_bat(image, motion_mask, wrist_points, previous_bat, cfg)
+            bat_source = "motion_line_wrist_prior"
         if bat is None and cfg.detect_bat and cfg.use_wrist_bat_proxy:
             bat = _bat_wrist_proxy(wrist_points)
             bat_source = "wrist_proxy"
@@ -116,7 +182,14 @@ def detect_equipment_tracks(
         ball_anchors = list(wrist_points)
         if bat is not None:
             ball_anchors.extend([bat.barrel, bat.handle])
-        ball = _detect_ball(image, motion_mask, previous_ball, ball_anchors, cfg) if cfg.detect_ball else None
+        ball = None
+        ball_source = "motion_blob_temporal"
+        if cfg.detect_ball and _uses_yolo(cfg):
+            ball = _detect_ball_yolo(yolo_detections, previous_ball, ball_anchors, width, height, cfg)
+            ball_source = "yolo_sports_ball"
+        if ball is None and cfg.detect_ball and _uses_motion(cfg):
+            ball = _detect_ball(image, motion_mask, previous_ball, ball_anchors, cfg)
+            ball_source = "motion_blob_temporal"
         if ball is not None:
             previous_ball = ball
             records.append(
@@ -133,12 +206,124 @@ def detect_equipment_tracks(
                     confidence=ball.confidence,
                     width=width,
                     height=height,
-                    source="motion_blob_temporal",
+                    source=ball_source,
                 )
             )
         previous_gray = gray
 
     return records
+
+
+def _create_yolo_detector(config: EquipmentTrackingConfig) -> _YoloObjectDetector | None:
+    if not _uses_yolo(config):
+        return None
+    return _YoloObjectDetector(config)
+
+
+def _uses_yolo(config: EquipmentTrackingConfig) -> bool:
+    return config.detector_backend in {"yolo", "hybrid_yolo_motion"}
+
+
+def _uses_motion(config: EquipmentTrackingConfig) -> bool:
+    return config.detector_backend in {"motion", "hybrid_yolo_motion"}
+
+
+def _detect_bat_yolo(
+    detections: list[_YoloDetection],
+    wrist_points: list[tuple[float, float]],
+    previous: _BatCandidate | None,
+    width: int,
+    height: int,
+    config: EquipmentTrackingConfig,
+) -> _BatCandidate | None:
+    wrist_center = _mean_point(wrist_points)
+    if wrist_center is None:
+        return None
+    diagonal = math.hypot(width, height)
+    candidates: list[_BatCandidate] = []
+    for detection in detections:
+        if detection.class_id not in config.yolo_bat_class_ids:
+            continue
+        if detection.confidence < config.yolo_bat_min_confidence:
+            continue
+        handle, barrel = _bat_candidate_from_box(detection.xyxy, wrist_center)
+        handle_distance = _distance(handle, wrist_center)
+        if handle_distance > config.bat_max_handle_distance_ratio * diagonal:
+            continue
+        previous_score = 0.5
+        if previous is not None:
+            jump = _distance(barrel, previous.barrel)
+            if jump > config.bat_max_frame_jump_ratio * diagonal:
+                continue
+            previous_score = max(0.0, 1.0 - jump / (config.bat_max_frame_jump_ratio * diagonal))
+        wrist_score = max(0.0, 1.0 - handle_distance / (config.bat_max_handle_distance_ratio * diagonal))
+        confidence = (
+            config.yolo_bat_weight * detection.confidence
+            + (1.0 - config.yolo_bat_weight) * (0.65 * wrist_score + 0.35 * previous_score)
+        )
+        candidates.append(_BatCandidate(barrel=barrel, handle=handle, confidence=confidence))
+    if not candidates:
+        return None
+    best = max(candidates, key=lambda item: item.confidence)
+    return best if best.confidence >= 0.35 else None
+
+
+def _detect_ball_yolo(
+    detections: list[_YoloDetection],
+    previous: _BallCandidate | None,
+    anchors: list[tuple[float, float]],
+    width: int,
+    height: int,
+    config: EquipmentTrackingConfig,
+) -> _BallCandidate | None:
+    diagonal = math.hypot(width, height)
+    candidates: list[_BallCandidate] = []
+    for detection in detections:
+        if detection.class_id not in config.yolo_ball_class_ids:
+            continue
+        if detection.confidence < config.yolo_ball_min_confidence:
+            continue
+        x1, y1, x2, y2 = detection.xyxy
+        center = ((x1 + x2) / 2, (y1 + y2) / 2)
+        radius = max(x2 - x1, y2 - y1) / 2
+        if radius < config.ball_min_radius_px or radius > config.ball_max_radius_px * 2.5:
+            continue
+        if center[1] > config.ball_max_y_ratio * height:
+            continue
+        if anchors and center[1] > max(anchor[1] for anchor in anchors) + config.ball_max_below_anchor_ratio * height:
+            continue
+        if previous is None and not _near_any_anchor(
+            center,
+            anchors,
+            config.ball_start_anchor_distance_ratio * diagonal,
+        ):
+            continue
+        previous_score = 0.5
+        if previous is not None:
+            jump = _distance(center, previous.center)
+            if jump > config.ball_max_frame_jump_ratio * diagonal:
+                continue
+            previous_score = max(0.0, 1.0 - jump / (config.ball_max_frame_jump_ratio * diagonal))
+        confidence = config.yolo_ball_weight * detection.confidence + (1.0 - config.yolo_ball_weight) * previous_score
+        candidates.append(_BallCandidate(center=center, radius_px=radius, confidence=confidence))
+    if not candidates:
+        return None
+    best = max(candidates, key=lambda item: item.confidence)
+    return best if best.confidence >= 0.35 else None
+
+
+def _bat_candidate_from_box(
+    xyxy: tuple[float, float, float, float],
+    wrist_center: tuple[float, float],
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    x1, y1, x2, y2 = xyxy
+    if (x2 - x1) >= (y2 - y1):
+        first = (x1, (y1 + y2) / 2)
+        second = (x2, (y1 + y2) / 2)
+    else:
+        first = ((x1 + x2) / 2, y1)
+        second = ((x1 + x2) / 2, y2)
+    return _orient_bat(first, second, wrist_center)
 
 
 def _detect_bat(
