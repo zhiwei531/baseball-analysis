@@ -1,5 +1,6 @@
 from baseball_pose.equipment.features import extract_object_motion_features
 from baseball_pose.equipment.detection import (
+    _BallCandidate,
     EquipmentTrackingConfig,
     _YoloDetection,
     _create_yolo_detector,
@@ -130,6 +131,24 @@ def test_yolo_ball_candidate_does_not_require_pose_or_object_anchor():
 
     assert ball is not None
     assert ball.center == (305.0, 105.0)
+
+
+def test_yolo_ball_high_confidence_can_reacquire_after_bad_previous():
+    config = EquipmentTrackingConfig(detector_backend="yolo", ball_max_y_ratio=1.0)
+    previous = _BallCandidate(center=(50.0, 50.0), radius_px=5.0, confidence=0.40)
+    detections = [_YoloDetection(class_id=32, confidence=0.75, xyxy=(620.0, 410.0, 650.0, 432.0))]
+
+    ball = _detect_ball_yolo(
+        detections=detections,
+        previous=previous,
+        anchors=[],
+        width=1280,
+        height=720,
+        config=config,
+    )
+
+    assert ball is not None
+    assert ball.center == (635.0, 421.0)
 
 
 def test_interpolate_object_records_fills_short_gap():

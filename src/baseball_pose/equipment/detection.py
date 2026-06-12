@@ -28,6 +28,7 @@ class EquipmentTrackingConfig:
     yolo_ball_weight: float = 0.70
     yolo_bat_min_confidence: float = 0.18
     yolo_ball_min_confidence: float = 0.18
+    yolo_ball_reacquire_confidence: float = 0.55
     yolo_bat_roi_padding_ratio: float = 0.12
     yolo_bat_min_line_length_ratio: float = 0.04
     yolo_bat_max_box_area_ratio: float = 0.22
@@ -356,7 +357,7 @@ def _detect_ball_yolo(
         previous_score = 0.5
         if previous is not None:
             jump = _distance(center, previous.center)
-            if jump > config.ball_max_frame_jump_ratio * diagonal:
+            if jump > config.ball_max_frame_jump_ratio * diagonal and detection.confidence < config.yolo_ball_reacquire_confidence:
                 continue
             previous_score = max(0.0, 1.0 - jump / (config.ball_max_frame_jump_ratio * diagonal))
         confidence = config.yolo_ball_weight * detection.confidence + (1.0 - config.yolo_ball_weight) * previous_score

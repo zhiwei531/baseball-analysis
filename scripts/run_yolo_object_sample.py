@@ -59,6 +59,7 @@ def main() -> None:
 
     for clip_id in clips:
         is_batting = "hit" in clip_id
+        uses_batting_objects = is_batting or args.detect in {"bat", "both"}
         source_frames = (
             Path(args.source_data_dir)
             / "interim"
@@ -80,8 +81,10 @@ def main() -> None:
             detect_ball=_should_detect_ball(args.detect, is_batting),
             use_pose_priors=False,
             interpolate_max_gap_frames=3,
-            ball_min_track_length_frames=3 if _should_detect_bat(args.detect, is_batting) else 1,
+            ball_min_track_length_frames=3 if uses_batting_objects else 1,
             ball_track_max_gap_frames=2,
+            ball_max_y_ratio=1.0 if uses_batting_objects and _should_detect_ball(args.detect, is_batting) else 0.66,
+            ball_max_below_anchor_ratio=1.0 if uses_batting_objects and _should_detect_ball(args.detect, is_batting) else 0.20,
         )
         records = detect_equipment_tracks(
             frames_csv=frame_manifest,
