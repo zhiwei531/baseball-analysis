@@ -18,6 +18,12 @@ from baseball_pose.visualization.equipment import draw_equipment_overlay
 
 
 DEFAULT_CLIPS = ("benchmark_hit_vertical_02", "benchmark_pitch_vertical_10")
+SUPPORTED_CLIPS = (
+    "benchmark_hit_vertical_02",
+    "benchmark_hit_horizontal_06",
+    "benchmark_pitch_vertical_10",
+    "benchmark_pitch_vertical_09",
+)
 
 
 def main() -> None:
@@ -32,7 +38,13 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--imgsz", type=int, default=1280)
     parser.add_argument("--conf", type=float, default=0.18)
-    parser.add_argument("--clip-id", action="append", choices=DEFAULT_CLIPS)
+    parser.add_argument(
+        "--detect",
+        choices=("auto", "bat", "ball", "both"),
+        default="auto",
+        help="Objects to detect. auto uses bat for hitting clips and ball for pitching clips.",
+    )
+    parser.add_argument("--clip-id", action="append", choices=SUPPORTED_CLIPS)
     args = parser.parse_args()
 
     clips = args.clip_id if args.clip_id else list(DEFAULT_CLIPS)
@@ -60,8 +72,8 @@ def main() -> None:
             yolo_confidence=args.conf,
             yolo_image_size=args.imgsz,
             yolo_device=args.device,
-            detect_bat=is_batting,
-            detect_ball=not is_batting,
+            detect_bat=_should_detect_bat(args.detect, is_batting),
+            detect_ball=_should_detect_ball(args.detect, is_batting),
             use_pose_priors=False,
             interpolate_max_gap_frames=3,
         )
@@ -101,6 +113,14 @@ def main() -> None:
         print(f"{clip_id}: {len(records)} records {counts} {sources}")
         print(f"  objects: {object_path}")
         print(f"  overlay: {video_path}")
+
+
+def _should_detect_bat(mode: str, is_batting: bool) -> bool:
+    return mode in {"bat", "both"} or (mode == "auto" and is_batting)
+
+
+def _should_detect_ball(mode: str, is_batting: bool) -> bool:
+    return mode in {"ball", "both"} or (mode == "auto" and not is_batting)
 
 
 def _update_tracks(
