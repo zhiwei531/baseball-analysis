@@ -83,6 +83,8 @@ def main() -> None:
             interpolate_max_gap_frames=3,
             bat_smoothing_window_frames=9,
             bat_smoothing_passes=3,
+            bat_smoothing_contact_margin_frames=4,
+            bat_smoothing_contact_original_weight=0.35,
             ball_min_track_length_frames=3 if uses_batting_objects else 1,
             ball_track_max_gap_frames=2,
             ball_max_y_ratio=1.0 if uses_batting_objects and _should_detect_ball(args.detect, is_batting) else 0.66,

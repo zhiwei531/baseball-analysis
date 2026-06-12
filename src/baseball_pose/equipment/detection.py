@@ -55,6 +55,8 @@ class EquipmentTrackingConfig:
     bat_smoothing_window_frames: int = 0
     bat_smoothing_min_segment_frames: int = 3
     bat_smoothing_passes: int = 1
+    bat_smoothing_contact_margin_frames: int = 0
+    bat_smoothing_contact_original_weight: float = 0.0
     ball_min_radius_px: int = 3
     ball_max_radius_px: int = 14
     ball_previous_weight: float = 0.45
@@ -544,10 +546,21 @@ def _smooth_bat_records(
     window = _odd_window(config.bat_smoothing_window_frames)
     if window <= 1:
         return records
+    original_bat_by_frame = {
+        record.frame_index: record
+        for record in records
+        if record.object_name == "bat"
+    }
+    contact_frames = _contact_protected_frames(records, config.bat_smoothing_contact_margin_frames)
     smoothed = records
     for _ in range(max(1, config.bat_smoothing_passes)):
         smoothed = _smooth_bat_records_once(smoothed, config, window)
-    return smoothed
+    return _blend_contact_bat_records(
+        smoothed,
+        original_bat_by_frame,
+        contact_frames,
+        config.bat_smoothing_contact_original_weight,
+    )
 
 
 def _smooth_bat_records_once(
@@ -578,6 +591,65 @@ def _smooth_bat_records_once(
         [smoothed_by_frame.get(record.frame_index, record) if record.object_name == "bat" else record for record in records],
         key=lambda item: (item.frame_index, item.object_name),
     )
+
+
+def _contact_protected_frames(records: list[ObjectTrackRecord], margin_frames: int) -> set[int]:
+    if margin_frames < 0:
+        margin_frames = 0
+    protected: set[int] = set()
+    for record in records:
+        if record.object_name != "ball":
+            continue
+        for frame_index in range(record.frame_index - margin_frames, record.frame_index + margin_frames + 1):
+            protected.add(frame_index)
+    return protected
+
+
+def _blend_contact_bat_records(
+    records: list[ObjectTrackRecord],
+    original_bat_by_frame: dict[int, ObjectTrackRecord],
+    contact_frames: set[int],
+    original_weight: float,
+) -> list[ObjectTrackRecord]:
+    if not contact_frames or original_weight <= 0:
+        return records
+    original_weight = min(1.0, original_weight)
+    smoothed_weight = 1.0 - original_weight
+    blended: list[ObjectTrackRecord] = []
+    for record in records:
+        original = original_bat_by_frame.get(record.frame_index)
+        if record.object_name != "bat" or record.frame_index not in contact_frames or original is None:
+            blended.append(record)
+            continue
+        blended.append(
+            ObjectTrackRecord(
+                clip_id=record.clip_id,
+                condition_id=record.condition_id,
+                frame_index=record.frame_index,
+                timestamp_sec=record.timestamp_sec,
+                object_name=record.object_name,
+                x=_blend_optional(record.x, original.x, smoothed_weight, original_weight),
+                y=_blend_optional(record.y, original.y, smoothed_weight, original_weight),
+                x2=_blend_optional(record.x2, original.x2, smoothed_weight, original_weight),
+                y2=_blend_optional(record.y2, original.y2, smoothed_weight, original_weight),
+                confidence=record.confidence,
+                width=record.width,
+                height=record.height,
+                source=record.source,
+            )
+        )
+    return sorted(blended, key=lambda item: (item.frame_index, item.object_name))
+
+
+def _blend_optional(
+    smoothed: float | None,
+    original: float | None,
+    smoothed_weight: float,
+    original_weight: float,
+) -> float | None:
+    if smoothed is None or original is None:
+        return smoothed if smoothed is not None else original
+    return smoothed * smoothed_weight + original * original_weight
 
 
 def _smooth_bat_segment(
@@ -696,6 +768,19 @@ def _smooth_numeric_window(values: list[float], records: list[ObjectTrackRecord]
         temporal_weight = 1.0 / (1.0 + abs(index - target_index))
         confidence_weight = max(0.05, record.confidence if record.confidence is not None else 0.5)
         weighted_values.append((value, temporal_weight * confidence_weight))
+    if len(weighted_values) >= 3:
+        try:
+            import numpy as np
+
+            degree = 2 if len(weighted_values) >= 5 else 1
+            xs = np.array([index - target_index for index in range(len(weighted_values))], dtype=float)
+            ys = np.array([value for value, _ in weighted_values], dtype=float)
+            weights = np.array([weight for _, weight in weighted_values], dtype=float)
+            if float(weights.sum()) > 0:
+                coefficients = np.polyfit(xs, ys, degree, w=weights)
+                return float(np.polyval(coefficients, 0.0))
+        except Exception:
+            pass
     total_weight = sum(weight for _, weight in weighted_values)
     if total_weight <= 0:
         return values[target_index]

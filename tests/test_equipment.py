@@ -239,6 +239,32 @@ def test_smooth_bat_records_preserves_line_geometry():
     assert abs(middle.y - middle.y2) < 0.03
 
 
+def test_smooth_bat_records_preserves_contact_motion_near_ball():
+    records = [
+        _record(0, 0.0, "bat", 0.10, 0.20, 0.00, 0.20),
+        _record(1, 1 / 30.0, "bat", 0.20, 0.20, 0.10, 0.20),
+        _record(1, 1 / 30.0, "ball", 0.60, 0.20),
+        _record(2, 2 / 30.0, "bat", 0.30, 0.20, 0.20, 0.20),
+    ]
+
+    smoothed = _smooth_bat_records(
+        records,
+        EquipmentTrackingConfig(
+            bat_smoothing_window_frames=3,
+            bat_smoothing_passes=2,
+            bat_smoothing_contact_margin_frames=0,
+            bat_smoothing_contact_original_weight=0.35,
+        ),
+    )
+    contact_bat = next(record for record in smoothed if record.object_name == "bat" and record.frame_index == 1)
+    ball = next(record for record in smoothed if record.object_name == "ball")
+
+    assert contact_bat.x is not None
+    assert contact_bat.x > 0.15
+    assert ball.x == 0.60
+    assert ball.y == 0.20
+
+
 def _record(
     frame_index: int,
     timestamp_sec: float,
