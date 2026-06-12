@@ -57,6 +57,9 @@ class EquipmentTrackingConfig:
     bat_smoothing_passes: int = 1
     bat_smoothing_contact_margin_frames: int = 0
     bat_smoothing_contact_original_weight: float = 0.0
+    bat_smoothing_fast_angle_threshold_deg: float = 0.0
+    bat_smoothing_fast_margin_frames: int = 0
+    bat_smoothing_fast_original_weight: float = 0.0
     ball_min_radius_px: int = 3
     ball_max_radius_px: int = 14
     ball_previous_weight: float = 0.45
@@ -551,15 +554,14 @@ def _smooth_bat_records(
         for record in records
         if record.object_name == "bat"
     }
-    contact_frames = _contact_protected_frames(records, config.bat_smoothing_contact_margin_frames)
+    original_weights = _bat_original_blend_weights(records, original_bat_by_frame, config)
     smoothed = records
     for _ in range(max(1, config.bat_smoothing_passes)):
         smoothed = _smooth_bat_records_once(smoothed, config, window)
-    return _blend_contact_bat_records(
+    return _blend_protected_bat_records(
         smoothed,
         original_bat_by_frame,
-        contact_frames,
-        config.bat_smoothing_contact_original_weight,
+        original_weights,
     )
 
 
@@ -593,34 +595,75 @@ def _smooth_bat_records_once(
     )
 
 
-def _contact_protected_frames(records: list[ObjectTrackRecord], margin_frames: int) -> set[int]:
-    if margin_frames < 0:
-        margin_frames = 0
-    protected: set[int] = set()
+def _bat_original_blend_weights(
+    records: list[ObjectTrackRecord],
+    original_bat_by_frame: dict[int, ObjectTrackRecord],
+    config: EquipmentTrackingConfig,
+) -> dict[int, float]:
+    weights: dict[int, float] = {}
     for record in records:
         if record.object_name != "ball":
             continue
-        for frame_index in range(record.frame_index - margin_frames, record.frame_index + margin_frames + 1):
-            protected.add(frame_index)
-    return protected
+        _add_protected_frame_weights(
+            weights,
+            record.frame_index,
+            config.bat_smoothing_contact_margin_frames,
+            config.bat_smoothing_contact_original_weight,
+        )
+    if config.bat_smoothing_fast_angle_threshold_deg > 0 and config.bat_smoothing_fast_original_weight > 0:
+        bat_records = sorted(original_bat_by_frame.values(), key=lambda item: item.frame_index)
+        previous: ObjectTrackRecord | None = None
+        for record in bat_records:
+            if previous is not None and record.frame_index - previous.frame_index <= 1:
+                angle_delta = abs(_angle_delta_deg(_bat_record_angle(previous), _bat_record_angle(record)))
+                if angle_delta >= config.bat_smoothing_fast_angle_threshold_deg:
+                    _add_protected_frame_weights(
+                        weights,
+                        previous.frame_index,
+                        config.bat_smoothing_fast_margin_frames,
+                        config.bat_smoothing_fast_original_weight,
+                    )
+                    _add_protected_frame_weights(
+                        weights,
+                        record.frame_index,
+                        config.bat_smoothing_fast_margin_frames,
+                        config.bat_smoothing_fast_original_weight,
+                    )
+            previous = record
+    return weights
 
 
-def _blend_contact_bat_records(
+def _add_protected_frame_weights(
+    weights: dict[int, float],
+    center_frame: int,
+    margin_frames: int,
+    original_weight: float,
+) -> None:
+    if original_weight <= 0:
+        return
+    margin_frames = max(0, margin_frames)
+    original_weight = min(1.0, original_weight)
+    for frame_index in range(center_frame - margin_frames, center_frame + margin_frames + 1):
+        distance = abs(frame_index - center_frame)
+        falloff = 1.0 - distance / (margin_frames + 1)
+        weights[frame_index] = max(weights.get(frame_index, 0.0), original_weight * falloff)
+
+
+def _blend_protected_bat_records(
     records: list[ObjectTrackRecord],
     original_bat_by_frame: dict[int, ObjectTrackRecord],
-    contact_frames: set[int],
-    original_weight: float,
+    original_weights: dict[int, float],
 ) -> list[ObjectTrackRecord]:
-    if not contact_frames or original_weight <= 0:
+    if not original_weights:
         return records
-    original_weight = min(1.0, original_weight)
-    smoothed_weight = 1.0 - original_weight
     blended: list[ObjectTrackRecord] = []
     for record in records:
         original = original_bat_by_frame.get(record.frame_index)
-        if record.object_name != "bat" or record.frame_index not in contact_frames or original is None:
+        original_weight = min(1.0, original_weights.get(record.frame_index, 0.0))
+        if record.object_name != "bat" or original_weight <= 0 or original is None:
             blended.append(record)
             continue
+        smoothed_weight = 1.0 - original_weight
         blended.append(
             ObjectTrackRecord(
                 clip_id=record.clip_id,
@@ -639,6 +682,12 @@ def _blend_contact_bat_records(
             )
         )
     return sorted(blended, key=lambda item: (item.frame_index, item.object_name))
+
+
+def _bat_record_angle(record: ObjectTrackRecord) -> float:
+    if record.x is None or record.y is None or record.x2 is None or record.y2 is None:
+        return 0.0
+    return math.degrees(math.atan2(record.y - record.y2, record.x - record.x2))
 
 
 def _blend_optional(

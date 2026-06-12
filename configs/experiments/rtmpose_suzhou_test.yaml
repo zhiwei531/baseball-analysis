@@ -132,10 +132,13 @@ equipment_tracking:
   bat_max_handle_distance_ratio: 0.08
   bat_max_wrist_spread_ratio: 0.16
   bat_max_frame_jump_ratio: 0.14
-  bat_smoothing_window_frames: 9
-  bat_smoothing_passes: 3
+  bat_smoothing_window_frames: 7
+  bat_smoothing_passes: 2
   bat_smoothing_contact_margin_frames: 4
-  bat_smoothing_contact_original_weight: 0.35
+  bat_smoothing_contact_original_weight: 0.15
+  bat_smoothing_fast_angle_threshold_deg: 12.0
+  bat_smoothing_fast_margin_frames: 1
+  bat_smoothing_fast_original_weight: 0.85
   ball_min_radius_px: 3
   ball_max_radius_px: 13
   ball_max_area_px: 650

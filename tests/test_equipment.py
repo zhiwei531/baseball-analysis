@@ -265,6 +265,29 @@ def test_smooth_bat_records_preserves_contact_motion_near_ball():
     assert ball.y == 0.20
 
 
+def test_smooth_bat_records_preserves_fast_angular_motion_without_ball():
+    records = [
+        _record(0, 0.0, "bat", 0.30, 0.20, 0.10, 0.20),
+        _record(1, 1 / 30.0, "bat", 0.20, 0.30, 0.20, 0.10),
+        _record(2, 2 / 30.0, "bat", 0.10, 0.20, 0.30, 0.20),
+    ]
+
+    smoothed = _smooth_bat_records(
+        records,
+        EquipmentTrackingConfig(
+            bat_smoothing_window_frames=3,
+            bat_smoothing_passes=2,
+            bat_smoothing_fast_angle_threshold_deg=20.0,
+            bat_smoothing_fast_original_weight=0.85,
+        ),
+    )
+    middle = next(record for record in smoothed if record.frame_index == 1)
+
+    assert middle.y is not None
+    assert middle.y2 is not None
+    assert middle.y - middle.y2 > 0.12
+
+
 def _record(
     frame_index: int,
     timestamp_sec: float,
