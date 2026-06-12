@@ -44,7 +44,11 @@ def main() -> None:
         default="auto",
         help="Objects to detect. auto uses bat for hitting clips and ball for pitching clips.",
     )
-    parser.add_argument("--clip-id", action="append", choices=SUPPORTED_CLIPS)
+    parser.add_argument(
+        "--clip-id",
+        action="append",
+        help=f"Clip id to process. Known examples: {', '.join(SUPPORTED_CLIPS)}.",
+    )
     args = parser.parse_args()
 
     clips = args.clip_id if args.clip_id else list(DEFAULT_CLIPS)
