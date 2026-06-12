@@ -221,6 +221,24 @@ def test_smooth_bat_records_reduces_jitter_without_moving_ball():
     assert [(record.x, record.y) for record in ball_records] == [(0.80, 0.10), (0.70, 0.20)]
 
 
+def test_smooth_bat_records_preserves_line_geometry():
+    records = [
+        _record(0, 0.0, "bat", 0.20, 0.20, 0.00, 0.20),
+        _record(1, 1 / 30.0, "bat", 0.24, 0.22, 0.04, 0.18),
+        _record(2, 2 / 30.0, "bat", 0.20, 0.20, 0.00, 0.20),
+    ]
+
+    smoothed = _smooth_bat_records(records, EquipmentTrackingConfig(bat_smoothing_window_frames=3))
+    middle = next(record for record in smoothed if record.frame_index == 1)
+
+    assert middle.x is not None
+    assert middle.x2 is not None
+    assert round(middle.x - middle.x2, 2) == 0.20
+    assert middle.y is not None
+    assert middle.y2 is not None
+    assert abs(middle.y - middle.y2) < 0.03
+
+
 def _record(
     frame_index: int,
     timestamp_sec: float,

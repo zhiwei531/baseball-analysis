@@ -54,6 +54,7 @@ class EquipmentTrackingConfig:
     bat_max_frame_jump_ratio: float = 0.16
     bat_smoothing_window_frames: int = 0
     bat_smoothing_min_segment_frames: int = 3
+    bat_smoothing_passes: int = 1
     ball_min_radius_px: int = 3
     ball_max_radius_px: int = 14
     ball_previous_weight: float = 0.45
@@ -543,6 +544,17 @@ def _smooth_bat_records(
     window = _odd_window(config.bat_smoothing_window_frames)
     if window <= 1:
         return records
+    smoothed = records
+    for _ in range(max(1, config.bat_smoothing_passes)):
+        smoothed = _smooth_bat_records_once(smoothed, config, window)
+    return smoothed
+
+
+def _smooth_bat_records_once(
+    records: list[ObjectTrackRecord],
+    config: EquipmentTrackingConfig,
+    window: int,
+) -> list[ObjectTrackRecord]:
     bat_records = sorted(
         [record for record in records if record.object_name == "bat"],
         key=lambda item: item.frame_index,
@@ -575,6 +587,68 @@ def _smooth_bat_segment(
 ) -> dict[int, ObjectTrackRecord]:
     if len(records) < min_segment_frames:
         return {}
+    if any(record.x2 is None or record.y2 is None for record in records):
+        return _smooth_bat_coordinate_segment(records, window)
+    return _smooth_bat_geometry_segment(records, window)
+
+
+def _smooth_bat_geometry_segment(records: list[ObjectTrackRecord], window: int) -> dict[int, ObjectTrackRecord]:
+    centers_x: list[float] = []
+    centers_y: list[float] = []
+    angles: list[float] = []
+    lengths: list[float] = []
+    previous_angle: float | None = None
+    for record in records:
+        assert record.x is not None and record.y is not None and record.x2 is not None and record.y2 is not None
+        center_x = (record.x + record.x2) / 2
+        center_y = (record.y + record.y2) / 2
+        dx = record.x - record.x2
+        dy = record.y - record.y2
+        angle = math.atan2(dy, dx)
+        if previous_angle is not None:
+            while angle - previous_angle > math.pi:
+                angle -= 2 * math.pi
+            while angle - previous_angle < -math.pi:
+                angle += 2 * math.pi
+        previous_angle = angle
+        centers_x.append(center_x)
+        centers_y.append(center_y)
+        angles.append(angle)
+        lengths.append(math.hypot(dx, dy))
+
+    half_window = window // 2
+    smoothed: dict[int, ObjectTrackRecord] = {}
+    for index, record in enumerate(records):
+        start = max(0, index - half_window)
+        end = min(len(records), index + half_window + 1)
+        target_index = index - start
+        neighbors = records[start:end]
+        center_x = _smooth_numeric_window(centers_x[start:end], neighbors, target_index)
+        center_y = _smooth_numeric_window(centers_y[start:end], neighbors, target_index)
+        angle = _smooth_numeric_window(angles[start:end], neighbors, target_index)
+        length = _smooth_numeric_window(lengths[start:end], neighbors, target_index)
+        half_length = length / 2
+        dx = math.cos(angle) * half_length
+        dy = math.sin(angle) * half_length
+        smoothed[record.frame_index] = ObjectTrackRecord(
+            clip_id=record.clip_id,
+            condition_id=record.condition_id,
+            frame_index=record.frame_index,
+            timestamp_sec=record.timestamp_sec,
+            object_name=record.object_name,
+            x=center_x + dx,
+            y=center_y + dy,
+            x2=center_x - dx,
+            y2=center_y - dy,
+            confidence=record.confidence,
+            width=record.width,
+            height=record.height,
+            source=record.source,
+        )
+    return smoothed
+
+
+def _smooth_bat_coordinate_segment(records: list[ObjectTrackRecord], window: int) -> dict[int, ObjectTrackRecord]:
     half_window = window // 2
     smoothed: dict[int, ObjectTrackRecord] = {}
     for index, record in enumerate(records):
@@ -614,6 +688,18 @@ def _smooth_optional_coordinate(records: list[ObjectTrackRecord], field_name: st
     if total_weight <= 0:
         return values[len(values) // 2][0]
     return sum(value * weight for value, weight in values) / total_weight
+
+
+def _smooth_numeric_window(values: list[float], records: list[ObjectTrackRecord], target_index: int) -> float:
+    weighted_values: list[tuple[float, float]] = []
+    for index, (value, record) in enumerate(zip(values, records)):
+        temporal_weight = 1.0 / (1.0 + abs(index - target_index))
+        confidence_weight = max(0.05, record.confidence if record.confidence is not None else 0.5)
+        weighted_values.append((value, temporal_weight * confidence_weight))
+    total_weight = sum(weight for _, weight in weighted_values)
+    if total_weight <= 0:
+        return values[target_index]
+    return sum(value * weight for value, weight in weighted_values) / total_weight
 
 
 def _odd_window(value: int) -> int:
