@@ -3,6 +3,7 @@ from baseball_pose.equipment.detection import (
     _BallCandidate,
     EquipmentTrackingConfig,
     _YoloDetection,
+    _bat_swing_window_frames,
     _create_yolo_detector,
     _detect_ball_yolo,
     _detect_bat_yolo,
@@ -286,6 +287,31 @@ def test_smooth_bat_records_preserves_fast_angular_motion_without_ball():
     assert middle.y is not None
     assert middle.y2 is not None
     assert middle.y - middle.y2 > 0.12
+
+
+def test_bat_swing_window_uses_ball_window_when_available():
+    records = [
+        _record(10, 10 / 30.0, "bat", 0.30, 0.20, 0.10, 0.20),
+        _record(11, 11 / 30.0, "bat", 0.20, 0.30, 0.20, 0.10),
+        _record(100, 100 / 30.0, "bat", 0.30, 0.20, 0.10, 0.20),
+        _record(101, 101 / 30.0, "bat", 0.20, 0.30, 0.20, 0.10),
+        _record(100, 100 / 30.0, "ball", 0.60, 0.20),
+    ]
+    bat_by_frame = {record.frame_index: record for record in records if record.object_name == "bat"}
+
+    swing_frames = _bat_swing_window_frames(
+        records,
+        bat_by_frame,
+        EquipmentTrackingConfig(
+            bat_smoothing_fast_angle_threshold_deg=20.0,
+            bat_swing_window_margin_frames=2,
+        ),
+    )
+
+    assert 100 in swing_frames
+    assert 101 in swing_frames
+    assert 10 not in swing_frames
+    assert 11 not in swing_frames
 
 
 def _record(

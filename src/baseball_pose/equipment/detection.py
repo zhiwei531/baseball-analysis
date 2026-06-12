@@ -60,6 +60,10 @@ class EquipmentTrackingConfig:
     bat_smoothing_fast_angle_threshold_deg: float = 0.0
     bat_smoothing_fast_margin_frames: int = 0
     bat_smoothing_fast_original_weight: float = 0.0
+    bat_swing_window_margin_frames: int = 0
+    bat_swing_max_angle_step_deg: float = 35.0
+    bat_swing_length_min_ratio: float = 0.45
+    bat_swing_length_max_ratio: float = 1.35
     ball_min_radius_px: int = 3
     ball_max_radius_px: int = 14
     ball_previous_weight: float = 0.45
@@ -554,12 +558,14 @@ def _smooth_bat_records(
         for record in records
         if record.object_name == "bat"
     }
-    original_weights = _bat_original_blend_weights(records, original_bat_by_frame, config)
+    swing_frames = _bat_swing_window_frames(records, original_bat_by_frame, config)
+    original_weights = _bat_original_blend_weights(records, original_bat_by_frame, config, swing_frames)
     smoothed = records
     for _ in range(max(1, config.bat_smoothing_passes)):
         smoothed = _smooth_bat_records_once(smoothed, config, window)
+    tuned = _fine_tune_swing_bat_records(smoothed, original_bat_by_frame, swing_frames, config)
     return _blend_protected_bat_records(
-        smoothed,
+        tuned,
         original_bat_by_frame,
         original_weights,
     )
@@ -599,6 +605,7 @@ def _bat_original_blend_weights(
     records: list[ObjectTrackRecord],
     original_bat_by_frame: dict[int, ObjectTrackRecord],
     config: EquipmentTrackingConfig,
+    swing_frames: set[int],
 ) -> dict[int, float]:
     weights: dict[int, float] = {}
     for record in records:
@@ -610,7 +617,11 @@ def _bat_original_blend_weights(
             config.bat_smoothing_contact_margin_frames,
             config.bat_smoothing_contact_original_weight,
         )
-    if config.bat_smoothing_fast_angle_threshold_deg > 0 and config.bat_smoothing_fast_original_weight > 0:
+    if (
+        config.bat_smoothing_fast_angle_threshold_deg > 0
+        and config.bat_smoothing_fast_original_weight > 0
+        and not swing_frames
+    ):
         bat_records = sorted(original_bat_by_frame.values(), key=lambda item: item.frame_index)
         previous: ObjectTrackRecord | None = None
         for record in bat_records:
@@ -631,6 +642,49 @@ def _bat_original_blend_weights(
                     )
             previous = record
     return weights
+
+
+def _bat_swing_window_frames(
+    records: list[ObjectTrackRecord],
+    original_bat_by_frame: dict[int, ObjectTrackRecord],
+    config: EquipmentTrackingConfig,
+) -> set[int]:
+    if config.bat_smoothing_fast_angle_threshold_deg <= 0 or config.bat_swing_window_margin_frames < 0:
+        return set()
+    bat_records = sorted(original_bat_by_frame.values(), key=lambda item: item.frame_index)
+    ball_frames = [record.frame_index for record in records if record.object_name == "ball"]
+    if ball_frames:
+        start = min(ball_frames) - config.bat_swing_window_margin_frames
+        end = max(ball_frames) + config.bat_swing_window_margin_frames
+        return {record.frame_index for record in bat_records if start <= record.frame_index <= end}
+
+    fast_frames: set[int] = set()
+    previous: ObjectTrackRecord | None = None
+    for record in bat_records:
+        if previous is not None and record.frame_index - previous.frame_index <= 1:
+            angle_delta = abs(_angle_delta_deg(_bat_record_angle(previous), _bat_record_angle(record)))
+            if angle_delta >= config.bat_smoothing_fast_angle_threshold_deg:
+                fast_frames.update({previous.frame_index, record.frame_index})
+        previous = record
+    if not fast_frames:
+        return set()
+    fast_clusters = _cluster_frame_indices(sorted(fast_frames), max_gap=config.bat_swing_window_margin_frames + 1)
+    selected = max(fast_clusters, key=len)
+    start = min(selected) - config.bat_swing_window_margin_frames
+    end = max(selected) + config.bat_swing_window_margin_frames
+    return {record.frame_index for record in bat_records if start <= record.frame_index <= end}
+
+
+def _cluster_frame_indices(frame_indices: list[int], max_gap: int) -> list[list[int]]:
+    if not frame_indices:
+        return []
+    clusters: list[list[int]] = [[frame_indices[0]]]
+    for frame_index in frame_indices[1:]:
+        if frame_index - clusters[-1][-1] <= max_gap:
+            clusters[-1].append(frame_index)
+        else:
+            clusters.append([frame_index])
+    return clusters
 
 
 def _add_protected_frame_weights(
@@ -682,6 +736,120 @@ def _blend_protected_bat_records(
             )
         )
     return sorted(blended, key=lambda item: (item.frame_index, item.object_name))
+
+
+def _fine_tune_swing_bat_records(
+    records: list[ObjectTrackRecord],
+    original_bat_by_frame: dict[int, ObjectTrackRecord],
+    swing_frames: set[int],
+    config: EquipmentTrackingConfig,
+) -> list[ObjectTrackRecord]:
+    if not swing_frames:
+        return records
+    bat_records = sorted(
+        [record for record in records if record.object_name == "bat" and record.frame_index in swing_frames],
+        key=lambda item: item.frame_index,
+    )
+    if len(bat_records) < config.bat_smoothing_min_segment_frames:
+        return records
+    tuned_by_frame: dict[int, ObjectTrackRecord] = {}
+    current: list[ObjectTrackRecord] = []
+    previous_frame: int | None = None
+    for record in bat_records:
+        if previous_frame is None or record.frame_index - previous_frame <= 1:
+            current.append(record)
+        else:
+            tuned_by_frame.update(_fine_tune_swing_segment(current, original_bat_by_frame, config))
+            current = [record]
+        previous_frame = record.frame_index
+    tuned_by_frame.update(_fine_tune_swing_segment(current, original_bat_by_frame, config))
+    if not tuned_by_frame:
+        return records
+    return sorted(
+        [tuned_by_frame.get(record.frame_index, record) if record.object_name == "bat" else record for record in records],
+        key=lambda item: (item.frame_index, item.object_name),
+    )
+
+
+def _fine_tune_swing_segment(
+    smoothed_records: list[ObjectTrackRecord],
+    original_bat_by_frame: dict[int, ObjectTrackRecord],
+    config: EquipmentTrackingConfig,
+) -> dict[int, ObjectTrackRecord]:
+    originals = [original_bat_by_frame.get(record.frame_index) for record in smoothed_records]
+    if any(record is None or record.x2 is None or record.y2 is None for record in originals):
+        return {}
+    original_records = [record for record in originals if record is not None]
+    angles = _unwrapped_bat_angles(original_records)
+    lengths = [_bat_record_length(record) for record in original_records]
+    reference_length = _median(lengths)
+    min_length = reference_length * config.bat_swing_length_min_ratio
+    max_length = reference_length * config.bat_swing_length_max_ratio
+    tuned: dict[int, ObjectTrackRecord] = {}
+    previous_angle: float | None = None
+    max_step = max(1.0, math.radians(config.bat_swing_max_angle_step_deg))
+    for index, (smoothed, original) in enumerate(zip(smoothed_records, original_records)):
+        if smoothed.x is None or smoothed.y is None or smoothed.x2 is None or smoothed.y2 is None:
+            continue
+        center_x = (smoothed.x + smoothed.x2) / 2
+        center_y = (smoothed.y + smoothed.y2) / 2
+        angle = angles[index]
+        if previous_angle is not None:
+            angle = min(previous_angle + max_step, max(previous_angle - max_step, angle))
+        previous_angle = angle
+        length = min(max(_bat_record_length(smoothed), min_length), max_length)
+        if length <= 0:
+            length = _bat_record_length(original)
+        half_length = length / 2
+        dx = math.cos(angle) * half_length
+        dy = math.sin(angle) * half_length
+        tuned[smoothed.frame_index] = ObjectTrackRecord(
+            clip_id=smoothed.clip_id,
+            condition_id=smoothed.condition_id,
+            frame_index=smoothed.frame_index,
+            timestamp_sec=smoothed.timestamp_sec,
+            object_name=smoothed.object_name,
+            x=center_x + dx,
+            y=center_y + dy,
+            x2=center_x - dx,
+            y2=center_y - dy,
+            confidence=smoothed.confidence,
+            width=smoothed.width,
+            height=smoothed.height,
+            source=smoothed.source,
+        )
+    return tuned
+
+
+def _unwrapped_bat_angles(records: list[ObjectTrackRecord]) -> list[float]:
+    angles: list[float] = []
+    previous: float | None = None
+    for record in records:
+        angle = math.radians(_bat_record_angle(record))
+        if previous is not None:
+            while angle - previous > math.pi:
+                angle -= 2 * math.pi
+            while angle - previous < -math.pi:
+                angle += 2 * math.pi
+        angles.append(angle)
+        previous = angle
+    return angles
+
+
+def _bat_record_length(record: ObjectTrackRecord) -> float:
+    if record.x is None or record.y is None or record.x2 is None or record.y2 is None:
+        return 0.0
+    return math.hypot(record.x - record.x2, record.y - record.y2)
+
+
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
 
 
 def _bat_record_angle(record: ObjectTrackRecord) -> float:
