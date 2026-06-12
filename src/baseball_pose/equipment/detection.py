@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import os
 from pathlib import Path
 
 from baseball_pose.equipment.schema import ObjectTrackRecord
@@ -27,6 +28,12 @@ class EquipmentTrackingConfig:
     yolo_ball_weight: float = 0.70
     yolo_bat_min_confidence: float = 0.18
     yolo_ball_min_confidence: float = 0.18
+    yolo_bat_roi_padding_ratio: float = 0.12
+    yolo_bat_min_line_length_ratio: float = 0.04
+    yolo_bat_max_box_area_ratio: float = 0.22
+    yolo_bat_edge_margin_ratio: float = 0.01
+    yolo_bat_max_angle_change_deg: float = 75.0
+    yolo_bat_allow_box_fallback: bool = False
     interpolate_max_gap_frames: int = 0
     interpolate_confidence_scale: float = 0.75
     use_pose_priors: bool = False
@@ -87,6 +94,7 @@ class _YoloObjectDetector:
     def __init__(self, config: EquipmentTrackingConfig) -> None:
         if config.yolo_model_path is None:
             raise ValueError("equipment_tracking.yolo_model_path is required for YOLO object tracking.")
+        os.environ.setdefault("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
         try:
             from ultralytics import YOLO
         except ModuleNotFoundError as exc:
@@ -159,8 +167,8 @@ def detect_equipment_tracks(
         bat = None
         bat_source = "motion_line"
         if cfg.detect_bat and _uses_yolo(cfg):
-            bat = _detect_bat_yolo(yolo_detections, wrist_points, previous_bat, width, height, cfg)
-            bat_source = "yolo_baseball_bat"
+            bat = _detect_bat_yolo(image, yolo_detections, wrist_points, previous_bat, width, height, cfg)
+            bat_source = "yolo_bat_roi_line"
         if bat is None and cfg.detect_bat and _uses_motion(cfg):
             bat = _detect_bat(image, motion_mask, wrist_points, previous_bat, cfg)
             bat_source = "motion_line_pose_prior" if wrist_points else "motion_line"
@@ -253,6 +261,7 @@ def _resolve_yolo_device(device: str | None) -> str | None:
 
 
 def _detect_bat_yolo(
+    image,
     detections: list[_YoloDetection],
     wrist_points: list[tuple[float, float]],
     previous: _BatCandidate | None,
@@ -268,7 +277,14 @@ def _detect_bat_yolo(
             continue
         if detection.confidence < config.yolo_bat_min_confidence:
             continue
-        handle, barrel = _bat_candidate_from_box(detection.xyxy, wrist_center)
+        if _reject_yolo_bat_box(detection.xyxy, width, height, config):
+            continue
+        refined = _bat_candidate_from_yolo_roi(image, detection.xyxy, wrist_center, previous, width, height, config)
+        if refined is None and config.yolo_bat_allow_box_fallback:
+            refined = _bat_candidate_from_box(detection.xyxy, wrist_center, previous)
+        if refined is None:
+            continue
+        handle, barrel = refined
         wrist_score = 0.5
         if wrist_center is not None:
             handle_distance = _distance(handle, wrist_center)
@@ -279,6 +295,9 @@ def _detect_bat_yolo(
         if previous is not None:
             jump = _distance(barrel, previous.barrel)
             if jump > config.bat_max_frame_jump_ratio * diagonal:
+                continue
+            angle_delta = _angle_delta_deg(_bat_angle(handle, barrel), _bat_angle(previous.handle, previous.barrel))
+            if angle_delta > config.yolo_bat_max_angle_change_deg:
                 continue
             previous_score = max(0.0, 1.0 - jump / (config.bat_max_frame_jump_ratio * diagonal))
         confidence = (
@@ -338,7 +357,8 @@ def _detect_ball_yolo(
 
 def _bat_candidate_from_box(
     xyxy: tuple[float, float, float, float],
-    wrist_center: tuple[float, float],
+    wrist_center: tuple[float, float] | None,
+    previous: _BatCandidate | None = None,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     x1, y1, x2, y2 = xyxy
     if (x2 - x1) >= (y2 - y1):
@@ -347,7 +367,107 @@ def _bat_candidate_from_box(
     else:
         first = ((x1 + x2) / 2, y1)
         second = ((x1 + x2) / 2, y2)
-    return _orient_bat(first, second, wrist_center)
+    return _orient_bat_with_reference(first, second, wrist_center, previous)
+
+
+def _bat_candidate_from_yolo_roi(
+    image,
+    xyxy: tuple[float, float, float, float],
+    wrist_center: tuple[float, float] | None,
+    previous: _BatCandidate | None,
+    width: int,
+    height: int,
+    config: EquipmentTrackingConfig,
+) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    if image is None:
+        return None
+    cv2 = _require_cv2()
+    x1, y1, x2, y2 = _expand_box(xyxy, width, height, config.yolo_bat_roi_padding_ratio)
+    roi = image[y1:y2, x1:x2]
+    if roi.size == 0:
+        return None
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    edges = cv2.Canny(gray, 40, 130)
+    diagonal = math.hypot(width, height)
+    min_line_length = max(18, int(config.yolo_bat_min_line_length_ratio * diagonal))
+    max_line_gap = max(4, int(config.bat_max_line_gap_ratio * diagonal))
+    lines = cv2.HoughLinesP(
+        edges,
+        rho=1,
+        theta=math.pi / 180,
+        threshold=24,
+        minLineLength=min_line_length,
+        maxLineGap=max_line_gap,
+    )
+    if lines is None:
+        return None
+
+    best: tuple[float, tuple[float, float], tuple[float, float]] | None = None
+    for line in lines[:, 0, :]:
+        lx1, ly1, lx2, ly2 = [float(value) for value in line]
+        first = (lx1 + x1, ly1 + y1)
+        second = (lx2 + x1, ly2 + y1)
+        length = _distance(first, second)
+        if length < min_line_length:
+            continue
+        if length > config.bat_max_line_length_ratio * diagonal:
+            continue
+        handle, barrel = _orient_bat_with_reference(first, second, wrist_center, previous)
+        previous_score = 0.5
+        if previous is not None:
+            jump = _distance(barrel, previous.barrel)
+            if jump > config.bat_max_frame_jump_ratio * diagonal:
+                continue
+            angle_delta = _angle_delta_deg(_bat_angle(handle, barrel), _bat_angle(previous.handle, previous.barrel))
+            if angle_delta > config.yolo_bat_max_angle_change_deg:
+                continue
+            previous_score = max(0.0, 1.0 - jump / (config.bat_max_frame_jump_ratio * diagonal))
+        wrist_score = 0.5
+        if wrist_center is not None:
+            wrist_score = max(0.0, 1.0 - _distance_to_segment(wrist_center, first, second) / (0.08 * diagonal))
+        score = 0.55 * min(1.0, length / (0.25 * diagonal)) + 0.25 * previous_score + 0.20 * wrist_score
+        if best is None or score > best[0]:
+            best = (score, handle, barrel)
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def _reject_yolo_bat_box(
+    xyxy: tuple[float, float, float, float],
+    width: int,
+    height: int,
+    config: EquipmentTrackingConfig,
+) -> bool:
+    x1, y1, x2, y2 = xyxy
+    box_width = max(0.0, x2 - x1)
+    box_height = max(0.0, y2 - y1)
+    if box_width <= 1.0 or box_height <= 1.0:
+        return True
+    if (box_width * box_height) / max(1.0, width * height) > config.yolo_bat_max_box_area_ratio:
+        return True
+    margin_x = config.yolo_bat_edge_margin_ratio * width
+    margin_y = config.yolo_bat_edge_margin_ratio * height
+    touches_left_or_right = x1 <= margin_x or x2 >= width - margin_x
+    touches_top_or_bottom = y1 <= margin_y or y2 >= height - margin_y
+    return touches_left_or_right and touches_top_or_bottom
+
+
+def _expand_box(
+    xyxy: tuple[float, float, float, float],
+    width: int,
+    height: int,
+    padding_ratio: float,
+) -> tuple[int, int, int, int]:
+    x1, y1, x2, y2 = xyxy
+    pad = padding_ratio * max(x2 - x1, y2 - y1)
+    return (
+        max(0, int(math.floor(x1 - pad))),
+        max(0, int(math.floor(y1 - pad))),
+        min(width, int(math.ceil(x2 + pad))),
+        min(height, int(math.ceil(y2 + pad))),
+    )
 
 
 def _interpolate_object_records(
@@ -659,10 +779,36 @@ def _orient_bat(
     return second, first
 
 
+def _orient_bat_with_reference(
+    first: tuple[float, float],
+    second: tuple[float, float],
+    wrist_center: tuple[float, float] | None,
+    previous: _BatCandidate | None,
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    if wrist_center is not None:
+        return _orient_bat(first, second, wrist_center)
+    if previous is None:
+        return first, second
+    same = _distance(first, previous.handle) + _distance(second, previous.barrel)
+    flipped = _distance(second, previous.handle) + _distance(first, previous.barrel)
+    if same <= flipped:
+        return first, second
+    return second, first
+
+
 def _mean_point(points: list[tuple[float, float]]) -> tuple[float, float] | None:
     if not points:
         return None
     return (sum(point[0] for point in points) / len(points), sum(point[1] for point in points) / len(points))
+
+
+def _bat_angle(handle: tuple[float, float], barrel: tuple[float, float]) -> float:
+    return math.degrees(math.atan2(barrel[1] - handle[1], barrel[0] - handle[0]))
+
+
+def _angle_delta_deg(first: float, second: float) -> float:
+    delta = abs((first - second + 90.0) % 180.0 - 90.0)
+    return min(delta, 180.0 - delta)
 
 
 def _distance(first: tuple[float, float], second: tuple[float, float]) -> float:

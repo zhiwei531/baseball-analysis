@@ -56,6 +56,7 @@ def test_yolo_bat_candidate_uses_baseball_bat_class_and_wrist_prior():
     ]
 
     bat = _detect_bat_yolo(
+        image=_bat_test_image(),
         detections=detections,
         wrist_points=[(96.0, 88.0)],
         previous=None,
@@ -65,8 +66,10 @@ def test_yolo_bat_candidate_uses_baseball_bat_class_and_wrist_prior():
     )
 
     assert bat is not None
-    assert bat.handle == (100.0, 88.0)
-    assert bat.barrel == (180.0, 88.0)
+    assert abs(bat.handle[0] - 100.0) < 5
+    assert abs(bat.handle[1] - 88.0) < 5
+    assert abs(bat.barrel[0] - 180.0) < 5
+    assert abs(bat.barrel[1] - 88.0) < 5
     assert bat.confidence > 0.6
 
 
@@ -75,6 +78,7 @@ def test_yolo_bat_candidate_does_not_require_pose_prior():
     detections = [_YoloDetection(class_id=34, confidence=0.80, xyxy=(100.0, 80.0, 180.0, 96.0))]
 
     bat = _detect_bat_yolo(
+        image=_bat_test_image(),
         detections=detections,
         wrist_points=[],
         previous=None,
@@ -84,8 +88,8 @@ def test_yolo_bat_candidate_does_not_require_pose_prior():
     )
 
     assert bat is not None
-    assert bat.handle == (100.0, 88.0)
-    assert bat.barrel == (180.0, 88.0)
+    assert abs(bat.handle[0] - 100.0) < 5
+    assert abs(bat.barrel[0] - 180.0) < 5
 
 
 def test_yolo_ball_candidate_uses_sports_ball_class_and_anchor():
@@ -176,3 +180,12 @@ def _record(
         height=480,
         source="test",
     )
+
+
+def _bat_test_image():
+    import cv2
+    import numpy as np
+
+    image = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.line(image, (100, 88), (180, 88), (255, 255, 255), 3, cv2.LINE_AA)
+    return image
