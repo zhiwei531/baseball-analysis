@@ -52,6 +52,8 @@ class EquipmentTrackingConfig:
     bat_max_handle_distance_ratio: float = 0.10
     bat_max_wrist_spread_ratio: float = 0.18
     bat_max_frame_jump_ratio: float = 0.16
+    bat_smoothing_window_frames: int = 0
+    bat_smoothing_min_segment_frames: int = 3
     ball_min_radius_px: int = 3
     ball_max_radius_px: int = 14
     ball_previous_weight: float = 0.45
@@ -236,7 +238,8 @@ def detect_equipment_tracks(
         min_track_length=_positive_or_default(cfg.ball_min_track_length_frames, 1),
         max_gap_frames=_positive_or_default(cfg.ball_track_max_gap_frames, 2),
     )
-    return _interpolate_object_records(records, frames, cfg)
+    records = _interpolate_object_records(records, frames, cfg)
+    return _smooth_bat_records(records, cfg)
 
 
 def _positive_or_default(value: int, default: int) -> int:
@@ -531,6 +534,92 @@ def _interpolate_object_records(
                     )
                 )
     return sorted(interpolated, key=lambda item: (item.frame_index, item.object_name))
+
+
+def _smooth_bat_records(
+    records: list[ObjectTrackRecord],
+    config: EquipmentTrackingConfig,
+) -> list[ObjectTrackRecord]:
+    window = _odd_window(config.bat_smoothing_window_frames)
+    if window <= 1:
+        return records
+    bat_records = sorted(
+        [record for record in records if record.object_name == "bat"],
+        key=lambda item: item.frame_index,
+    )
+    if not bat_records:
+        return records
+
+    smoothed_by_frame: dict[int, ObjectTrackRecord] = {}
+    current: list[ObjectTrackRecord] = []
+    previous_frame: int | None = None
+    for record in bat_records:
+        if previous_frame is None or record.frame_index - previous_frame <= 1:
+            current.append(record)
+        else:
+            smoothed_by_frame.update(_smooth_bat_segment(current, window, config.bat_smoothing_min_segment_frames))
+            current = [record]
+        previous_frame = record.frame_index
+    smoothed_by_frame.update(_smooth_bat_segment(current, window, config.bat_smoothing_min_segment_frames))
+
+    return sorted(
+        [smoothed_by_frame.get(record.frame_index, record) if record.object_name == "bat" else record for record in records],
+        key=lambda item: (item.frame_index, item.object_name),
+    )
+
+
+def _smooth_bat_segment(
+    records: list[ObjectTrackRecord],
+    window: int,
+    min_segment_frames: int,
+) -> dict[int, ObjectTrackRecord]:
+    if len(records) < min_segment_frames:
+        return {}
+    half_window = window // 2
+    smoothed: dict[int, ObjectTrackRecord] = {}
+    for index, record in enumerate(records):
+        start = max(0, index - half_window)
+        end = min(len(records), index + half_window + 1)
+        neighbors = records[start:end]
+        smoothed[record.frame_index] = ObjectTrackRecord(
+            clip_id=record.clip_id,
+            condition_id=record.condition_id,
+            frame_index=record.frame_index,
+            timestamp_sec=record.timestamp_sec,
+            object_name=record.object_name,
+            x=_smooth_optional_coordinate(neighbors, "x", index - start),
+            y=_smooth_optional_coordinate(neighbors, "y", index - start),
+            x2=_smooth_optional_coordinate(neighbors, "x2", index - start),
+            y2=_smooth_optional_coordinate(neighbors, "y2", index - start),
+            confidence=record.confidence,
+            width=record.width,
+            height=record.height,
+            source=record.source,
+        )
+    return smoothed
+
+
+def _smooth_optional_coordinate(records: list[ObjectTrackRecord], field_name: str, target_index: int) -> float | None:
+    values: list[tuple[float, float]] = []
+    for index, record in enumerate(records):
+        value = getattr(record, field_name)
+        if value is None:
+            continue
+        temporal_weight = 1.0 / (1.0 + abs(index - target_index))
+        confidence_weight = max(0.05, record.confidence if record.confidence is not None else 0.5)
+        values.append((float(value), temporal_weight * confidence_weight))
+    if not values:
+        return None
+    total_weight = sum(weight for _, weight in values)
+    if total_weight <= 0:
+        return values[len(values) // 2][0]
+    return sum(value * weight for value, weight in values) / total_weight
+
+
+def _odd_window(value: int) -> int:
+    if value <= 1:
+        return 0
+    return value if value % 2 == 1 else value - 1
 
 
 def _filter_short_object_tracks(

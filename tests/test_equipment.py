@@ -9,6 +9,7 @@ from baseball_pose.equipment.detection import (
     _filter_short_object_tracks,
     _interpolate_object_records,
     _resolve_yolo_device,
+    _smooth_bat_records,
 )
 from baseball_pose.equipment.schema import ObjectTrackRecord
 from baseball_pose.io.object_csv import read_object_tracks, write_object_tracks
@@ -198,6 +199,26 @@ def test_filter_short_ball_tracks_removes_isolated_false_positives():
         ("ball", 31),
         ("ball", 32),
     ]
+
+
+def test_smooth_bat_records_reduces_jitter_without_moving_ball():
+    records = [
+        _record(0, 0.0, "bat", 0.10, 0.20, 0.00, 0.25),
+        _record(0, 0.0, "ball", 0.80, 0.10),
+        _record(1, 1 / 30.0, "bat", 0.20, 0.10, 0.10, 0.15),
+        _record(1, 1 / 30.0, "ball", 0.70, 0.20),
+        _record(2, 2 / 30.0, "bat", 0.10, 0.20, 0.00, 0.25),
+    ]
+
+    smoothed = _smooth_bat_records(records, EquipmentTrackingConfig(bat_smoothing_window_frames=3))
+    bat_frame_1 = next(record for record in smoothed if record.object_name == "bat" and record.frame_index == 1)
+    ball_records = [record for record in smoothed if record.object_name == "ball"]
+
+    assert bat_frame_1.x is not None
+    assert bat_frame_1.x < 0.20
+    assert bat_frame_1.y is not None
+    assert bat_frame_1.y > 0.10
+    assert [(record.x, record.y) for record in ball_records] == [(0.80, 0.10), (0.70, 0.20)]
 
 
 def _record(
