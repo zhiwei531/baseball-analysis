@@ -5,9 +5,11 @@ from baseball_pose.equipment.detection import (
     _create_yolo_detector,
     _detect_ball_yolo,
     _detect_bat_yolo,
+    _interpolate_object_records,
 )
 from baseball_pose.equipment.schema import ObjectTrackRecord
 from baseball_pose.io.object_csv import read_object_tracks, write_object_tracks
+from baseball_pose.io.video import FrameRecord
 
 
 def test_extract_object_motion_features_computes_bat_and_ball_speed():
@@ -83,6 +85,31 @@ def test_yolo_ball_candidate_uses_sports_ball_class_and_anchor():
     assert ball.center == (305.0, 105.0)
     assert ball.radius_px == 5.0
     assert ball.confidence > 0.6
+
+
+def test_interpolate_object_records_fills_short_gap():
+    frames = [
+        FrameRecord("clip", index, index / 30.0, frame_path="unused.png", condition_id="condition")
+        for index in range(3)
+    ]
+    records = [
+        _record(0, 0.0, "ball", 0.10, 0.20),
+        _record(2, 2 / 30.0, "ball", 0.30, 0.40),
+    ]
+
+    interpolated = _interpolate_object_records(
+        records,
+        frames,
+        EquipmentTrackingConfig(interpolate_max_gap_frames=1),
+    )
+
+    assert len(interpolated) == 3
+    middle = interpolated[1]
+    assert middle.frame_index == 1
+    assert middle.object_name == "ball"
+    assert round(middle.x, 2) == 0.20
+    assert round(middle.y, 2) == 0.30
+    assert middle.source == "temporal_interpolation"
 
 
 def _record(

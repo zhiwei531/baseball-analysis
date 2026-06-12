@@ -121,6 +121,8 @@ equipment_tracking:
   motion_frame_threshold: 18
   motion_min_area_px: 8
   motion_dilate_iterations: 1
+  interpolate_max_gap_frames: 3
+  interpolate_confidence_scale: 0.75
   detect_ball_for_batting: false
   detect_ball_for_pitching: true
   bat_min_line_length_ratio: 0.07

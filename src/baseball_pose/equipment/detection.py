@@ -27,6 +27,8 @@ class EquipmentTrackingConfig:
     yolo_ball_weight: float = 0.70
     yolo_bat_min_confidence: float = 0.18
     yolo_ball_min_confidence: float = 0.18
+    interpolate_max_gap_frames: int = 0
+    interpolate_confidence_scale: float = 0.75
     motion_backend: str = "background"
     motion_background_samples: int = 60
     motion_background_threshold: int = 28
@@ -211,7 +213,7 @@ def detect_equipment_tracks(
             )
         previous_gray = gray
 
-    return records
+    return _interpolate_object_records(records, frames, cfg)
 
 
 def _create_yolo_detector(config: EquipmentTrackingConfig) -> _YoloObjectDetector | None:
@@ -324,6 +326,72 @@ def _bat_candidate_from_box(
         first = ((x1 + x2) / 2, y1)
         second = ((x1 + x2) / 2, y2)
     return _orient_bat(first, second, wrist_center)
+
+
+def _interpolate_object_records(
+    records: list[ObjectTrackRecord],
+    frame_records,
+    config: EquipmentTrackingConfig,
+) -> list[ObjectTrackRecord]:
+    if config.interpolate_max_gap_frames <= 0 or not records:
+        return records
+    frame_by_index = {frame.frame_index: frame for frame in frame_records}
+    records_by_object: dict[str, list[ObjectTrackRecord]] = {}
+    for record in records:
+        records_by_object.setdefault(record.object_name, []).append(record)
+
+    interpolated = list(records)
+    for object_name, object_records in records_by_object.items():
+        ordered = sorted(object_records, key=lambda item: item.frame_index)
+        for previous, current in zip(ordered, ordered[1:]):
+            gap = current.frame_index - previous.frame_index - 1
+            if gap <= 0 or gap > config.interpolate_max_gap_frames:
+                continue
+            if not _can_interpolate(previous, current):
+                continue
+            for step in range(1, gap + 1):
+                frame_index = previous.frame_index + step
+                frame = frame_by_index.get(frame_index)
+                if frame is None:
+                    continue
+                ratio = step / (gap + 1)
+                confidence = None
+                if previous.confidence is not None and current.confidence is not None:
+                    confidence = min(previous.confidence, current.confidence) * config.interpolate_confidence_scale
+                interpolated.append(
+                    ObjectTrackRecord(
+                        clip_id=previous.clip_id,
+                        condition_id=previous.condition_id,
+                        frame_index=frame_index,
+                        timestamp_sec=frame.timestamp_sec,
+                        object_name=object_name,
+                        x=_lerp_optional(previous.x, current.x, ratio),
+                        y=_lerp_optional(previous.y, current.y, ratio),
+                        x2=_lerp_optional(previous.x2, current.x2, ratio),
+                        y2=_lerp_optional(previous.y2, current.y2, ratio),
+                        confidence=confidence,
+                        width=previous.width if previous.width is not None else current.width,
+                        height=previous.height if previous.height is not None else current.height,
+                        source="temporal_interpolation",
+                    )
+                )
+    return sorted(interpolated, key=lambda item: (item.frame_index, item.object_name))
+
+
+def _can_interpolate(previous: ObjectTrackRecord, current: ObjectTrackRecord) -> bool:
+    return (
+        previous.object_name == current.object_name
+        and previous.x is not None
+        and previous.y is not None
+        and current.x is not None
+        and current.y is not None
+    )
+
+
+def _lerp_optional(first: float | None, second: float | None, ratio: float) -> float | None:
+    if first is None or second is None:
+        return None
+    return first + (second - first) * ratio
 
 
 def _detect_bat(
