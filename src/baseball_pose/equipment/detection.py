@@ -60,6 +60,8 @@ class EquipmentTrackingConfig:
     ball_max_y_ratio: float = 0.66
     ball_max_area_px: int = 650
     ball_max_aspect_ratio: float = 5.0
+    ball_min_track_length_frames: int = 1
+    ball_track_max_gap_frames: int = 2
     pose_confidence_threshold: float = 0.12
     pose_thresholds: dict[str, object] | None = None
     detect_bat: bool = True
@@ -227,7 +229,17 @@ def detect_equipment_tracks(
             )
         previous_gray = gray
 
+    records = _filter_short_object_tracks(
+        records,
+        object_name="ball",
+        min_track_length=_positive_or_default(cfg.ball_min_track_length_frames, 1),
+        max_gap_frames=_positive_or_default(cfg.ball_track_max_gap_frames, 2),
+    )
     return _interpolate_object_records(records, frames, cfg)
+
+
+def _positive_or_default(value: int, default: int) -> int:
+    return value if value > 0 else default
 
 
 def _create_yolo_detector(config: EquipmentTrackingConfig) -> _YoloObjectDetector | None:
@@ -518,6 +530,48 @@ def _interpolate_object_records(
                     )
                 )
     return sorted(interpolated, key=lambda item: (item.frame_index, item.object_name))
+
+
+def _filter_short_object_tracks(
+    records: list[ObjectTrackRecord],
+    object_name: str,
+    min_track_length: int,
+    max_gap_frames: int,
+) -> list[ObjectTrackRecord]:
+    if min_track_length <= 1:
+        return records
+    target_records = sorted(
+        [record for record in records if record.object_name == object_name],
+        key=lambda item: item.frame_index,
+    )
+    keep_ids: set[tuple[str, str, int, str]] = set()
+    current: list[ObjectTrackRecord] = []
+    previous_frame: int | None = None
+    for record in target_records:
+        if previous_frame is None or record.frame_index - previous_frame <= max_gap_frames + 1:
+            current.append(record)
+        else:
+            _mark_track_if_long_enough(current, min_track_length, keep_ids)
+            current = [record]
+        previous_frame = record.frame_index
+    _mark_track_if_long_enough(current, min_track_length, keep_ids)
+    return [
+        record
+        for record in records
+        if record.object_name != object_name
+        or (record.clip_id, record.condition_id, record.frame_index, record.object_name) in keep_ids
+    ]
+
+
+def _mark_track_if_long_enough(
+    records: list[ObjectTrackRecord],
+    min_track_length: int,
+    keep_ids: set[tuple[str, str, int, str]],
+) -> None:
+    if len(records) < min_track_length:
+        return
+    for record in records:
+        keep_ids.add((record.clip_id, record.condition_id, record.frame_index, record.object_name))
 
 
 def _can_interpolate(previous: ObjectTrackRecord, current: ObjectTrackRecord) -> bool:

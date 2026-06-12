@@ -80,6 +80,8 @@ def main() -> None:
             detect_ball=_should_detect_ball(args.detect, is_batting),
             use_pose_priors=False,
             interpolate_max_gap_frames=3,
+            ball_min_track_length_frames=3 if _should_detect_bat(args.detect, is_batting) else 1,
+            ball_track_max_gap_frames=2,
         )
         records = detect_equipment_tracks(
             frames_csv=frame_manifest,

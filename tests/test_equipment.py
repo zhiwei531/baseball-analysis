@@ -5,6 +5,7 @@ from baseball_pose.equipment.detection import (
     _create_yolo_detector,
     _detect_ball_yolo,
     _detect_bat_yolo,
+    _filter_short_object_tracks,
     _interpolate_object_records,
     _resolve_yolo_device,
 )
@@ -154,6 +155,30 @@ def test_interpolate_object_records_fills_short_gap():
     assert round(middle.x, 2) == 0.20
     assert round(middle.y, 2) == 0.30
     assert middle.source == "temporal_interpolation"
+
+
+def test_filter_short_ball_tracks_removes_isolated_false_positives():
+    records = [
+        _record(0, 0.0, "bat", 0.10, 0.20),
+        _record(10, 10 / 30.0, "ball", 0.10, 0.20),
+        _record(30, 30 / 30.0, "ball", 0.30, 0.40),
+        _record(31, 31 / 30.0, "ball", 0.31, 0.41),
+        _record(32, 32 / 30.0, "ball", 0.32, 0.42),
+    ]
+
+    filtered = _filter_short_object_tracks(
+        records,
+        object_name="ball",
+        min_track_length=3,
+        max_gap_frames=2,
+    )
+
+    assert [(record.object_name, record.frame_index) for record in filtered] == [
+        ("bat", 0),
+        ("ball", 30),
+        ("ball", 31),
+        ("ball", 32),
+    ]
 
 
 def _record(
