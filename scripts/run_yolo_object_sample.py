@@ -94,7 +94,12 @@ def main() -> None:
             ball_min_track_length_frames=3 if uses_batting_objects or uses_ball_only else 1,
             ball_track_max_gap_frames=2,
             ball_track_max_jump_ratio=0.25 if uses_ball_only else 0.0,
-            ball_max_y_ratio=1.0 if uses_batting_objects and _should_detect_ball(args.detect, is_batting) else 0.66,
+            small_ball_detector_enabled=uses_ball_only,
+            small_ball_extend_backward_frames=0,
+            small_ball_extend_forward_frames=2,
+            small_ball_gap_fill_max_frames=2,
+            small_ball_max_prediction_jump_ratio=0.16,
+            ball_max_y_ratio=1.0 if _should_detect_ball(args.detect, is_batting) and (uses_batting_objects or uses_ball_only) else 0.66,
             ball_max_below_anchor_ratio=1.0 if uses_batting_objects and _should_detect_ball(args.detect, is_batting) else 0.20,
         )
         records = detect_equipment_tracks(

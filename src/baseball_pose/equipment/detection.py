@@ -76,6 +76,19 @@ class EquipmentTrackingConfig:
     ball_min_track_length_frames: int = 1
     ball_track_max_gap_frames: int = 2
     ball_track_max_jump_ratio: float = 0.0
+    small_ball_detector_enabled: bool = False
+    small_ball_extend_backward_frames: int = 0
+    small_ball_extend_forward_frames: int = 0
+    small_ball_gap_fill_max_frames: int = 2
+    small_ball_max_prediction_jump_ratio: float = 0.14
+    small_ball_min_area_px: int = 2
+    small_ball_max_area_px: int = 120
+    small_ball_max_box_size_px: int = 22
+    small_ball_local_window_px: int = 25
+    small_ball_max_local_white_px: int = 55
+    small_ball_min_value: int = 145
+    small_ball_max_saturation: int = 95
+    small_ball_motion_threshold: int = 14
     pose_confidence_threshold: float = 0.12
     pose_thresholds: dict[str, object] | None = None
     detect_bat: bool = True
@@ -104,6 +117,13 @@ class _YoloDetection:
     class_id: int
     confidence: float
     xyxy: tuple[float, float, float, float]
+
+
+@dataclass(frozen=True)
+class _SmallBallCandidate:
+    center: tuple[float, float]
+    radius_px: float
+    confidence: float
 
 
 class _YoloObjectDetector:
@@ -250,6 +270,15 @@ def detect_equipment_tracks(
         max_gap_frames=_positive_or_default(cfg.ball_track_max_gap_frames, 2),
         max_jump_ratio=cfg.ball_track_max_jump_ratio,
     )
+    if cfg.detect_ball and cfg.small_ball_detector_enabled:
+        records = _augment_ball_records_with_small_detector(records, frames, cfg)
+        records = _filter_short_object_tracks(
+            records,
+            object_name="ball",
+            min_track_length=_positive_or_default(cfg.ball_min_track_length_frames, 1),
+            max_gap_frames=_positive_or_default(cfg.ball_track_max_gap_frames, 2),
+            max_jump_ratio=cfg.ball_track_max_jump_ratio,
+        )
     records = _interpolate_object_records(records, frames, cfg)
     return _smooth_bat_records(records, cfg)
 
@@ -546,6 +575,152 @@ def _interpolate_object_records(
                     )
                 )
     return sorted(interpolated, key=lambda item: (item.frame_index, item.object_name))
+
+
+def _augment_ball_records_with_small_detector(
+    records: list[ObjectTrackRecord],
+    frame_records,
+    config: EquipmentTrackingConfig,
+) -> list[ObjectTrackRecord]:
+    ball_records = sorted([record for record in records if record.object_name == "ball"], key=lambda item: item.frame_index)
+    if len(ball_records) < 2:
+        return records
+    frame_by_index = {frame.frame_index: frame for frame in frame_records}
+    existing_frames = {record.frame_index for record in ball_records}
+    additions: list[ObjectTrackRecord] = []
+
+    for previous, current in zip(ball_records, ball_records[1:]):
+        gap = current.frame_index - previous.frame_index - 1
+        if gap <= 0 or gap > config.small_ball_gap_fill_max_frames:
+            continue
+        for frame_index in range(previous.frame_index + 1, current.frame_index):
+            ratio = (frame_index - previous.frame_index) / (current.frame_index - previous.frame_index)
+            predicted = (_lerp_optional(previous.x, current.x, ratio), _lerp_optional(previous.y, current.y, ratio))
+            record = _small_ball_record_near_prediction(
+                frame_by_index.get(frame_index),
+                previous,
+                predicted,
+                config,
+                source="small_ball_gap_fill",
+            )
+            if record is not None:
+                additions.append(record)
+
+    for direction in (-1, 1):
+        extend_frames = (
+            config.small_ball_extend_backward_frames if direction < 0 else config.small_ball_extend_forward_frames
+        )
+        if extend_frames <= 0:
+            continue
+        anchor = ball_records[0] if direction < 0 else ball_records[-1]
+        neighbor = ball_records[1] if direction < 0 else ball_records[-2]
+        dx = (anchor.x or 0.0) - (neighbor.x or 0.0)
+        dy = (anchor.y or 0.0) - (neighbor.y or 0.0)
+        for step in range(1, extend_frames + 1):
+            frame_index = anchor.frame_index + direction * step
+            if frame_index in existing_frames or frame_index not in frame_by_index:
+                continue
+            predicted = ((anchor.x or 0.0) + direction * dx * step, (anchor.y or 0.0) + direction * dy * step)
+            record = _small_ball_record_near_prediction(
+                frame_by_index.get(frame_index),
+                anchor,
+                predicted,
+                config,
+                source="small_ball_track_extend",
+            )
+            if record is None:
+                continue
+            additions.append(record)
+            existing_frames.add(frame_index)
+
+    if not additions:
+        return records
+    return sorted(records + additions, key=lambda item: (item.frame_index, item.object_name, item.source))
+
+
+def _small_ball_record_near_prediction(
+    frame,
+    reference: ObjectTrackRecord,
+    predicted: tuple[float | None, float | None],
+    config: EquipmentTrackingConfig,
+    source: str,
+) -> ObjectTrackRecord | None:
+    if frame is None or predicted[0] is None or predicted[1] is None:
+        return None
+    image = read_frame(frame.frame_path)
+    candidates = _small_ball_candidates(image, config)
+    if not candidates:
+        return None
+    height, width = image.shape[:2]
+    diagonal = math.hypot(width, height)
+    predicted_px = (predicted[0] * width, predicted[1] * height)
+    max_distance = config.small_ball_max_prediction_jump_ratio * diagonal
+    best: tuple[float, _SmallBallCandidate] | None = None
+    for candidate in candidates:
+        distance = _distance(candidate.center, predicted_px)
+        if distance > max_distance:
+            continue
+        proximity = max(0.0, 1.0 - distance / max_distance)
+        score = 0.65 * proximity + 0.35 * candidate.confidence
+        if best is None or score > best[0]:
+            best = (score, candidate)
+    if best is None:
+        return None
+    candidate = best[1]
+    return ObjectTrackRecord(
+        clip_id=reference.clip_id,
+        condition_id=reference.condition_id,
+        frame_index=frame.frame_index,
+        timestamp_sec=frame.timestamp_sec,
+        object_name="ball",
+        x=candidate.center[0] / width,
+        y=candidate.center[1] / height,
+        x2=None,
+        y2=None,
+        confidence=min(0.80, max(0.25, best[0])),
+        width=width,
+        height=height,
+        source=source,
+    )
+
+
+def _small_ball_candidates(image, config: EquipmentTrackingConfig) -> list[_SmallBallCandidate]:
+    cv2 = _require_cv2()
+    height, width = image.shape[:2]
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    white_mask = cv2.inRange(
+        hsv,
+        (0, 0, config.small_ball_min_value),
+        (179, config.small_ball_max_saturation, 255),
+    )
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 35, 120)
+    mask = cv2.bitwise_and(white_mask, cv2.dilate(edges, None, iterations=1))
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    candidates: list[_SmallBallCandidate] = []
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < config.small_ball_min_area_px or area > config.small_ball_max_area_px:
+            continue
+        x, y, box_width, box_height = cv2.boundingRect(contour)
+        if max(box_width, box_height) > config.small_ball_max_box_size_px:
+            continue
+        if y + box_height / 2 > config.ball_max_y_ratio * height:
+            continue
+        center = (x + box_width / 2, y + box_height / 2)
+        local_half = max(1, config.small_ball_local_window_px // 2)
+        local_x1 = max(0, int(center[0]) - local_half)
+        local_y1 = max(0, int(center[1]) - local_half)
+        local_x2 = min(width, int(center[0]) + local_half + 1)
+        local_y2 = min(height, int(center[1]) + local_half + 1)
+        if int((white_mask[local_y1:local_y2, local_x1:local_x2] > 0).sum()) > config.small_ball_max_local_white_px:
+            continue
+        radius = max(box_width, box_height) / 2
+        aspect = max(box_width, box_height) / max(1, min(box_width, box_height))
+        brightness = float(gray[y : y + box_height, x : x + box_width].mean()) / 255.0
+        confidence = max(0.0, min(1.0, 0.65 * brightness + 0.35 * (1.0 / aspect)))
+        candidates.append(_SmallBallCandidate(center=center, radius_px=radius, confidence=confidence))
+    return candidates
 
 
 def _smooth_bat_records(

@@ -10,6 +10,7 @@ from baseball_pose.equipment.detection import (
     _filter_short_object_tracks,
     _interpolate_object_records,
     _resolve_yolo_device,
+    _small_ball_candidates,
     _smooth_bat_records,
 )
 from baseball_pose.equipment.schema import ObjectTrackRecord
@@ -220,6 +221,20 @@ def test_filter_short_ball_tracks_splits_large_position_jumps():
     )
 
     assert [record.frame_index for record in filtered] == [8, 9, 10]
+
+
+def test_small_ball_candidates_find_tiny_white_object():
+    cv2 = __import__("cv2")
+    np = __import__("numpy")
+    image = np.zeros((80, 120, 3), dtype=np.uint8)
+    cv2.circle(image, (70, 30), 4, (255, 255, 255), -1)
+
+    candidates = _small_ball_candidates(image, EquipmentTrackingConfig(ball_max_y_ratio=1.0))
+
+    assert candidates
+    best = max(candidates, key=lambda item: item.confidence)
+    assert abs(best.center[0] - 70) <= 5
+    assert abs(best.center[1] - 30) <= 5
 
 
 def test_smooth_bat_records_reduces_jitter_without_moving_ball():
