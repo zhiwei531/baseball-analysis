@@ -60,6 +60,7 @@ def main() -> None:
     for clip_id in clips:
         is_batting = "hit" in clip_id
         uses_batting_objects = is_batting or args.detect in {"bat", "both"}
+        uses_ball_only = _should_detect_ball(args.detect, is_batting) and not _should_detect_bat(args.detect, is_batting)
         source_frames = (
             Path(args.source_data_dir)
             / "interim"
@@ -90,8 +91,9 @@ def main() -> None:
             bat_smoothing_fast_original_weight=0.0,
             bat_swing_window_margin_frames=6,
             bat_swing_max_angle_step_deg=40.0,
-            ball_min_track_length_frames=3 if uses_batting_objects else 1,
+            ball_min_track_length_frames=3 if uses_batting_objects or uses_ball_only else 1,
             ball_track_max_gap_frames=2,
+            ball_track_max_jump_ratio=0.25 if uses_ball_only else 0.0,
             ball_max_y_ratio=1.0 if uses_batting_objects and _should_detect_ball(args.detect, is_batting) else 0.66,
             ball_max_below_anchor_ratio=1.0 if uses_batting_objects and _should_detect_ball(args.detect, is_batting) else 0.20,
         )

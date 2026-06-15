@@ -75,6 +75,7 @@ class EquipmentTrackingConfig:
     ball_max_aspect_ratio: float = 5.0
     ball_min_track_length_frames: int = 1
     ball_track_max_gap_frames: int = 2
+    ball_track_max_jump_ratio: float = 0.0
     pose_confidence_threshold: float = 0.12
     pose_thresholds: dict[str, object] | None = None
     detect_bat: bool = True
@@ -247,6 +248,7 @@ def detect_equipment_tracks(
         object_name="ball",
         min_track_length=_positive_or_default(cfg.ball_min_track_length_frames, 1),
         max_gap_frames=_positive_or_default(cfg.ball_track_max_gap_frames, 2),
+        max_jump_ratio=cfg.ball_track_max_jump_ratio,
     )
     records = _interpolate_object_records(records, frames, cfg)
     return _smooth_bat_records(records, cfg)
@@ -1015,6 +1017,7 @@ def _filter_short_object_tracks(
     object_name: str,
     min_track_length: int,
     max_gap_frames: int,
+    max_jump_ratio: float = 0.0,
 ) -> list[ObjectTrackRecord]:
     if min_track_length <= 1:
         return records
@@ -1025,13 +1028,21 @@ def _filter_short_object_tracks(
     keep_ids: set[tuple[str, str, int, str]] = set()
     current: list[ObjectTrackRecord] = []
     previous_frame: int | None = None
+    previous_record: ObjectTrackRecord | None = None
     for record in target_records:
-        if previous_frame is None or record.frame_index - previous_frame <= max_gap_frames + 1:
+        frame_continues = previous_frame is None or record.frame_index - previous_frame <= max_gap_frames + 1
+        motion_continues = previous_record is None or _object_track_motion_continues(
+            previous_record,
+            record,
+            max_jump_ratio,
+        )
+        if frame_continues and motion_continues:
             current.append(record)
         else:
             _mark_track_if_long_enough(current, min_track_length, keep_ids)
             current = [record]
         previous_frame = record.frame_index
+        previous_record = record
     _mark_track_if_long_enough(current, min_track_length, keep_ids)
     return [
         record
@@ -1039,6 +1050,22 @@ def _filter_short_object_tracks(
         if record.object_name != object_name
         or (record.clip_id, record.condition_id, record.frame_index, record.object_name) in keep_ids
     ]
+
+
+def _object_track_motion_continues(
+    previous: ObjectTrackRecord,
+    current: ObjectTrackRecord,
+    max_jump_ratio: float,
+) -> bool:
+    if max_jump_ratio <= 0:
+        return True
+    if previous.x is None or previous.y is None or current.x is None or current.y is None:
+        return True
+    width = previous.width or current.width or 1
+    height = previous.height or current.height or 1
+    diagonal = math.hypot(width, height)
+    jump = math.hypot((current.x - previous.x) * width, (current.y - previous.y) * height)
+    return jump <= max_jump_ratio * diagonal
 
 
 def _mark_track_if_long_enough(

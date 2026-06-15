@@ -202,6 +202,26 @@ def test_filter_short_ball_tracks_removes_isolated_false_positives():
     ]
 
 
+def test_filter_short_ball_tracks_splits_large_position_jumps():
+    records = [
+        _record(7, 7 / 30.0, "ball", 0.50, 0.30),
+        _record(8, 8 / 30.0, "ball", 0.90, 0.53),
+        _record(9, 9 / 30.0, "ball", 0.88, 0.53),
+        _record(10, 10 / 30.0, "ball", 0.84, 0.54),
+        _record(13, 13 / 30.0, "ball", 0.10, 0.33),
+    ]
+
+    filtered = _filter_short_object_tracks(
+        records,
+        object_name="ball",
+        min_track_length=3,
+        max_gap_frames=2,
+        max_jump_ratio=0.25,
+    )
+
+    assert [record.frame_index for record in filtered] == [8, 9, 10]
+
+
 def test_smooth_bat_records_reduces_jitter_without_moving_ball():
     records = [
         _record(0, 0.0, "bat", 0.10, 0.20, 0.00, 0.25),
