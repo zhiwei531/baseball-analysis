@@ -187,6 +187,12 @@ def active_duration_sec(speed: np.ndarray, rate_hz: float) -> float:
     return float((end - start + 1) / rate_hz)
 
 
+def peak_index(speed: np.ndarray) -> int | None:
+    if not np.isfinite(speed).any():
+        return None
+    return int(np.nanargmax(speed))
+
+
 def infer_action(path: Path) -> str:
     return "batting" if "bat" in path.name.lower() else "pitching"
 
@@ -202,7 +208,7 @@ def compute_trial_metrics(trial: C3DTrial) -> dict[str, object]:
     rfhd = marker(trial, "RFHD")
     lbhd = marker(trial, "LBHD")
     rbhd = marker(trial, "RBHD")
-    head = np.nanmean(np.stack([lfhd, rfhd, lbhd, rbhd]), axis=0)
+    head = safe_nanmean([lfhd, rfhd, lbhd, rbhd], axis=0)
     lsho, rsho = marker(trial, "LSHO"), marker(trial, "RSHO")
     lelb, relb = marker(trial, "LELB"), marker(trial, "RELB")
     lwrist = marker(trial, "LWRA", "LWRB")
@@ -212,10 +218,10 @@ def compute_trial_metrics(trial: C3DTrial) -> dict[str, object]:
     lkne, rkne = marker(trial, "LKNE"), marker(trial, "RKNE")
     lank, rank = marker(trial, "LANK"), marker(trial, "RANK")
     c7, t10, clav, strn = marker(trial, "C7"), marker(trial, "T10"), marker(trial, "CLAV"), marker(trial, "STRN")
-    shoulder_mid = np.nanmean(np.stack([lsho, rsho]), axis=0)
-    hip_mid = np.nanmean(np.stack([lhip, rhip]), axis=0)
-    neck = np.nanmean(np.stack([c7, clav]), axis=0)
-    trunk = np.nanmean(np.stack([c7, t10, clav, strn]), axis=0)
+    shoulder_mid = safe_nanmean([lsho, rsho], axis=0)
+    hip_mid = safe_nanmean([lhip, rhip], axis=0)
+    neck = safe_nanmean([c7, clav], axis=0)
+    trunk = safe_nanmean([c7, t10, clav, strn], axis=0)
     hip_angle = plane_angle(lhip, rhip)
     shoulder_angle = plane_angle(lsho, rsho)
     hip_shoulder = circular_abs_diff(shoulder_angle, hip_angle)
@@ -260,9 +266,35 @@ def compute_trial_metrics(trial: C3DTrial) -> dict[str, object]:
     }
 
 
+def key_action_frame(trial: C3DTrial) -> tuple[int, str, str]:
+    action = infer_action(trial.path)
+    rwrist = marker(trial, "RWRA", "RWRB")
+    lwrist = marker(trial, "LWRA", "LWRB")
+    right_speed = speed_kmh(rwrist, trial.rate_hz)
+    left_speed = speed_kmh(lwrist, trial.rate_hz)
+    bat1 = marker(trial, "Bat1")
+    bat5 = marker(trial, "Bat5")
+    bat_mid = safe_nanmean([bat1, bat5], axis=0)
+    bat_speed = speed_kmh(bat1 if np.isfinite(bat1).any() else bat_mid, trial.rate_hz)
+    if action == "batting" and np.isfinite(bat_speed).any():
+        return int(np.nanargmax(bat_speed)), "球棒峰值速度", "bat_speed_peak"
+    if finite_stat(right_speed, "max") >= finite_stat(left_speed, "max"):
+        idx = peak_index(right_speed)
+        if idx is not None:
+            return idx, "右手峰值速度", "right_hand_speed_peak"
+    idx = peak_index(left_speed)
+    if idx is not None:
+        return idx, "左手峰值速度", "left_hand_speed_peak"
+    return trial.points.shape[0] // 2, "动作中段兜底", "mid_frame_fallback"
+
+
 def point_summary_rows(trial: C3DTrial) -> list[dict[str, object]]:
     rows = []
     clean = [clean_label(label) for label in trial.labels]
+    key_idx, key_label, key_rule = key_action_frame(trial)
+    radius = max(1, round(trial.rate_hz * 0.03))
+    start = max(0, key_idx - radius)
+    end = min(trial.points.shape[0], key_idx + radius + 1)
     keep = [
         "LFHD",
         "RFHD",
@@ -292,17 +324,27 @@ def point_summary_rows(trial: C3DTrial) -> list[dict[str, object]]:
         valid = np.isfinite(pts[:, 0])
         if not valid.any():
             continue
-        mid = pts[valid][len(pts[valid]) // 2]
+        window = pts[start:end]
+        if np.isfinite(window[:, 0]).any():
+            key_point = safe_nanmean(window, axis=0)
+        else:
+            key_point = pts[valid][len(pts[valid]) // 2]
         rows.append(
             {
                 "trial_id": trial_id(trial.path),
                 "athlete": trial.path.parent.name,
                 "action_type": infer_action(trial.path),
+                "key_event": key_label,
+                "key_rule": key_rule,
+                "key_frame_index": key_idx,
+                "key_time_sec": key_idx / trial.rate_hz,
+                "window_start_frame": start,
+                "window_end_frame": end - 1,
                 "point": name,
                 "valid_pct": float(valid.sum() / valid.size * 100),
-                "mid_x_mm": float(mid[0]),
-                "mid_y_mm": float(mid[1]),
-                "mid_z_mm": float(mid[2]),
+                "key_x_mm": float(key_point[0]),
+                "key_y_mm": float(key_point[1]),
+                "key_z_mm": float(key_point[2]),
             }
         )
     return rows

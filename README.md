@@ -116,7 +116,11 @@ report.html
 Vicon exports. It ignores macOS `._*.c3d` resource-fork files, extracts marker
 labels, frame rate, 3D marker points, bat markers, and full-body model points
 when present, then writes report-ready optical reference metrics. Some report
-figures reconstruct 3D body/bat structure directly from those C3D points.
+figures reconstruct 3D body/bat structure from those C3D points after first
+selecting a key action position. Do not use global trial-wide point averages for
+these reconstruction figures: pitching uses the hand-speed peak frame, and
+batting uses the bat-speed peak frame, with a short local window around that
+event.
 
 Report design rules live in [DESIGN.md](DESIGN.md). Keep the final HTML Chinese,
 use compact graph x-axes, avoid text/curve overlap, and convert user-facing

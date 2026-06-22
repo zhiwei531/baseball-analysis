@@ -452,6 +452,11 @@ Notes:
   point scale/data start, and float point frames. It does not require `ezc3d`.
 - It outputs trial-level optical reference metrics and a point-summary table
   used by `report.html` to reconstruct body/bat 3D projection figures.
+- The point-summary table is not a global point average. The script first
+  extracts a key action position, then averages a short local window around
+  that frame: pitching uses the dominant hand-speed peak; batting uses the
+  bat-speed peak. Use `key_event`, `key_frame_index`, and `key_time_sec` to
+  trace every reconstructed point figure.
 - Pitching C3D files include full-body AI/model points; batting C3D files
   include body markers plus `Bat:Bat1` through `Bat:Bat5`.
 

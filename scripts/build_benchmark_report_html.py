@@ -924,10 +924,14 @@ def vicon_source_table(rows: list[dict[str, str]]) -> str:
 
 def vicon_reconstruction_svg(rows: list[dict[str, str]], trial_id_value: str, title: str) -> str:
     pts = {
-        row["point"]: (num(row.get("mid_x_mm")), num(row.get("mid_y_mm")), num(row.get("mid_z_mm")))
+        row["point"]: (num(row.get("key_x_mm")), num(row.get("key_y_mm")), num(row.get("key_z_mm")))
         for row in rows
         if row.get("trial_id") == trial_id_value
     }
+    event_row = next((row for row in rows if row.get("trial_id") == trial_id_value), {})
+    event_text = event_row.get("key_event", "关键动作帧")
+    frame_text = event_row.get("key_frame_index", "")
+    time_text = fmt(event_row.get("key_time_sec"), "s") if event_row else ""
     valid = {name: xyz for name, xyz in pts.items() if all(v is not None for v in xyz)}
     if not valid:
         return line_placeholder_svg(title)
@@ -969,7 +973,8 @@ def vicon_reconstruction_svg(rows: list[dict[str, str]], trial_id_value: str, ti
     <svg class="pose-svg" viewBox="0 0 640 320" role="img" aria-label="{esc(title)}">
       <rect width="640" height="320" rx="18" fill="#ffffff"/>
       <text x="24" y="28" fill="#101828" font-size="14" font-weight="700">{esc(title)}</text>
-      <text x="24" y="50" fill="#667085" font-size="12">由 C3D marker 中点重建，蓝色为身体点，橙色为球棒点。</text>
+      <text x="24" y="50" fill="#667085" font-size="12">先定位{esc(event_text)}，再用第{esc(frame_text)}帧附近窗口重建；时间 {esc(time_text)}。</text>
+      <text x="24" y="70" fill="#667085" font-size="12">蓝色为身体点，橙色为球棒点；不是全局点位平均。</text>
       <g>{''.join(tags)}</g>
     </svg>
     """
@@ -1435,11 +1440,11 @@ def main() -> None:
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>Vicon 2026 C3D来源表</h4><div class="table-scroll">{vicon_source_table(vicon)}</div><p>表内统计由 vicon_2026 文件夹中的 C3D 导出直接解析得到，忽略 macOS 资源分叉文件。</p></article>
-        <article class="visual-card"><h4>Vicon三维点重建图</h4>{vicon_reconstruction_svg(vicon_points, "green_006_pitch_09", "Green投球C3D点重建")}<p>怎么看：该图不是截图，而是从 C3D marker 的三维点坐标投影重建，用于检查光学数据的身体点结构。</p></article>
+        <article class="visual-card"><h4>Vicon三维点重建图</h4>{vicon_reconstruction_svg(vicon_points, "green_006_pitch_09", "Green投球C3D点重建")}<p>怎么看：该图不是全局点云截图，而是先提取投球关键动作帧，再从 C3D marker 的三维点坐标投影重建身体点结构。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>数据质量图</h4>{pose_quality_chart}<p>怎么看：条形长度综合输入质量分和关节完整率；研究者应优先检查低质量样本的峰值速度和事件点。</p></article>
-        <article class="visual-card"><h4>Vicon球棒点重建图</h4>{vicon_reconstruction_svg(vicon_points, "green_006_bat_04", "Green打击C3D点重建")}<p>怎么看：橙色连线来自 Bat1/Bat5 marker，可用于解释光学棒速；身体点用于确认击球动作的全身姿态背景。</p></article>
+        <article class="visual-card"><h4>Vicon球棒点重建图</h4>{vicon_reconstruction_svg(vicon_points, "green_006_bat_04", "Green打击C3D点重建")}<p>怎么看：先提取球棒峰值速度附近的关键动作窗口，再重建 Bat1/Bat5 和身体点；橙色连线用于解释光学棒速。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>光学动作捕捉校准说明</h4><div class="bars">{bars([("Bryan球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "bryan"), "km/h", "#16a34a"), ("Green球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "green"), "km/h", "#60a5fa"), ("Bryan挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "bryan"), "s", "#f97316"), ("Green挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "green"), "s", "#60a5fa")])}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出，用于校准和解释视频估算，不直接替代当前视频指标。</p></article>
