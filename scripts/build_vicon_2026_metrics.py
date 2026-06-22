@@ -289,6 +289,15 @@ def key_action_frame(trial: C3DTrial) -> tuple[int, str, str]:
     return trial.points.shape[0] // 2, "动作中段兜底", "mid_frame_fallback"
 
 
+def is_reconstruction_point(label: str) -> bool:
+    derived_suffixes = ("Angles", "Angle", "Power", "Force", "Moment")
+    if label.endswith(derived_suffixes):
+        return False
+    if "ProgressAngles" in label:
+        return False
+    return True
+
+
 def point_summary_rows(trial: C3DTrial) -> list[dict[str, object]]:
     rows = []
     clean = [clean_label(label) for label in trial.labels]
@@ -296,28 +305,10 @@ def point_summary_rows(trial: C3DTrial) -> list[dict[str, object]]:
     radius = max(1, round(trial.rate_hz * 0.03))
     start = max(0, key_idx - radius)
     end = min(trial.points.shape[0], key_idx + radius + 1)
-    keep = [
-        "LFHD",
-        "RFHD",
-        "C7",
-        "T10",
-        "LSHO",
-        "RSHO",
-        "LELB",
-        "RELB",
-        "LWRA",
-        "LWRB",
-        "RWRA",
-        "RWRB",
-        "LASI",
-        "RASI",
-        "LKNE",
-        "RKNE",
-        "LANK",
-        "RANK",
-        "Bat1",
-        "Bat5",
-    ]
+    keep = []
+    for name in clean:
+        if name not in keep and is_reconstruction_point(name):
+            keep.append(name)
     for name in keep:
         if name not in clean:
             continue

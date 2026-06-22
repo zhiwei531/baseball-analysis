@@ -37,8 +37,52 @@ BODY_SEGMENTS = [
     ("RASI", "RKNE"),
     ("RKNE", "RANK"),
 ]
-BAT_SEGMENTS = [("Bat1", "Bat5")]
-LABEL_POINTS = ["LFHD", "RFHD", "C7", "T10", "LSHO", "RSHO", "LASI", "RASI", "Bat1", "Bat5"]
+MODEL_SEGMENTS = [
+    ("PELO", "PELA"),
+    ("PELO", "PELL"),
+    ("PELO", "PELP"),
+    ("TRXO", "TRXA"),
+    ("TRXO", "TRXL"),
+    ("TRXO", "TRXP"),
+    ("HEDO", "HEDA"),
+    ("HEDO", "HEDL"),
+    ("HEDO", "HEDP"),
+    ("LCLO", "LCLA"),
+    ("LCLO", "LCLL"),
+    ("RCLO", "RCLA"),
+    ("RCLO", "RCLL"),
+    ("LHUO", "LHUA"),
+    ("LHUO", "LHUL"),
+    ("LRAO", "LRAA"),
+    ("LRAO", "LRAL"),
+    ("LHNO", "LHNA"),
+    ("RHUO", "RHUA"),
+    ("RHUO", "RHUL"),
+    ("RRAO", "RRAA"),
+    ("RRAO", "RRAL"),
+    ("RHNO", "RHNA"),
+    ("LFEO", "LFEA"),
+    ("LFEO", "LFEL"),
+    ("LTIO", "LTIA"),
+    ("LTIO", "LTIL"),
+    ("LFOO", "LFOA"),
+    ("LTOO", "LTOA"),
+    ("RFEO", "RFEA"),
+    ("RFEO", "RFEL"),
+    ("RTIO", "RTIA"),
+    ("RTIO", "RTIL"),
+    ("RFOO", "RFOA"),
+    ("RTOO", "RTOA"),
+]
+BAT_SEGMENTS = [("Bat1", "Bat2"), ("Bat2", "Bat3"), ("Bat3", "Bat4"), ("Bat4", "Bat5")]
+LABEL_POINTS = ["LFHD", "RFHD", "C7", "T10", "LSHO", "RSHO", "LASI", "RASI", "CentreOfMass", "Bat1", "Bat5"]
+RAW_MARKERS = {
+    "LFHD", "RFHD", "LBHD", "RBHD", "C7", "T10", "CLAV", "STRN", "RBAK",
+    "LSHO", "LUPA", "LELB", "LFRM", "LWRA", "LWRB", "LFIN",
+    "RSHO", "RUPA", "RELB", "RFRM", "RWRA", "RWRB", "RFIN",
+    "LASI", "RASI", "LPSI", "RPSI", "LTHI", "LKNE", "LTIB", "LANK", "LHEE", "LTOE",
+    "RTHI", "RKNE", "RTIB", "RANK", "RHEE", "RTOE",
+}
 ZH_FONT_PATHS = [
     Path("/System/Library/Fonts/PingFang.ttc"),
     Path("/System/Library/Fonts/STHeiti Medium.ttc"),
@@ -85,7 +129,7 @@ def set_equal_axes(ax, points: dict[str, tuple[float, float, float]]) -> None:
     mins = coords.min(axis=0)
     maxs = coords.max(axis=0)
     center = (mins + maxs) / 2
-    radius = max(float((maxs - mins).max()) / 2, 250.0)
+    radius = max(float((maxs - mins).max()) / 2, 250.0) * 1.55
     ax.set_xlim(center[0] - radius, center[0] + radius)
     ax.set_ylim(center[1] - radius, center[1] + radius)
     ax.set_zlim(center[2] - radius, center[2] + radius)
@@ -114,6 +158,9 @@ def render_trial(rows: list[dict[str, str]], out_dir: Path) -> Path | None:
         return None
 
     body_points = {k: v for k, v in points.items() if not k.startswith("Bat")}
+    raw_points = {k: v for k, v in body_points.items() if k in RAW_MARKERS}
+    model_points = {k: v for k, v in body_points.items() if k not in RAW_MARKERS and not k.startswith("CentreOfMass")}
+    com_points = {k: v for k, v in body_points.items() if k.startswith("CentreOfMass")}
     bat_points = {k: v for k, v in points.items() if k.startswith("Bat")}
 
     fig = plt.figure(figsize=(8.0, 5.2), dpi=180)
@@ -123,23 +170,31 @@ def render_trial(rows: list[dict[str, str]], out_dir: Path) -> Path | None:
     fig.patch.set_facecolor("#ffffff")
     ax.view_init(elev=17, azim=-66)
 
+    for a, b in MODEL_SEGMENTS:
+        draw_segment(ax, points, a, b, "#93c5fd", 1.4)
     for a, b in BODY_SEGMENTS:
-        draw_segment(ax, points, a, b, "#2563eb", 3.2)
+        draw_segment(ax, points, a, b, "#2563eb", 2.0)
     for a, b in BAT_SEGMENTS:
-        draw_segment(ax, points, a, b, "#f97316", 5.2)
+        draw_segment(ax, points, a, b, "#f97316", 3.4)
 
-    if body_points:
-        body = np.array(list(body_points.values()), dtype=float)
-        ax.scatter(body[:, 0], body[:, 1], body[:, 2], s=34, c="#101828", depthshade=False, label="身体点")
+    if model_points:
+        model = np.array(list(model_points.values()), dtype=float)
+        ax.scatter(model[:, 0], model[:, 1], model[:, 2], s=12, c="#93c5fd", depthshade=False, label="模型点")
+    if raw_points:
+        raw = np.array(list(raw_points.values()), dtype=float)
+        ax.scatter(raw[:, 0], raw[:, 1], raw[:, 2], s=18, c="#101828", depthshade=False, label="标记点")
+    if com_points:
+        com = np.array(list(com_points.values()), dtype=float)
+        ax.scatter(com[:, 0], com[:, 1], com[:, 2], s=26, c="#16a34a", depthshade=False, label="质心点")
     if bat_points:
         bat = np.array(list(bat_points.values()), dtype=float)
-        ax.scatter(bat[:, 0], bat[:, 1], bat[:, 2], s=58, c="#f97316", depthshade=False, label="球棒点")
+        ax.scatter(bat[:, 0], bat[:, 1], bat[:, 2], s=30, c="#f97316", depthshade=False, label="球棒点")
 
     for name in LABEL_POINTS:
         if name not in points:
             continue
         x, y, z = points[name]
-        ax.text(x, y, z, name, fontsize=6.5, color="#475467")
+        ax.text(x, y, z, name, fontsize=5.5, color="#475467")
 
     set_equal_axes(ax, points)
     ax.set_xlabel("X（毫米）", labelpad=8, fontsize=9, fontproperties=font)
@@ -157,7 +212,8 @@ def render_trial(rows: list[dict[str, str]], out_dir: Path) -> Path | None:
     fig.suptitle(f"{sample} / {action_text} / {event} / 第{frame}帧 / {time_text}", fontsize=10, color="#101828", fontproperties=font)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{trial_id}.png"
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    ax.set_box_aspect((1, 1, 1))
+    fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.94])
     fig.savefig(out_path, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
     return out_path
