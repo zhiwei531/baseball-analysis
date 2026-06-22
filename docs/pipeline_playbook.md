@@ -451,12 +451,17 @@ Notes:
 - The script has a small built-in C3D parser for `POINT:LABELS`, frame rate,
   point scale/data start, and float point frames. It does not require `ezc3d`.
 - It outputs trial-level optical reference metrics and a point-summary table
-  used by `report.html` to reconstruct body/bat 3D projection figures.
+  used by the reconstruction renderer to build body/bat 3D PNG screenshots.
 - The point-summary table is not a global point average. The script first
   extracts a key action position, then averages a short local window around
   that frame: pitching uses the dominant hand-speed peak; batting uses the
   bat-speed peak. Use `key_event`, `key_frame_index`, and `key_time_sec` to
   trace every reconstructed point figure.
+- `sample_name` is the direct folder name under `../vicon_2026/`; do not invent
+  display names for Vicon samples.
+- Run `scripts/render_vicon_reconstruction_images.py` before building the HTML.
+  The report embeds the generated PNG files instead of drawing C3D
+  reconstruction figures inline with SVG.
 - Pitching C3D files include full-body AI/model points; batting C3D files
   include body markers plus `Bat:Bat1` through `Bat:Bat5`.
 
@@ -464,6 +469,7 @@ Current benchmark HTML report:
 
 ```bash
 .venv312/bin/python scripts/build_vicon_2026_metrics.py
+MPLCONFIGDIR=/private/tmp/baseball_mpl_cache .venv312/bin/python scripts/render_vicon_reconstruction_images.py
 python3 scripts/build_benchmark_report_html.py
 ```
 
@@ -475,6 +481,7 @@ output/data/benchmark_pitch_vertical_09_motion_metrics_full.csv
 output/data/benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv
 reports/vicon_2026_metrics.csv
 reports/vicon_2026_point_summary.csv
+reports/assets/vicon_reconstruction/*.png
 data_full/benchmark_rtmpose_test/processed/poses3d/*/image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv
 data_full/coach_pose3d/gvhmr/pitch_horizontal_coach.csv
 outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/*.png

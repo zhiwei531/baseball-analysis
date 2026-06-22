@@ -637,9 +637,9 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 - 图表 caption/title 要短，不要把方法说明塞进图内；方法说明放在图下“怎么看”或 module note。
 
 **Current HTML Implementation Requirements**
-- 当前 HTML 报告由 `scripts/build_benchmark_report_html.py` 生成，Vicon 2026 中间表由 `scripts/build_vicon_2026_metrics.py` 从 `../vicon_2026/*/*.c3d` 生成。报告必须优先读取当前可用 CSV、C3D 衍生表和 3D pose CSV 生成真实图表：`reports/slymask_benchmark_metrics.csv`、`output/data/*motion_metrics*.csv`、`reports/vicon_2026_metrics.csv`、`reports/vicon_2026_point_summary.csv`、`data_full/benchmark_rtmpose_test/processed/poses3d/*` 和教练 3D 姿态。
+- 当前 HTML 报告由 `scripts/build_benchmark_report_html.py` 生成，Vicon 2026 中间表由 `scripts/build_vicon_2026_metrics.py` 从 `../vicon_2026/*/*.c3d` 生成，C3D 重建截图由 `scripts/render_vicon_reconstruction_images.py` 生成。报告必须优先读取当前可用 CSV、C3D 衍生表、预渲染 PNG 和 3D pose CSV 生成真实图表：`reports/slymask_benchmark_metrics.csv`、`output/data/*motion_metrics*.csv`、`reports/vicon_2026_metrics.csv`、`reports/vicon_2026_point_summary.csv`、`reports/assets/vicon_reconstruction/*.png`、`data_full/benchmark_rtmpose_test/processed/poses3d/*` 和教练 3D 姿态。
 - 姿态纠正图不得再使用固定 SVG placeholder。当前实现口径：球员投球样本出手附近帧作为浅蓝虚线，教练三维序列出手侧手部速度峰值附近帧作为绿色参考，偏差最大的球员骨段用红色强调。
-- C3D 点重建图不得使用全局 trial points 或全局平均点。必须先提取关键动作位置，再从该关键帧附近小窗口重建点位：投球使用出手侧/主导手速度峰值，打击使用球棒速度峰值。报告中必须能追溯 `key_event`、`key_frame_index` 和 `key_time_sec`。
+- C3D 点重建图不得使用全局 trial points 或全局平均点。必须先提取关键动作位置，再从该关键帧附近小窗口重建点位：投球使用出手侧/主导手速度峰值，打击使用球棒速度峰值。重建图必须先单独渲染为 PNG 截图，再嵌入 report；不得在 HTML 中临时用内联 SVG 拼接 C3D 重建图。报告中必须能追溯 `sample_name`、`key_event`、`key_frame_index` 和 `key_time_sec`，其中 `sample_name` 必须直接来自 `vicon_2026` 下的子文件夹名。
 - 研究者模块不得在已有逐帧 3D 姿态 CSV 时保留“缺少逐帧数据”占位。至少要生成投球角度曲线、投球速度曲线、打击角度曲线、打击速度曲线和三维姿态数据质量图。
 - 角度时间曲线至少包含前腿膝角、肘角、躯干倾斜、髋肩分离。速度时间曲线至少包含髋部中心、躯干中心和手部末端速度；球棒未直接检测时必须写 proxy 或限制说明。
 - 点位对比图采用一行一个指标、一条横轴、多色点位的形式：主体样本蓝色，对照样本橙色，教练/Vicon/建议参考黑色竖线。它比多组条形更适合展示“球员处于同一指标什么位置”。

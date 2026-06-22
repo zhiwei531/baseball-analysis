@@ -835,6 +835,10 @@ def rel_asset(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
+def sample_name(row: dict[str, str]) -> str:
+    return row.get("sample_name") or row.get("athlete") or "未命名样本"
+
+
 def image_figure(path: Path, title: str, caption: str) -> str:
     return f"""
     <figure class="evidence-figure">
@@ -911,7 +915,7 @@ def vicon_source_table(rows: list[dict[str, str]]) -> str:
     for row in rows:
         body.append(
             "<tr>"
-            f"<td>{esc(row['athlete'])}</td>"
+            f"<td>{esc(sample_name(row))}</td>"
             f"<td>{esc('投球' if row['action_type'] == 'pitching' else '打击')}</td>"
             f"<td>{esc(str(row['frames']))}</td>"
             f"<td>{esc(fmt(row.get('duration_sec'), 's'))}</td>"
@@ -919,64 +923,33 @@ def vicon_source_table(rows: list[dict[str, str]]) -> str:
             f"<td>{esc(row['source_file'])}</td>"
             "</tr>"
         )
-    return '<table><thead><tr><th>对象</th><th>动作</th><th>帧数</th><th>时长</th><th>有效点比例</th><th>C3D来源</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
+    return '<table><thead><tr><th>样本名</th><th>动作</th><th>帧数</th><th>时长</th><th>有效点比例</th><th>C3D来源</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
 
 
-def vicon_reconstruction_svg(rows: list[dict[str, str]], trial_id_value: str, title: str) -> str:
-    pts = {
-        row["point"]: (num(row.get("key_x_mm")), num(row.get("key_y_mm")), num(row.get("key_z_mm")))
-        for row in rows
-        if row.get("trial_id") == trial_id_value
-    }
+def vicon_trial(rows: list[dict[str, str]], action: str, preferred_sample: str = "green") -> dict[str, str] | None:
+    candidates = [row for row in rows if row.get("action_type") == action]
+    for row in candidates:
+        if sample_name(row) == preferred_sample:
+            return row
+    return candidates[0] if candidates else None
+
+
+def vicon_reconstruction_image(rows: list[dict[str, str]], trial_id_value: str, title: str) -> str:
     event_row = next((row for row in rows if row.get("trial_id") == trial_id_value), {})
     event_text = event_row.get("key_event", "关键动作帧")
     frame_text = event_row.get("key_frame_index", "")
     time_text = fmt(event_row.get("key_time_sec"), "s") if event_row else ""
-    valid = {name: xyz for name, xyz in pts.items() if all(v is not None for v in xyz)}
-    if not valid:
+    image_path = ROOT / "reports" / "assets" / "vicon_reconstruction" / f"{trial_id_value}.png"
+    if not image_path.exists():
         return line_placeholder_svg(title)
-    xs = [xyz[0] for xyz in valid.values() if xyz[0] is not None]
-    zs = [xyz[2] for xyz in valid.values() if xyz[2] is not None]
-    min_x, max_x = min(xs), max(xs)
-    min_z, max_z = min(zs), max(zs)
-    scale = min(520 / max(max_x - min_x, 1), 230 / max(max_z - min_z, 1))
-
-    def xy(name: str) -> tuple[float, float] | None:
-        xyz = valid.get(name)
-        if not xyz:
-            return None
-        x, _, z = xyz
-        return (82 + (x - min_x) * scale, 274 - (z - min_z) * scale)
-
-    segments = [
-        ("LFHD", "RFHD"), ("LFHD", "C7"), ("RFHD", "C7"), ("C7", "T10"),
-        ("LSHO", "RSHO"), ("LSHO", "LELB"), ("LELB", "LWRA"), ("LELB", "LWRB"),
-        ("RSHO", "RELB"), ("RELB", "RWRA"), ("RELB", "RWRB"),
-        ("LASI", "RASI"), ("LASI", "LKNE"), ("LKNE", "LANK"), ("RASI", "RKNE"), ("RKNE", "RANK"),
-        ("Bat1", "Bat5"),
-    ]
-    tags = []
-    for a, b in segments:
-        pa, pb = xy(a), xy(b)
-        if pa is None or pb is None:
-            continue
-        color = "#f97316" if a.startswith("Bat") or b.startswith("Bat") else "#2563eb"
-        width = 6 if color == "#f97316" else 4
-        tags.append(f'<line x1="{pa[0]:.1f}" y1="{pa[1]:.1f}" x2="{pb[0]:.1f}" y2="{pb[1]:.1f}" stroke="{color}" stroke-width="{width}" stroke-linecap="round"/>')
-    for name in ["LFHD", "RFHD", "C7", "T10", "LSHO", "RSHO", "LELB", "RELB", "LWRA", "LWRB", "RWRA", "RWRB", "LASI", "RASI", "LKNE", "RKNE", "LANK", "RANK", "Bat1", "Bat5"]:
-        point = xy(name)
-        if point is None:
-            continue
-        color = "#f97316" if name.startswith("Bat") else "#101828"
-        tags.append(f'<circle cx="{point[0]:.1f}" cy="{point[1]:.1f}" r="4" fill="{color}"/>')
     return f"""
-    <svg class="pose-svg" viewBox="0 0 640 320" role="img" aria-label="{esc(title)}">
-      <rect width="640" height="320" rx="18" fill="#ffffff"/>
-      <text x="24" y="28" fill="#101828" font-size="14" font-weight="700">{esc(title)}</text>
-      <text x="24" y="50" fill="#667085" font-size="12">先定位{esc(event_text)}，再用第{esc(frame_text)}帧附近窗口重建；时间 {esc(time_text)}。</text>
-      <text x="24" y="70" fill="#667085" font-size="12">蓝色为身体点，橙色为球棒点；不是全局点位平均。</text>
-      <g>{''.join(tags)}</g>
-    </svg>
+    <figure class="reconstruction-figure">
+      <img class="reconstruction-img" src="{esc(rel_asset(image_path))}" alt="{esc(title)}" loading="lazy">
+      <figcaption>
+        <b>{esc(title)}</b>
+        <span>先定位{esc(event_text)}，再用第{esc(frame_text)}帧附近窗口截图式重建；时间 {esc(time_text)}。蓝色为身体骨段，橙色为球棒点；不是全局点位平均。</span>
+      </figcaption>
+    </figure>
     """
 
 
@@ -1005,6 +978,14 @@ def main() -> None:
     pitch_coach_frames = read_pose_sequence(pose3d_pitch_coach)
     pitch09_pose_summary = pose3d_summary(pose3d_pitch09)
     bat02_pose_summary = pose3d_summary(pose3d_bat02)
+    vicon_pitch_trial = vicon_trial(vicon, "pitching")
+    vicon_bat_trial = vicon_trial(vicon, "batting")
+    vicon_pitch_title = (
+        f"{sample_name(vicon_pitch_trial)}投球C3D重建截图" if vicon_pitch_trial else "投球C3D重建截图"
+    )
+    vicon_bat_title = (
+        f"{sample_name(vicon_bat_trial)}打击C3D重建截图" if vicon_bat_trial else "打击C3D重建截图"
+    )
 
     pitch_names = ["Hip-Shoulder Sep", "Lead Knee Angle", "Trunk Tilt", "Head Stability", "Stride Length", "Ball Speed"]
     bat_names = ["Hip-Shoulder Sep", "Lead Knee Angle", "Trunk Tilt", "Head Stability", "Estimated Bat Speed", "Attack Angle"]
@@ -1048,8 +1029,8 @@ def main() -> None:
         [
             ("打击样本二 髋肩分离", num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "deg", "#f97316"),
             ("打击样本六 髋肩分离", num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "deg", "#60a5fa"),
-            ("Green光学参考", first_metric(vicon, "batting", "hip_shoulder_sep_deg", "green"), "deg", "#16a34a"),
-            ("Bryan光学参考", first_metric(vicon, "batting", "hip_shoulder_sep_deg", "bryan"), "deg", "#16a34a"),
+            ("green光学参考", first_metric(vicon, "batting", "hip_shoulder_sep_deg", "green"), "deg", "#16a34a"),
+            ("bryan光学参考", first_metric(vicon, "batting", "hip_shoulder_sep_deg", "bryan"), "deg", "#16a34a"),
             ("打击样本二 头部稳定", num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "%", "#f97316"),
             ("打击样本六 头部稳定", num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "%", "#60a5fa"),
         ],
@@ -1299,6 +1280,11 @@ def main() -> None:
     .evidence-figure figcaption b {{ color:var(--ink); font-size:15px; line-height:20px; }}
     .evidence-figure figcaption span {{ color:var(--mid); font-size:13px; line-height:18px; }}
     .hero-evidence .evidence-img {{ aspect-ratio:16/11; }}
+    .reconstruction-figure {{ margin:0; background:#fff; border:1px solid var(--line); border-radius:18px; overflow:hidden; }}
+    .reconstruction-img {{ width:100%; aspect-ratio:16/10; object-fit:contain; display:block; background:#fff; }}
+    .reconstruction-figure figcaption {{ display:grid; gap:4px; padding:12px 14px; border-top:1px solid #e4e7ec; }}
+    .reconstruction-figure figcaption b {{ color:var(--ink); font-size:15px; line-height:20px; }}
+    .reconstruction-figure figcaption span {{ color:var(--mid); font-size:13px; line-height:19px; }}
     .dot-plot-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
     .dot-compare-svg {{ width:100%; min-width:0; display:block; border-radius:18px; }}
     .line-chart-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
@@ -1440,14 +1426,14 @@ def main() -> None:
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>Vicon 2026 C3D来源表</h4><div class="table-scroll">{vicon_source_table(vicon)}</div><p>表内统计由 vicon_2026 文件夹中的 C3D 导出直接解析得到，忽略 macOS 资源分叉文件。</p></article>
-        <article class="visual-card"><h4>Vicon三维点重建图</h4>{vicon_reconstruction_svg(vicon_points, "green_006_pitch_09", "Green投球C3D点重建")}<p>怎么看：该图不是全局点云截图，而是先提取投球关键动作帧，再从 C3D marker 的三维点坐标投影重建身体点结构。</p></article>
+        <article class="visual-card"><h4>Vicon三维点重建图</h4>{vicon_reconstruction_image(vicon_points, vicon_pitch_trial["trial_id"], vicon_pitch_title) if vicon_pitch_trial else line_placeholder_svg("投球C3D重建截图")}<p>怎么看：该图不是全局点云截图，而是先提取投球关键动作帧，再从 C3D marker 的毫米坐标渲染独立重建截图。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>数据质量图</h4>{pose_quality_chart}<p>怎么看：条形长度综合输入质量分和关节完整率；研究者应优先检查低质量样本的峰值速度和事件点。</p></article>
-        <article class="visual-card"><h4>Vicon球棒点重建图</h4>{vicon_reconstruction_svg(vicon_points, "green_006_bat_04", "Green打击C3D点重建")}<p>怎么看：先提取球棒峰值速度附近的关键动作窗口，再重建 Bat1/Bat5 和身体点；橙色连线用于解释光学棒速。</p></article>
+        <article class="visual-card"><h4>Vicon球棒点重建图</h4>{vicon_reconstruction_image(vicon_points, vicon_bat_trial["trial_id"], vicon_bat_title) if vicon_bat_trial else line_placeholder_svg("打击C3D重建截图")}<p>怎么看：先提取球棒峰值速度附近的关键动作窗口，再用独立 PNG 展示 Bat1/Bat5 和身体点；橙色连线用于解释光学棒速。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>光学动作捕捉校准说明</h4><div class="bars">{bars([("Bryan球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "bryan"), "km/h", "#16a34a"), ("Green球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "green"), "km/h", "#60a5fa"), ("Bryan挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "bryan"), "s", "#f97316"), ("Green挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "green"), "s", "#60a5fa")])}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出，用于校准和解释视频估算，不直接替代当前视频指标。</p></article>
+        <article class="visual-card"><h4>光学动作捕捉校准说明</h4><div class="bars">{bars([("bryan球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "bryan"), "km/h", "#16a34a"), ("green球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "green"), "km/h", "#60a5fa"), ("bryan挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "bryan"), "s", "#f97316"), ("green挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "green"), "s", "#60a5fa")])}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出，用于校准和解释视频估算，不直接替代当前视频指标。</p></article>
         <article class="visual-card"><h4>限制卡片组</h4><div class="grid-2">{card("真实球速", "当前速度是视频追踪换算值，不等同雷达枪正式球速。", "需复核", "review")}{card("换算假设", "使用源视频分辨率、帧率、画面人体高度，并假设青少年身高一米五五。", "需复核", "review")}{card("身体重心", "当前使用髋部和脊柱中心近似，不是力板重心。", "需复核", "review")}{card("光学与视频对齐", "不同来源尚未逐帧同步，只能做解释性参考。", "需复核", "review")}</div></article>
       </div>
       <article class="visual-card" style="margin-top:18px"><h4>指标来源表</h4><div class="table-scroll">{source_table(sly, all_rows=sly)}</div></article>

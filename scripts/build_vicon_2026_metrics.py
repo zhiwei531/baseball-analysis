@@ -203,7 +203,7 @@ def trial_id(path: Path) -> str:
 
 def compute_trial_metrics(trial: C3DTrial) -> dict[str, object]:
     action = infer_action(trial.path)
-    athlete = trial.path.parent.name
+    sample = trial.path.parent.name
     lfhd = marker(trial, "LFHD")
     rfhd = marker(trial, "RFHD")
     lbhd = marker(trial, "LBHD")
@@ -244,7 +244,8 @@ def compute_trial_metrics(trial: C3DTrial) -> dict[str, object]:
     valid_ratio = float(valid_points.sum() / valid_points.size) if valid_points.size else float("nan")
     return {
         "trial_id": trial_id(trial.path),
-        "athlete": athlete,
+        "sample_name": sample,
+        "athlete": sample,
         "action_type": action,
         "source_file": str(trial.path.relative_to(PROJECT_ROOT)),
         "frames": frame_count,
@@ -332,6 +333,7 @@ def point_summary_rows(trial: C3DTrial) -> list[dict[str, object]]:
         rows.append(
             {
                 "trial_id": trial_id(trial.path),
+                "sample_name": trial.path.parent.name,
                 "athlete": trial.path.parent.name,
                 "action_type": infer_action(trial.path),
                 "key_event": key_label,
