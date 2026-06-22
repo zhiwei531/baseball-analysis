@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>青少年棒球三维动作体检报告</title>
+  <style>
+    :root {
+      --primary:#2563eb; --ink:#101828; --body:#344054; --mid:#667085; --mute:#98a2b3;
+      --line:#d0d5dd; --canvas:#f5f7fb; --soft:#eef6ff; --card:#fff; --dusk:#101828;
+      --orange:#f97316; --green:#16a34a; --red:#ef4444; --review:#e89918; --blue:#60a5fa; --violet:#7c4dff;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--canvas); color:var(--ink); font-family:STHeiti,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; line-height:1.5; letter-spacing:0; }
+    .topbar { position:sticky; top:0; z-index:10; background:rgba(255,255,255,.95); border-bottom:1px solid var(--line); backdrop-filter:blur(12px); }
+    .nav { max-width:1180px; margin:auto; padding:20px 24px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .brand { color:var(--primary); font-size:24px; font-weight:600; }
+    .links { display:flex; flex-wrap:wrap; gap:14px; color:var(--mid); font-size:18px; }
+    .links a { color:inherit; text-decoration:none; }
+    main { max-width:1180px; margin:auto; padding:32px 24px 72px; }
+    .hero { background:var(--dusk); color:white; border-radius:26px; padding:42px; display:grid; grid-template-columns:1.02fr .98fr; gap:34px; align-items:stretch; }
+    .hero > * { min-width:0; }
+    h1 { font-size:56px; line-height:66px; font-weight:500; margin:0 0 18px; }
+    h2 { font-size:34px; line-height:44px; font-weight:500; margin:0; }
+    h3 { font-size:27px; line-height:36px; font-weight:500; margin:0; }
+    h4 { font-size:20px; line-height:30px; margin:0; }
+    p { margin:0; color:var(--body); font-size:18px; overflow-wrap:anywhere; }
+    .hero p { color:#dbeafe; font-size:22px; line-height:34px; }
+    .pill-row { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
+    .pill { border:1px solid #334155; background:#0f172a; color:#dbeafe; border-radius:999px; padding:8px 16px; font-size:18px; }
+    .hero-evidence { background:linear-gradient(135deg,rgba(37,99,235,.34),rgba(249,115,22,.16)),#0f172a; border:1px solid #334155; border-radius:24px; padding:18px; display:grid; gap:14px; }
+    .hero-stat { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .hero-stat div { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:14px; }
+    .hero-stat b { display:block; font-size:26px; color:#fff; }
+    .hero-stat span { color:#cbd5e1; font-size:15px; }
+    .section { margin-top:42px; min-width:0; }
+    .section-title { display:flex; align-items:center; gap:14px; margin-bottom:18px; }
+    .mark { width:12px; height:40px; background:var(--primary); border-radius:999px; flex:0 0 auto; }
+    .module-note { background:var(--soft); border:1px solid #bfdbfe; border-radius:12px; padding:16px 18px; margin-bottom:18px; }
+    .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
+    .grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+    .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+    .grid > *, .grid-2 > *, .grid-3 > * { min-width:0; }
+    .card,.metric-card,.visual-card { background:var(--card); border:2px solid #e4e7ec; border-radius:24px; padding:24px; min-width:0; }
+    .card.good,.metric-card.good { background:#f7fff9; }
+    .card.review,.metric-card.review { background:#fffaf4; }
+    .card.risk,.metric-card.risk { background:#fff8f8; }
+    .card.na,.metric-card.na { background:#eef2f7; border-style:dashed; }
+    .card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .badge { display:inline-flex; align-items:center; border-radius:999px; padding:5px 11px; font-size:15px; white-space:nowrap; }
+    .badge.good { background:#dcfce7; color:#166534; }
+    .badge.review { background:#fff7ed; color:#9a3412; }
+    .badge.risk { background:#fef2f2; color:#b91c1c; }
+    .badge.na { background:#eef2f7; color:#697586; }
+    .metric-value { font-size:32px; line-height:1; font-weight:700; margin:18px 0 10px; overflow-wrap:anywhere; }
+    .visual-card h4 { font-size:18px; line-height:26px; }
+    .visual-card p,.metric-card p,.card p { margin-top:8px; color:var(--mid); }
+    .visual-card p { font-size:16px; line-height:24px; }
+    .radar { width:100%; max-width:330px; display:block; margin:auto; }
+    .radar text { fill:#344054; font-size:12px; font-weight:600; }
+    .pose-svg,.wide-svg { width:100%; display:block; border-radius:18px; }
+    .evidence-pair { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .evidence-figure { margin:0; min-width:0; background:#f8fafc; border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+    .evidence-img { width:100%; aspect-ratio:16/10; object-fit:cover; display:block; background:#101828; }
+    .evidence-figure figcaption { display:grid; gap:4px; padding:10px 12px; }
+    .evidence-figure figcaption b { color:var(--ink); font-size:15px; line-height:20px; }
+    .evidence-figure figcaption span { color:var(--mid); font-size:13px; line-height:18px; }
+    .hero-evidence .evidence-img { aspect-ratio:16/11; }
+    .dot-plot-scroll { width:100%; overflow-x:auto; padding-bottom:4px; }
+    .dot-compare-svg { width:100%; min-width:0; display:block; border-radius:18px; }
+    .line-chart-scroll { width:100%; overflow-x:auto; padding-bottom:4px; }
+    .line-chart-svg { width:100%; min-width:0; display:block; border-radius:18px; }
+    .mini-chart-scroll { width:100%; overflow-x:auto; padding-bottom:4px; }
+    .timeline-svg { min-width:0; }
+    .chain-svg { min-width:0; }
+    .chart-copy { display:grid; gap:10px; align-content:center; }
+    .chart-copy li { margin-bottom:8px; color:var(--body); font-size:18px; }
+    .priority-list { display:grid; gap:12px; }
+    .priority-item { display:grid; grid-template-columns:42px 1fr auto; gap:14px; align-items:center; background:#fff; border:2px solid #e4e7ec; border-radius:18px; padding:16px; }
+    .rank { width:42px; height:42px; border-radius:999px; display:grid; place-items:center; background:var(--orange); color:#fff; font-weight:700; }
+    .bars { display:grid; gap:12px; margin-top:16px; }
+    .bar-row { display:grid; grid-template-columns:180px 1fr 108px; gap:12px; align-items:center; font-size:16px; color:var(--mid); }
+    .track { height:12px; background:#e8eef6; border-radius:999px; overflow:hidden; }
+    .track i { display:block; height:100%; border-radius:inherit; }
+    .training { display:grid; grid-template-columns:repeat(7,minmax(150px,1fr)); gap:12px; overflow-x:auto; padding-bottom:4px; }
+    .day { min-height:180px; background:#fff; border:2px solid #e4e7ec; border-radius:18px; padding:16px; }
+    .day ul { padding-left:20px; margin:10px 0 0; color:var(--mid); font-size:16px; }
+    .matrix { position:relative; min-height:320px; background:linear-gradient(90deg,#f8fafc,#eef6ff); border-radius:18px; border:1px solid var(--line); overflow:hidden; }
+    .matrix:before,.matrix:after { content:""; position:absolute; background:#d0d5dd; }
+    .matrix:before { left:50%; top:0; bottom:0; width:1px; }
+    .matrix:after { top:50%; left:0; right:0; height:1px; }
+    .bubble { position:absolute; transform:translate(-50%,-50%); border-radius:999px; padding:12px 16px; color:white; font-weight:600; }
+    .table-scroll { max-height:420px; max-width:100%; overflow:auto; border:1px solid var(--line); border-radius:12px; background:white; }
+    table { width:100%; border-collapse:collapse; min-width:760px; }
+    th,td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:14px; color:var(--body); }
+    th { background:var(--soft); color:var(--ink); position:sticky; top:0; }
+    footer { border-top:1px solid var(--line); color:var(--mute); text-align:center; padding:24px; font-size:16px; }
+    @media (max-width:960px) { .hero,.grid-2,.grid-3 { grid-template-columns:1fr; } .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .bar-row,.priority-item { grid-template-columns:1fr; } h1 { font-size:40px; line-height:48px; } }
+    @media (max-width:640px) { main,.nav { padding-left:16px; padding-right:16px; } .hero { padding:26px; } .grid { grid-template-columns:1fr; } .hero-stat,.evidence-pair { grid-template-columns:1fr; } .links { font-size:16px; } .visual-card h4 { font-size:17px; line-height:24px; } .visual-card p { font-size:15px; line-height:22px; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <nav class="nav">
+      <div class="brand">棒球动作实验室</div>
+      <div class="links"><a href="#player">球员</a><a href="#coach">教练</a><a href="#research">研究者</a><a href="#pitch">投球</a><a href="#bat">打击</a></div>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div>
+        <h1>青少年棒球三维动作体检报告</h1>
+        <p>本报告按球员、教练、研究者三类读者拆分，并把投球和打击分开分析。能由当前三维基准数据计算的指标直接呈现；缺少逐帧、雷达枪或真实接触事件的数据，以占位和限制说明呈现。</p>
+        <div class="pill-row"><span class="pill">中文报告</span><span class="pill">三维骨架</span><span class="pill">可量化诊断</span><span class="pill">数据限制透明</span></div>
+      </div>
+      <aside class="hero-evidence">
+        
+    <figure class="evidence-figure">
+      <img class="evidence-img" src="outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/benchmark_pitch_vertical_09_3d_thumb.png" alt="投球三维骨架证据" loading="lazy">
+      <figcaption><b>投球三维骨架证据</b><span>来自当前基准投球样本的三维姿态输出。</span></figcaption>
+    </figure>
+    
+        <div class="hero-stat">
+          <div><b>53</b><span>投球三维可用帧</span></div>
+          <div><b>137</b><span>打击三维可用帧</span></div>
+          <div><b>96.1%</b><span>打击头部稳定</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section" id="player">
+      <div class="section-title"><span class="mark"></span><h2>球员模块</h2></div>
+      <div class="module-note"><p>这一模块只回答孩子和家长最关心的三件事：哪里做得好、哪里要改、接下来练什么。</p></div>
+
+      <section class="section" id="pitch">
+        <div class="section-title"><span class="mark"></span><h3>投球分析</h3></div>
+        <div class="grid-2">
+          <article class="visual-card">
+            <h4>投球六维评分图</h4>
+            
+    <svg class="radar" viewBox="0 0 320 290" role="img" aria-label="六维评分图">
+      <g class="grid-lines"><polygon points="160.0,113.6 184.6,127.8 184.6,156.2 160.0,170.4 135.4,156.2 135.4,127.8" fill="none" stroke="#d0d5dd" stroke-width="1"/><polygon points="160.0,85.2 209.2,113.6 209.2,170.4 160.0,198.8 110.8,170.4 110.8,113.6" fill="none" stroke="#d0d5dd" stroke-width="1"/><polygon points="160.0,56.0 234.5,99.0 234.5,185.0 160.0,228.0 85.5,185.0 85.5,99.0" fill="none" stroke="#d0d5dd" stroke-width="1"/><line x1="160" y1="142" x2="160.0" y2="56.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="234.5" y2="99.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="234.5" y2="185.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="160.0" y2="228.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="85.5" y2="185.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="85.5" y2="99.0" stroke="#d0d5dd"/></g>
+      <polygon points="160.0,86.1 197.2,120.5 223.3,178.5 160.0,209.9 128.7,160.1 105.6,110.6" fill="#4f5eea33" stroke="#4f5eea" stroke-width="4"/>
+      <circle cx="160" cy="142" r="3" fill="#4f5eea"/>
+      <g class="radar-labels"><text x="160.0" y="30.0" text-anchor="middle">下肢支撑</text><text x="257.0" y="86.0" text-anchor="middle">身体前移</text><text x="257.0" y="198.0" text-anchor="middle">髋肩分离</text><text x="160.0" y="254.0" text-anchor="middle">躯干控制</text><text x="63.0" y="198.0" text-anchor="middle">手臂加速</text><text x="63.0" y="86.0" text-anchor="middle">稳定性</text></g>
+    </svg>
+    
+            <p>怎么看：分数越低越需要优先训练；本次末端加速和身体前移比姿态角度更需要复测关注。</p>
+          </article>
+          <article class="visual-card">
+            <h4>投球优先级列表</h4>
+            <div class="priority-list">
+              <div class="priority-item"><span class="rank">1</span><div><h4>提高出手侧手部速度</h4><p>和教练参考差距较大，但速度属于估算，先用同机位复测看趋势。</p></div><span class="badge risk">关注</span></div>
+              <div class="priority-item"><span class="rank">2</span><div><h4>增加身体前移质量</h4><p>当前身体中心位移不是力板重心，只能作为动作方向参考。</p></div><span class="badge review">需复核</span></div>
+              <div class="priority-item"><span class="rank">3</span><div><h4>保持前腿支撑</h4><p>前腿角度和跨步角接近可训练范围，是本次可保持项。</p></div><span class="badge good">良好</span></div>
+            </div>
+          </article>
+        </div>
+        <div class="grid-2" style="margin-top:18px">
+          <article class="visual-card"><h4>投球关键帧证据图</h4><div class="evidence-pair">
+    <figure class="evidence-figure">
+      <img class="evidence-img" src="outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/benchmark_pitch_vertical_09_2d_thumb.png" alt="投球二维关键帧" loading="lazy">
+      <figcaption><b>投球二维关键帧</b><span>来自当前基准投球视频的关键帧输出。</span></figcaption>
+    </figure>
+    
+    <figure class="evidence-figure">
+      <img class="evidence-img" src="outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/benchmark_pitch_vertical_09_3d_thumb.png" alt="投球三维骨架" loading="lazy">
+      <figcaption><b>投球三维骨架</b><span>优先使用三维姿态结果解释动作角度。</span></figcaption>
+    </figure>
+    </div><p>方法：关键帧用于定位动作阶段，三维骨架用于解释髋肩分离、前膝支撑和躯干姿态。</p></article>
+          <article class="visual-card"><h4>投球姿态纠正图</h4>
+    <svg class="pose-svg" viewBox="0 0 620 320" role="img" aria-label="标准姿态纠正图">
+      <rect width="620" height="320" rx="18" fill="#ffffff"/>
+      <g fill="none">
+        <line x1="300.4" y1="86.7" x2="292.2" y2="101.6" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="292.2" y1="101.6" x2="309.6" y2="164.0" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="309.6" y1="164.0" x2="310.0" y2="230.0" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="296.5" y1="132.5" x2="296.9" y2="175.8" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="296.9" y1="175.8" x2="348.8" y2="213.5" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="348.8" y1="213.5" x2="366.0" y2="215.7" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="293.7" y1="114.4" x2="291.3" y2="122.9" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="291.3" y1="122.9" x2="283.4" y2="81.2" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="283.4" y1="81.2" x2="278.0" y2="73.2" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="306.5" y1="253.4" x2="365.1" y2="324.6" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="365.1" y1="324.6" x2="355.6" y2="433.4" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="355.6" y1="433.4" x2="382.9" y2="442.5" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="308.7" y1="253.5" x2="271.5" y2="344.7" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="271.5" y1="344.7" x2="181.1" y2="401.6" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="181.1" y1="401.6" x2="190.2" y2="433.9" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="296.5" y1="132.5" x2="293.7" y2="114.4" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/><line x1="306.5" y1="253.4" x2="308.7" y2="253.5" stroke="#60a5fa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 8"/>
+        <line x1="430.2" y1="136.3" x2="406.3" y2="140.9" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="406.3" y1="140.9" x2="352.5" y2="182.6" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="352.5" y1="182.6" x2="310.0" y2="230.0" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="384.5" y1="173.1" x2="330.4" y2="205.9" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="330.4" y1="205.9" x2="350.8" y2="249.6" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="350.8" y1="249.6" x2="366.1" y2="263.6" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="406.4" y1="145.0" x2="434.6" y2="150.1" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="434.6" y1="150.1" x2="493.5" y2="126.9" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="493.5" y1="126.9" x2="510.3" y2="111.8" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="305.8" y1="252.7" x2="392.6" y2="309.4" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="392.6" y1="309.4" x2="404.5" y2="418.0" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="404.5" y1="418.0" x2="439.5" y2="410.6" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="290.8" y1="247.0" x2="227.2" y2="327.9" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="227.2" y1="327.9" x2="127.4" y2="325.8" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="127.4" y1="325.8" x2="104.0" y2="352.5" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="384.5" y1="173.1" x2="406.4" y2="145.0" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><line x1="305.8" y1="252.7" x2="290.8" y2="247.0" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="293.7" y1="114.4" x2="291.3" y2="122.9" stroke="#ef4444" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><line x1="291.3" y1="122.9" x2="283.4" y2="81.2" stroke="#ef4444" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><line x1="283.4" y1="81.2" x2="278.0" y2="73.2" stroke="#ef4444" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <g>
+        <rect x="22" y="20" width="164" height="76" rx="14" fill="#eef6ff" stroke="#bfdbfe"/>
+        <text x="38" y="45" fill="#2563eb" font-size="13" font-weight="700">真实三维姿态对照</text>
+        <text x="38" y="66" fill="#667085" font-size="11">球员第10帧 / 教练第76帧</text>
+      </g>
+      <g font-size="12" fill="#344054">
+        <line x1="414" y1="34" x2="452" y2="34" stroke="#60a5fa" stroke-width="5" stroke-dasharray="9 8"/><text x="462" y="38">球员当前姿态</text>
+        <line x1="414" y1="58" x2="452" y2="58" stroke="#16a34a" stroke-width="5"/><text x="462" y="62">教练标准姿态</text>
+        <line x1="414" y1="82" x2="452" y2="82" stroke="#ef4444" stroke-width="7"/><text x="462" y="86">偏差较大骨段</text>
+      </g>
+    </svg>
+    <p>方法：蓝色虚线是球员出手附近三维姿态，绿色是教练出手侧手部速度峰值附近姿态；红色标出当前偏差最大的骨段。</p></article>
+        </div>
+        <div class="grid" style="margin-top:18px">
+    <article class="metric-card risk">
+      <div class="card-head"><h4>肘部弯曲</h4><span class="badge risk">关注</span></div>
+      <div class="metric-value">101.9度</div>
+      <p>出手帧右肩-右肘-右腕夹角。</p>
+    </article>
+    
+    <article class="metric-card good">
+      <div class="card-head"><h4>上臂外展</h4><span class="badge good">良好</span></div>
+      <div class="metric-value">108.2度</div>
+      <p>出手帧上臂相对躯干轴夹角。</p>
+    </article>
+    
+    <article class="metric-card review">
+      <div class="card-head"><h4>躯干倾斜</h4><span class="badge review">需复核</span></div>
+      <div class="metric-value">37.3度</div>
+      <p>出手帧髋-颈躯干轴相对竖直方向。</p>
+    </article>
+    
+    <article class="metric-card good">
+      <div class="card-head"><h4>跨步角</h4><span class="badge good">良好</span></div>
+      <div class="metric-value">52.4度</div>
+      <p>跨步落地帧前腿相对地面角度。</p>
+    </article>
+    
+    <article class="metric-card good">
+      <div class="card-head"><h4>前膝角</h4><span class="badge good">良好</span></div>
+      <div class="metric-value">140.4度</div>
+      <p>出手帧前腿髋-膝-踝夹角。</p>
+    </article>
+    
+    <article class="metric-card good">
+      <div class="card-head"><h4>髋肩分离</h4><span class="badge good">良好</span></div>
+      <div class="metric-value">-45.3度</div>
+      <p>出手帧肩线与髋线水平夹角；正负表示相对旋转方向。</p>
+    </article>
+    
+    <article class="metric-card risk">
+      <div class="card-head"><h4>手臂速度</h4><span class="badge risk">关注</span></div>
+      <div class="metric-value">41.6%</div>
+      <p>右腕峰值速度相对正常速度教练；速度类受单目深度抖动影响。</p>
+    </article>
+    
+    <article class="metric-card risk">
+      <div class="card-head"><h4>跨步长度</h4><span class="badge risk">关注</span></div>
+      <div class="metric-value">58.5 身高百分比</div>
+      <p>双踝最大水平距离除以估计身高，比 厘米 更适合跨主体对比。</p>
+    </article>
+    </div>
+        <div class="grid-3" style="margin-top:18px">
+          <article class="card review"><div class="card-head"><h4>投球训练目标一</h4><span class="badge review">训练</span></div><p>每周三次做跨步停顿投球影子练习，每次三组，每组八次；复测跨步长度和前膝角。</p></article>
+          <article class="card review"><div class="card-head"><h4>投球训练目标二</h4><span class="badge review">训练</span></div><p>每周三次做髋肩分离慢动作练习，先转胯再带肩；复测髋肩分离和躯干倾斜。</p></article>
+          <article class="card risk"><div class="card-head"><h4>投球训练目标三</h4><span class="badge risk">训练</span></div><p>每周两次做毛巾出手练习，只看动作顺序，不追求速度；复测手部速度估算趋势。</p></article>
+        </div>
+        <article class="visual-card" style="margin-top:18px"><h4>投球七天训练计划</h4><div class="training"><div class="day"><h4>第1天</h4><span class="badge review">训练</span><ul><li>髋肩分离慢动作</li><li>跨步停顿影子投球</li><li>记录疼痛、疲劳和完成率</li></ul></div><div class="day"><h4>第2天</h4><span class="badge review">训练</span><ul><li>髋肩分离慢动作</li><li>跨步停顿影子投球</li><li>记录疼痛、疲劳和完成率</li></ul></div><div class="day"><h4>第3天</h4><span class="badge review">训练</span><ul><li>髋肩分离慢动作</li><li>跨步停顿影子投球</li><li>记录疼痛、疲劳和完成率</li></ul></div><div class="day"><h4>第4天</h4><span class="badge review">训练</span><ul><li>髋肩分离慢动作</li><li>跨步停顿影子投球</li><li>记录疼痛、疲劳和完成率</li></ul></div><div class="day"><h4>第5天</h4><span class="badge review">训练</span><ul><li>髋肩分离慢动作</li><li>跨步停顿影子投球</li><li>记录疼痛、疲劳和完成率</li></ul></div><div class="day"><h4>第6天</h4><span class="badge review">训练</span><ul><li>髋肩分离慢动作</li><li>跨步停顿影子投球</li><li>记录疼痛、疲劳和完成率</li></ul></div><div class="day"><h4>第7天</h4><span class="badge review">复测</span><ul><li>同机位拍摄投球</li><li>复测两个短板指标</li><li>记录疼痛、疲劳和完成率</li></ul></div></div></article>
+      </section>
+
+      <section class="section" id="bat">
+        <div class="section-title"><span class="mark"></span><h3>打击分析</h3></div>
+        <div class="grid-2">
+          <article class="visual-card"><h4>打击六维评分图</h4>
+    <svg class="radar" viewBox="0 0 320 290" role="img" aria-label="六维评分图">
+      <g class="grid-lines"><polygon points="160.0,113.6 184.6,127.8 184.6,156.2 160.0,170.4 135.4,156.2 135.4,127.8" fill="none" stroke="#d0d5dd" stroke-width="1"/><polygon points="160.0,85.2 209.2,113.6 209.2,170.4 160.0,198.8 110.8,170.4 110.8,113.6" fill="none" stroke="#d0d5dd" stroke-width="1"/><polygon points="160.0,56.0 234.5,99.0 234.5,185.0 160.0,228.0 85.5,185.0 85.5,99.0" fill="none" stroke="#d0d5dd" stroke-width="1"/><line x1="160" y1="142" x2="160.0" y2="56.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="234.5" y2="99.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="234.5" y2="185.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="160.0" y2="228.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="85.5" y2="185.0" stroke="#d0d5dd"/><line x1="160" y1="142" x2="85.5" y2="99.0" stroke="#d0d5dd"/></g>
+      <polygon points="160.0,69.8 227.0,103.3 168.9,147.2 160.0,195.3 144.4,151.0 88.5,100.7" fill="#7c4dff33" stroke="#7c4dff" stroke-width="4"/>
+      <circle cx="160" cy="142" r="3" fill="#7c4dff"/>
+      <g class="radar-labels"><text x="160.0" y="30.0" text-anchor="middle">站姿稳定</text><text x="257.0" y="86.0" text-anchor="middle">跨步控制</text><text x="257.0" y="198.0" text-anchor="middle">髋肩分离</text><text x="160.0" y="254.0" text-anchor="middle">躯干旋转</text><text x="63.0" y="198.0" text-anchor="middle">挥棒平面</text><text x="63.0" y="86.0" text-anchor="middle">击球后平衡</text></g>
+    </svg>
+    <p>怎么看：髋肩分离和挥棒平面是本次打击优先改进项，头部稳定是保持项。</p></article>
+          <article class="visual-card"><h4>打击关键帧证据图</h4><div class="evidence-pair">
+    <figure class="evidence-figure">
+      <img class="evidence-img" src="outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/benchmark_hit_vertical_02_2d_thumb.png" alt="打击二维关键帧" loading="lazy">
+      <figcaption><b>打击二维关键帧</b><span>来自当前基准打击视频的关键帧输出。</span></figcaption>
+    </figure>
+    
+    <figure class="evidence-figure">
+      <img class="evidence-img" src="outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/benchmark_hit_vertical_02_3d_thumb.png" alt="打击三维骨架" loading="lazy">
+      <figcaption><b>打击三维骨架</b><span>已使用现有三维流程输出，不需要重新跑视频。</span></figcaption>
+    </figure>
+    </div><p>方法：重点看启动、击球点和随挥结束；真实球棒接触点仍需专门事件标注。</p></article>
+        </div>
+        <div class="grid" style="margin-top:18px">
+    <article class="metric-card good">
+      <div class="card-head"><h4>髋肩分离</h4><span class="badge good">良好</span></div>
+      <div class="metric-value">4.24度</div>
+      <p>当前为视频估算，适合看同流程复测趋势；速度已按画面人体尺度换算为常用单位。</p>
+    </article>
+    
+    <article class="metric-card good">
+      <div class="card-head"><h4>前腿膝角</h4><span class="badge good">良好</span></div>
+      <div class="metric-value">129.6度</div>
+      <p>当前为视频估算，适合看同流程复测趋势；速度已按画面人体尺度换算为常用单位。</p>
+    </article>
+    
+    <article class="metric-card good">
+      <div class="card-head"><h4>躯干倾斜</h4><span class="badge good">良好</span></div>
+      <div class="metric-value">15.5度</div>
+      <p>当前为视频估算，适合看同流程复测趋势；速度已按画面人体尺度换算为常用单位。</p>
+    </article>
+    
+    <article class="metric-card review">
+      <div class="card-head"><h4>头部稳定</h4><span class="badge review">需复核</span></div>
+      <div class="metric-value">96.1%</div>
+      <p>当前为视频估算，适合看同流程复测趋势；速度已按画面人体尺度换算为常用单位。</p>
+    </article>
+    
+    <article class="metric-card review">
+      <div class="card-head"><h4>球棒速度估算</h4><span class="badge review">需复核</span></div>
+      <div class="metric-value">约11.0 公里/小时</div>
+      <p>当前为视频估算，适合看同流程复测趋势；速度已按画面人体尺度换算为常用单位。</p>
+    </article>
+    
+    <article class="metric-card review">
+      <div class="card-head"><h4>攻击角</h4><span class="badge review">需复核</span></div>
+      <div class="metric-value">43.5度</div>
+      <p>当前为视频估算，适合看同流程复测趋势；速度已按画面人体尺度换算为常用单位。</p>
+    </article>
+    </div>
+        <div class="grid-2" style="margin-top:18px">
+          <article class="visual-card"><h4>挥棒轨迹证据图</h4><div class="evidence-pair">
+    <figure class="evidence-figure">
+      <img class="evidence-img" src="outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/benchmark_hit_vertical_02_3d_thumb.png" alt="主体打击三维骨架" loading="lazy">
+      <figcaption><b>主体打击三维骨架</b><span>用于观察挥棒过程中的身体轴线和下肢支撑。</span></figcaption>
+    </figure>
+    
+    <figure class="evidence-figure">
+      <img class="evidence-img" src="outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/benchmark_hit_horizontal_06_3d_thumb.png" alt="对照打击三维骨架" loading="lazy">
+      <figcaption><b>对照打击三维骨架</b><span>用于同批次样本对比，不作为绝对标准。</span></figcaption>
+    </figure>
+    </div><p>怎么看：当前真实可用的是身体三维骨架和手部轨迹估算，尚不能直接等同真实球棒杆身轨迹。</p></article>
+          <article class="visual-card"><h4>打击优先级列表</h4><div class="priority-list"><div class="priority-item"><span class="rank">1</span><div><h4>修正挥棒平面</h4><p>攻击角偏大时，球棒容易从球下方穿过。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">2</span><div><h4>提高髋肩分离</h4><p>身体蓄力不足时，动作容易变成只靠手。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">3</span><div><h4>保持看球稳定</h4><p>头部稳定分高，是本次打击优势。</p></div><span class="badge good">良好</span></div></div></article>
+        </div>
+        <div class="grid-3" style="margin-top:18px">
+          <article class="card risk"><div class="card-head"><h4>墙边髋肩分离</h4><span class="badge risk">训练</span></div><p>每天两组，左右各八次；家长只看肩膀不要抢先。</p></article>
+          <article class="card risk"><div class="card-head"><h4>固定球平扫路线</h4><span class="badge risk">训练</span></div><p>每次三组，每组八球；让球棒沿水平线穿过击球区。</p></article>
+          <article class="card good"><div class="card-head"><h4>看球冻结</h4><span class="badge good">训练</span></div><p>每次两组，每组十次；挥完保持击球点一秒再抬头。</p></article>
+        </div>
+      </section>
+    </section>
+
+    <section class="section" id="coach">
+      <div class="section-title"><span class="mark"></span><h2>教练模块</h2></div>
+      <div class="module-note"><p>这一模块聚焦对比、差距、阶段和训练干预，不把队员对比写成医学评价或单一排名。</p></div>
+      <div class="grid-2">
+        <article class="visual-card"><h4>投球差距仪表盘</h4><div class="table-scroll"><table><thead><tr><th>指标</th><th>球员</th><th>教练参考</th><th>差距</th><th>训练判断</th></tr></thead><tbody><tr><td>躯干旋转速度</td><td>512.8 度/秒</td><td>566.4 度/秒</td><td>-53.6 度/秒</td><td>关注</td></tr><tr><td>骨盆旋转速度</td><td>238.1 度/秒</td><td>198.6 度/秒</td><td>39.6 度/秒</td><td>关注</td></tr><tr><td>髋肩分离</td><td>54.9度</td><td>49.6度</td><td>5.35度</td><td>需复核</td></tr><tr><td>出手侧手部速度</td><td>4.98 米/秒</td><td>12.0 米/秒</td><td>-6.98 米/秒</td><td>需复核</td></tr><tr><td>跨步长度</td><td>88.4 厘米</td><td>116.9 厘米</td><td>-28.5 厘米</td><td>关注</td></tr><tr><td>重心前移</td><td>72.2 厘米</td><td>145.5 厘米</td><td>-73.3 厘米</td><td>关注</td></tr><tr><td>球速估算</td><td>15.4 公里/小时</td><td>暂无</td><td>暂无</td><td>需复核</td></tr></tbody></table></div><p>怎么看：按差距和训练可改性决定优先级，速度与位移估算必须复测确认。</p></article>
+        <article class="visual-card"><h4>投球阶段时间轴</h4>
+    <div class="mini-chart-scroll"><svg class="wide-svg timeline-svg" viewBox="0 0 610 176" role="img" aria-label="阶段时间轴">
+      <line x1="44" y1="70" x2="564" y2="70" stroke="#d0d5dd" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="44.0" cy="70" r="8" fill="#2563eb"/><text x="44.0" y="102" text-anchor="middle" font-size="14" font-weight="700">抬腿</text><rect x="6.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="44.0" y="134" text-anchor="middle" font-size="11" fill="#344054">暂无抬腿事件</text><text x="44.0" y="150" text-anchor="middle" font-size="11" fill="#667085">需逐帧检测</text><circle cx="174.0" cy="70" r="8" fill="#2563eb"/><text x="174.0" y="102" text-anchor="middle" font-size="14" font-weight="700">落脚</text><rect x="122.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="174.0" y="134" text-anchor="middle" font-size="11" fill="#344054">0.17 秒</text><text x="174.0" y="150" text-anchor="middle" font-size="11" fill="#667085">第5帧</text><circle cx="304.0" cy="70" r="8" fill="#2563eb"/><text x="304.0" y="102" text-anchor="middle" font-size="14" font-weight="700">最大外旋</text><rect x="252.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="304.0" y="134" text-anchor="middle" font-size="11" fill="#344054">暂无最大外旋</text><text x="304.0" y="150" text-anchor="middle" font-size="11" fill="#667085">需逐帧检测</text><circle cx="434.0" cy="70" r="8" fill="#2563eb"/><text x="434.0" y="102" text-anchor="middle" font-size="14" font-weight="700">出手</text><rect x="382.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="434.0" y="134" text-anchor="middle" font-size="11" fill="#344054">0.33 秒</text><text x="434.0" y="150" text-anchor="middle" font-size="11" fill="#667085">第10帧</text><circle cx="564.0" cy="70" r="8" fill="#2563eb"/><text x="564.0" y="102" text-anchor="middle" font-size="14" font-weight="700">随挥</text><rect x="500.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="564.0" y="134" text-anchor="middle" font-size="11" fill="#344054">0.70 秒</text><text x="564.0" y="150" text-anchor="middle" font-size="11" fill="#667085">第21帧</text>
+    </svg></div>
+    <p>当前汇总表提供动作开始、出手估算事件和动作结束；抬腿与最大外旋仍需逐帧事件检测。</p></article>
+      </div>
+      <article class="visual-card" style="margin-top:18px"><h4>投球队员对比点位图</h4>
+    <div class="dot-plot-scroll"><svg class="dot-compare-svg" viewBox="0 0 720 520" role="img" aria-label="球员对比点位图">
+      <rect width="720" height="520" rx="18" fill="#ffffff"/>
+      <text x="20" y="47" fill="#101828" font-size="14" font-weight="700">髋肩分离</text><text x="20" y="67" fill="#667085" font-size="12">身体扭转</text><line x1="150" y1="44" x2="470" y2="44" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="72" fill="#98a2b3" font-size="11" text-anchor="middle">-0.38度</text><text x="470" y="72" fill="#98a2b3" font-size="11" text-anchor="middle">57.2度</text><circle cx="192.4" cy="44" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="199.6" cy="44" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="427.6" y1="26" x2="427.6" y2="62" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="29" fill="#2563eb" font-size="12">样本九 7.24度</text><text x="500" y="45" fill="#f97316" font-size="12">样本十 8.54度</text><text x="500" y="61" fill="#101828" font-size="12">教练 49.6度</text><text x="20" y="115" fill="#101828" font-size="14" font-weight="700">前腿膝角</text><text x="20" y="135" fill="#667085" font-size="12">落地支撑</text><line x1="150" y1="112" x2="470" y2="112" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="140" fill="#98a2b3" font-size="11" text-anchor="middle">116.3度</text><text x="470" y="140" fill="#98a2b3" font-size="11" text-anchor="middle">147.7度</text><circle cx="384.9" cy="112" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="258.4" cy="112" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="235.1" y1="94" x2="235.1" y2="130" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="97" fill="#2563eb" font-size="12">样本九 139.4度</text><text x="500" y="113" fill="#f97316" font-size="12">样本十 126.9度</text><text x="500" y="129" fill="#101828" font-size="12">教练 124.6度</text><text x="20" y="183" fill="#101828" font-size="14" font-weight="700">躯干倾斜</text><text x="20" y="203" fill="#667085" font-size="12">身体姿态</text><line x1="150" y1="180" x2="470" y2="180" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="208" fill="#98a2b3" font-size="11" text-anchor="middle">8.25度</text><text x="470" y="208" fill="#98a2b3" font-size="11" text-anchor="middle">47.4度</text><circle cx="192.4" cy="180" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="237.4" cy="180" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="427.6" y1="162" x2="427.6" y2="198" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="165" fill="#2563eb" font-size="12">样本九 13.4度</text><text x="500" y="181" fill="#f97316" font-size="12">样本十 18.9度</text><text x="500" y="197" fill="#101828" font-size="12">教练 42.2度</text><text x="20" y="251" fill="#101828" font-size="14" font-weight="700">头部稳定</text><text x="20" y="271" fill="#667085" font-size="12">稳定性</text><line x1="150" y1="248" x2="470" y2="248" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="276" fill="#98a2b3" font-size="11" text-anchor="middle">67.6%</text><text x="470" y="276" fill="#98a2b3" font-size="11" text-anchor="middle">98.5%</text><circle cx="207.8" cy="248" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="412.2" cy="248" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="381.9" y1="230" x2="381.9" y2="266" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="233" fill="#2563eb" font-size="12">样本九 73.2%</text><text x="500" y="249" fill="#f97316" font-size="12">样本十 92.9%</text><text x="500" y="265" fill="#101828" font-size="12">参考 90.0%</text><text x="20" y="319" fill="#101828" font-size="14" font-weight="700">跨步长度</text><text x="20" y="339" fill="#667085" font-size="12">动力转移</text><line x1="150" y1="316" x2="470" y2="316" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="344" fill="#98a2b3" font-size="11" text-anchor="middle">55.0%</text><text x="470" y="344" fill="#98a2b3" font-size="11" text-anchor="middle">79.8%</text><circle cx="208.2" cy="316" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="259.7" cy="316" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="411.8" y1="298" x2="411.8" y2="334" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="301" fill="#2563eb" font-size="12">样本九 59.5%</text><text x="500" y="317" fill="#f97316" font-size="12">样本十 63.5%</text><text x="500" y="333" fill="#101828" font-size="12">教练 75.3%</text><text x="20" y="387" fill="#101828" font-size="14" font-weight="700">球速估算</text><text x="20" y="407" fill="#667085" font-size="12">同机位趋势</text><line x1="150" y1="384" x2="470" y2="384" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="412" fill="#98a2b3" font-size="11" text-anchor="middle">13.4 公里/小时</text><text x="470" y="412" fill="#98a2b3" font-size="11" text-anchor="middle">16.1 公里/小时</text><circle cx="268.6" cy="384" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="351.4" cy="384" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><text x="500" y="369" fill="#2563eb" font-size="12">样本九 14.4 公里/小时</text><text x="500" y="385" fill="#f97316" font-size="12">样本十 15.1 公里/小时</text>
+      <rect x="18" y="468" width="684" height="40" rx="12" fill="#eef6ff" stroke="#bfdbfe"/>
+      <circle cx="26" cy="492" r="7" fill="#2563eb"/><text x="42" y="497" fill="#344054" font-size="12">样本九</text><circle cx="154" cy="492" r="7" fill="#f97316"/><text x="170" y="497" fill="#344054" font-size="12">样本十</text><line x1="282" y1="486" x2="282" y2="500" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="298" y="497" fill="#344054" font-size="12">教练或建议参考</text>
+    </svg></div>
+    <p>读法：蓝点是主体投球样本，橙点是同批次对照样本，黑线是教练或建议参考。每一行只比较同一个指标。</p></article>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>投球动力链传递图</h4>
+    <div class="mini-chart-scroll"><svg class="wide-svg chain-svg" viewBox="0 0 560 172" role="img" aria-label="动力链传递图">
+      <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#98a2b3"/></marker></defs>
+      <g fill="#fff" font-size="16" font-weight="600"><circle cx="34" cy="58" r="26" fill="#16a34a"/><text x="34" y="63" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">下肢</text><rect x="6" y="100" width="96" height="58" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="34" y="122" text-anchor="middle" fill="#101828" font-size="12" font-weight="700">139.4度</text><text x="34" y="142" text-anchor="middle" fill="#667085" font-size="11">前腿膝角</text><path d="M66 58 L114 58" stroke="#98a2b3" stroke-width="4" marker-end="url(#arrow)"/><circle cx="146" cy="58" r="26" fill="#f97316"/><text x="146" y="63" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">骨盆</text><rect x="98" y="100" width="96" height="58" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="146" y="122" text-anchor="middle" fill="#101828" font-size="12" font-weight="700">238.1 度/秒</text><text x="146" y="142" text-anchor="middle" fill="#667085" font-size="11">峰值速度</text><path d="M178 58 L226 58" stroke="#98a2b3" stroke-width="4" marker-end="url(#arrow)"/><circle cx="258" cy="58" r="26" fill="#2563eb"/><text x="258" y="63" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">躯干</text><rect x="210" y="100" width="96" height="58" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="258" y="122" text-anchor="middle" fill="#101828" font-size="12" font-weight="700">512.8 度/秒</text><text x="258" y="142" text-anchor="middle" fill="#667085" font-size="11">峰值速度</text><path d="M290 58 L338 58" stroke="#98a2b3" stroke-width="4" marker-end="url(#arrow)"/><circle cx="370" cy="58" r="26" fill="#ef4444"/><text x="370" y="63" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">手臂</text><rect x="322" y="100" width="96" height="58" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="370" y="122" text-anchor="middle" fill="#101828" font-size="12" font-weight="700">41.6%</text><text x="370" y="142" text-anchor="middle" fill="#667085" font-size="11">相对教练</text><path d="M402 58 L450 58" stroke="#98a2b3" stroke-width="4" marker-end="url(#arrow)"/><circle cx="482" cy="58" r="26" fill="#697586"/><text x="482" y="63" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">出手</text><rect x="434" y="100" width="96" height="58" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="482" y="122" text-anchor="middle" fill="#101828" font-size="12" font-weight="700">约14.4 公里/小时</text><text x="482" y="142" text-anchor="middle" fill="#667085" font-size="11">球速估算</text></g>
+    </svg></div>
+    <p>怎么看：每个节点下方保留本次可用数值；速度为估算时只看顺序趋势，不直接下绝对速度结论。</p></article>
+        <article class="visual-card"><h4>打击阶段时间轴</h4>
+    <div class="mini-chart-scroll"><svg class="wide-svg timeline-svg" viewBox="0 0 610 176" role="img" aria-label="阶段时间轴">
+      <line x1="44" y1="70" x2="564" y2="70" stroke="#d0d5dd" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="44.0" cy="70" r="8" fill="#2563eb"/><text x="44.0" y="102" text-anchor="middle" font-size="14" font-weight="700">准备</text><rect x="6.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="44.0" y="134" text-anchor="middle" font-size="11" fill="#344054">暂无准备事件</text><text x="44.0" y="150" text-anchor="middle" font-size="11" fill="#667085">需逐帧检测</text><circle cx="148.0" cy="70" r="8" fill="#2563eb"/><text x="148.0" y="102" text-anchor="middle" font-size="14" font-weight="700">启动</text><rect x="96.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="148.0" y="134" text-anchor="middle" font-size="11" fill="#344054">2.03 秒</text><text x="148.0" y="150" text-anchor="middle" font-size="11" fill="#667085">第61帧</text><circle cx="252.0" cy="70" r="8" fill="#2563eb"/><text x="252.0" y="102" text-anchor="middle" font-size="14" font-weight="700">前脚落地</text><rect x="200.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="252.0" y="134" text-anchor="middle" font-size="11" fill="#344054">暂无落脚事件</text><text x="252.0" y="150" text-anchor="middle" font-size="11" fill="#667085">需逐帧检测</text><circle cx="356.0" cy="70" r="8" fill="#2563eb"/><text x="356.0" y="102" text-anchor="middle" font-size="14" font-weight="700">进入击球区</text><rect x="304.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="356.0" y="134" text-anchor="middle" font-size="11" fill="#344054">暂无入区事件</text><text x="356.0" y="150" text-anchor="middle" font-size="11" fill="#667085">需球棒轨迹</text><circle cx="460.0" cy="70" r="8" fill="#2563eb"/><text x="460.0" y="102" text-anchor="middle" font-size="14" font-weight="700">击球点</text><rect x="408.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="460.0" y="134" text-anchor="middle" font-size="11" fill="#344054">2.47 秒</text><text x="460.0" y="150" text-anchor="middle" font-size="11" fill="#667085">第74帧</text><circle cx="564.0" cy="70" r="8" fill="#2563eb"/><text x="564.0" y="102" text-anchor="middle" font-size="14" font-weight="700">随挥</text><rect x="500.0" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/><text x="564.0" y="134" text-anchor="middle" font-size="11" fill="#344054">2.90 秒</text><text x="564.0" y="150" text-anchor="middle" font-size="11" fill="#667085">第87帧</text>
+    </svg></div>
+    <p>打击阶段独立于投球阶段；当前汇总表提供启动、击球点估算和随挥结束，落脚与入区需要球棒轨迹补充。</p></article>
+      </div>
+      <article class="visual-card" style="margin-top:18px"><h4>打击队员对比点位图</h4>
+    <div class="dot-plot-scroll"><svg class="dot-compare-svg" viewBox="0 0 720 520" role="img" aria-label="球员对比点位图">
+      <rect width="720" height="520" rx="18" fill="#ffffff"/>
+      <text x="20" y="47" fill="#101828" font-size="14" font-weight="700">髋肩分离</text><text x="20" y="67" fill="#667085" font-size="12">身体蓄力</text><line x1="150" y1="44" x2="470" y2="44" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="72" fill="#98a2b3" font-size="11" text-anchor="middle">-0.10度</text><text x="470" y="72" fill="#98a2b3" font-size="11" text-anchor="middle">32.7度</text><circle cx="192.4" cy="44" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="348.8" cy="44" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="427.6" y1="26" x2="427.6" y2="62" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="29" fill="#2563eb" font-size="12">样本二 4.24度</text><text x="500" y="45" fill="#f97316" font-size="12">样本六 20.3度</text><text x="500" y="61" fill="#101828" font-size="12">光学参考 28.3度</text><text x="20" y="115" fill="#101828" font-size="14" font-weight="700">前腿膝角</text><text x="20" y="135" fill="#667085" font-size="12">支撑稳定</text><line x1="150" y1="112" x2="470" y2="112" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="140" fill="#98a2b3" font-size="11" text-anchor="middle">120.2度</text><text x="470" y="140" fill="#98a2b3" font-size="11" text-anchor="middle">165.8度</text><circle cx="215.9" cy="112" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="231.2" cy="112" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="404.1" y1="94" x2="404.1" y2="130" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="97" fill="#2563eb" font-size="12">样本二 129.6度</text><text x="500" y="113" fill="#f97316" font-size="12">样本六 131.8度</text><text x="500" y="129" fill="#101828" font-size="12">光学参考 156.4度</text><text x="20" y="183" fill="#101828" font-size="14" font-weight="700">躯干倾斜</text><text x="20" y="203" fill="#667085" font-size="12">身体轴线</text><line x1="150" y1="180" x2="470" y2="180" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="208" fill="#98a2b3" font-size="11" text-anchor="middle">10.4度</text><text x="470" y="208" fill="#98a2b3" font-size="11" text-anchor="middle">31.8度</text><circle cx="226.4" cy="180" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="192.4" cy="180" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="427.6" y1="162" x2="427.6" y2="198" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="165" fill="#2563eb" font-size="12">样本二 15.5度</text><text x="500" y="181" fill="#f97316" font-size="12">样本六 13.2度</text><text x="500" y="197" fill="#101828" font-size="12">光学参考 28.9度</text><text x="20" y="251" fill="#101828" font-size="14" font-weight="700">头部稳定</text><text x="20" y="271" fill="#667085" font-size="12">看球稳定</text><line x1="150" y1="248" x2="470" y2="248" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="276" fill="#98a2b3" font-size="11" text-anchor="middle">84.1%</text><text x="470" y="276" fill="#98a2b3" font-size="11" text-anchor="middle">105.1%</text><circle cx="332.6" cy="248" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="379.5" cy="248" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="240.5" y1="230" x2="240.5" y2="266" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="233" fill="#2563eb" font-size="12">样本二 96.1%</text><text x="500" y="249" fill="#f97316" font-size="12">样本六 99.1%</text><text x="500" y="265" fill="#101828" font-size="12">建议参考 90.0%</text><text x="20" y="319" fill="#101828" font-size="14" font-weight="700">攻击角</text><text x="20" y="339" fill="#667085" font-size="12">挥棒平面</text><line x1="150" y1="316" x2="470" y2="316" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="344" fill="#98a2b3" font-size="11" text-anchor="middle">-214.0度</text><text x="470" y="344" fill="#98a2b3" font-size="11" text-anchor="middle">82.7度</text><circle cx="427.6" cy="316" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="192.4" cy="316" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><line x1="402.3" y1="298" x2="402.3" y2="334" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="500" y="301" fill="#2563eb" font-size="12">样本二 43.5度</text><text x="500" y="317" fill="#f97316" font-size="12">样本六 -174.8度</text><text x="500" y="333" fill="#101828" font-size="12">光学参考 20.0度</text><text x="20" y="387" fill="#101828" font-size="14" font-weight="700">挥棒速度估算</text><text x="20" y="407" fill="#667085" font-size="12">末端速度</text><line x1="150" y1="384" x2="470" y2="384" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/><text x="150" y="412" fill="#98a2b3" font-size="11" text-anchor="middle">5.36 公里/小时</text><text x="470" y="412" fill="#98a2b3" font-size="11" text-anchor="middle">47.7 公里/小时</text><circle cx="192.4" cy="384" r="9" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="427.6" cy="384" r="9" fill="#f97316" stroke="#fff" stroke-width="2"/><text x="500" y="369" fill="#2563eb" font-size="12">样本二 11.0 公里/小时</text><text x="500" y="385" fill="#f97316" font-size="12">样本六 42.1 公里/小时</text>
+      <rect x="18" y="468" width="684" height="40" rx="12" fill="#eef6ff" stroke="#bfdbfe"/>
+      <circle cx="26" cy="492" r="7" fill="#2563eb"/><text x="42" y="497" fill="#344054" font-size="12">样本二</text><circle cx="154" cy="492" r="7" fill="#f97316"/><text x="170" y="497" fill="#344054" font-size="12">样本六</text><line x1="282" y1="486" x2="282" y2="500" stroke="#101828" stroke-width="4" stroke-linecap="round"/><text x="298" y="497" fill="#344054" font-size="12">光学或建议参考</text>
+    </svg></div>
+    <p>读法：蓝点是主体打击样本，橙点是同批次对照样本，黑线是光学动作捕捉或建议参考。点越接近参考线，说明该指标越接近参考动作。</p></article>
+      <article class="visual-card" style="margin-top:18px"><h4>改进优先级矩阵</h4><div class="matrix"><span class="bubble" style="left:78%;top:24%;background:#ef4444">手部速度</span><span class="bubble" style="left:66%;top:34%;background:#f97316">身体前移</span><span class="bubble" style="left:58%;top:62%;background:#7c4dff">挥棒平面</span><span class="bubble" style="left:36%;top:72%;background:#16a34a">头部稳定</span></div><p>横轴代表表现影响，纵轴越靠上代表越应优先训练。</p></article>
+    </section>
+
+    <section class="section" id="research">
+      <div class="section-title"><span class="mark"></span><h2>研究者模块</h2></div>
+      <div class="module-note"><p>这一模块使用当前三维姿态 CSV 与 vicon_2026 C3D 导出生成逐帧曲线、事件线、质量图和光学动作捕捉校准；不可直接观测的雷达球速和力板重心仍在限制说明中保留。</p></div>
+      <div class="grid-2">
+        <article class="visual-card"><h4>投球角度时间曲线</h4>
+    <div class="line-chart-scroll"><svg class="line-chart-svg" viewBox="0 0 720 360" role="img" aria-label="投球角度时间曲线">
+      <defs><clipPath id="clip-2127990073105841947"><rect x="116" y="88" width="562" height="188"/></clipPath></defs>
+      <rect width="720" height="360" rx="18" fill="#ffffff"/>
+      <text x="24" y="24" fill="#101828" font-size="14" font-weight="700">投球角度时间曲线</text>
+      <line x1="116" y1="276" x2="678" y2="276" stroke="#667085"/>
+      <line x1="116" y1="88" x2="116" y2="276" stroke="#667085"/>
+      <g stroke="#e4e7ec" stroke-width="1">
+        <line x1="116" y1="182.0" x2="678" y2="182.0"/>
+        <line x1="116" y1="88" x2="678" y2="88"/>
+      </g>
+      <text x="116" y="300" fill="#667085" font-size="12">时间（秒）</text>
+      <text x="24" y="72" fill="#667085" font-size="12">角度</text>
+      <rect x="18" y="264" width="84" height="20" rx="8" fill="#ffffff"/>
+      <rect x="18" y="76" width="84" height="20" rx="8" fill="#ffffff"/>
+      <text x="102" y="280" text-anchor="end" fill="#98a2b3" font-size="11">-16.9度</text>
+      <text x="102" y="92" text-anchor="end" fill="#98a2b3" font-size="11">180.7度</text>
+      <line x1="170.1" y1="88" x2="170.1" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="118.1" y="29" width="104.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M170.1 49 L170.1 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="170.1" y="44" text-anchor="middle" fill="#101828" font-size="11">动作阶段开始</text><line x1="224.0" y1="88" x2="224.0" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="186.0" y="53" width="76.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M224.0 73 L224.0 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="224.0" y="68" text-anchor="middle" fill="#101828" font-size="11">关键事件</text><line x1="343.0" y1="88" x2="343.0" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="291.0" y="29" width="104.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M343.0 49 L343.0 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="343.0" y="44" text-anchor="middle" fill="#101828" font-size="11">动作阶段结束</text>
+      <g clip-path="url(#clip-2127990073105841947)"><path d="M 116.0 107.0 L 126.8 110.2 L 137.6 113.9 L 148.4 118.0 L 159.2 122.5 L 170.0 127.3 L 180.8 131.1 L 191.7 133.9 L 202.5 135.7 L 213.3 136.5 L 224.1 136.5 L 234.9 135.8 L 245.7 134.7 L 256.5 132.9 L 267.3 130.8 L 278.1 128.6 L 288.9 126.3 L 299.7 124.2 L 310.5 122.2 L 321.3 120.4 L 332.2 118.7 L 343.0 117.2 L 353.8 115.9 L 364.6 114.8 L 375.4 113.8 L 386.2 113.0 L 397.0 112.3 L 407.8 111.8 L 418.6 111.5 L 429.4 111.4 L 440.2 111.4 L 451.0 111.6 L 461.8 112.0 L 472.7 112.4 L 483.5 112.8 L 494.3 113.4 L 505.1 113.9 L 515.9 114.4 L 526.7 114.8 L 537.5 115.1 L 548.3 115.2 L 559.1 115.2 L 569.9 115.0 L 580.7 114.7 L 591.5 114.2 L 602.3 113.5 L 613.2 112.8 L 624.0 111.9 L 634.8 110.9 L 645.6 110.0 L 656.4 109.2 L 667.2 108.5 L 678.0 107.9" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/><circle cx="116.0" cy="107.0" r="4" fill="#2563eb"/><path d="M 116.0 147.3 L 126.8 148.3 L 137.6 149.2 L 148.4 150.0 L 159.2 150.7 L 170.0 151.5 L 180.8 152.8 L 191.7 154.8 L 202.5 157.9 L 213.3 163.1 L 224.1 172.4 L 234.9 183.8 L 245.7 190.0 L 256.5 189.8 L 267.3 183.5 L 278.1 173.5 L 288.9 163.0 L 299.7 154.4 L 310.5 147.8 L 321.3 143.1 L 332.2 139.8 L 343.0 137.5 L 353.8 135.8 L 364.6 134.1 L 375.4 132.2 L 386.2 129.5 L 397.0 125.9 L 407.8 121.6 L 418.6 117.3 L 429.4 113.5 L 440.2 110.6 L 451.0 108.4 L 461.8 107.0 L 472.7 106.3 L 483.5 106.2 L 494.3 106.8 L 505.1 108.0 L 515.9 109.9 L 526.7 112.4 L 537.5 115.7 L 548.3 119.6 L 559.1 124.1 L 569.9 128.9 L 580.7 133.9 L 591.5 138.6 L 602.3 143.1 L 613.2 147.0 L 624.0 150.1 L 634.8 152.3 L 645.6 153.7 L 656.4 154.3 L 667.2 154.5 L 678.0 154.3" fill="none" stroke="#f97316" stroke-width="3" stroke-linejoin="round"/><circle cx="483.5" cy="106.2" r="4" fill="#f97316"/><path d="M 116.0 247.2 L 126.8 246.8 L 137.6 246.6 L 148.4 246.4 L 159.2 246.4 L 170.0 246.6 L 180.8 247.2 L 191.7 248.2 L 202.5 249.4 L 213.3 250.9 L 224.1 252.4 L 234.9 254.0 L 245.7 255.5 L 256.5 256.7 L 267.3 257.5 L 278.1 257.8 L 288.9 257.5 L 299.7 256.7 L 310.5 255.5 L 321.3 254.1 L 332.2 252.6 L 343.0 251.3 L 353.8 250.2 L 364.6 249.3 L 375.4 248.7 L 386.2 248.3 L 397.0 248.1 L 407.8 248.0 L 418.6 248.1 L 429.4 248.2 L 440.2 248.3 L 451.0 248.6 L 461.8 248.8 L 472.7 249.1 L 483.5 249.3 L 494.3 249.6 L 505.1 249.9 L 515.9 250.2 L 526.7 250.4 L 537.5 250.7 L 548.3 250.9 L 559.1 251.2 L 569.9 251.5 L 580.7 251.8 L 591.5 252.1 L 602.3 252.5 L 613.2 252.9 L 624.0 253.3 L 634.8 253.8 L 645.6 254.2 L 656.4 254.6 L 667.2 255.0 L 678.0 255.3" fill="none" stroke="#7c4dff" stroke-width="3" stroke-linejoin="round"/><circle cx="148.4" cy="246.4" r="4" fill="#7c4dff"/><path d="M 116.0 220.9 L 126.8 222.3 L 137.6 223.7 L 148.4 225.1 L 159.2 226.7 L 170.0 228.6 L 180.8 230.5 L 191.7 233.1 L 202.5 237.2 L 213.3 243.7 L 224.1 253.1 L 234.9 255.6 L 245.7 244.6 L 256.5 235.2 L 267.3 227.7 L 278.1 221.7 L 288.9 216.8 L 299.7 212.9 L 310.5 209.9 L 321.3 207.9 L 332.2 206.9 L 343.0 206.8 L 353.8 207.4 L 364.6 208.3 L 375.4 209.5 L 386.2 210.7 L 397.0 212.0 L 407.8 213.2 L 418.6 214.4 L 429.4 215.5 L 440.2 216.7 L 451.0 217.9 L 461.8 219.2 L 472.7 220.6 L 483.5 222.1 L 494.3 223.7 L 505.1 225.4 L 515.9 227.2 L 526.7 229.1 L 537.5 231.1 L 548.3 233.0 L 559.1 235.0 L 569.9 236.8 L 580.7 238.5 L 591.5 240.0 L 602.3 241.2 L 613.2 242.2 L 624.0 242.9 L 634.8 243.4 L 645.6 243.7 L 656.4 243.8 L 667.2 243.9 L 678.0 243.8" fill="none" stroke="#16a34a" stroke-width="3" stroke-linejoin="round"/><circle cx="343.0" cy="206.8" r="4" fill="#16a34a"/></g>
+      <circle cx="116" cy="326" r="6" fill="#2563eb"/><text x="128" y="331" fill="#344054" font-size="12">前腿膝角</text><circle cx="266" cy="326" r="6" fill="#f97316"/><text x="278" y="331" fill="#344054" font-size="12">肘角</text><circle cx="416" cy="326" r="6" fill="#7c4dff"/><text x="428" y="331" fill="#344054" font-size="12">躯干倾斜</text><circle cx="566" cy="326" r="6" fill="#16a34a"/><text x="578" y="331" fill="#344054" font-size="12">髋肩分离</text>
+    </svg></div>
+    <p>怎么看：曲线来自投球样本九三维骨架逐帧计算，黑色虚线为动作开始、出手估算和动作结束事件。</p></article>
+        <article class="visual-card"><h4>投球速度时间曲线</h4>
+    <div class="line-chart-scroll"><svg class="line-chart-svg" viewBox="0 0 720 360" role="img" aria-label="投球速度时间曲线">
+      <defs><clipPath id="clip-5081202184290862230"><rect x="116" y="88" width="562" height="188"/></clipPath></defs>
+      <rect width="720" height="360" rx="18" fill="#ffffff"/>
+      <text x="24" y="24" fill="#101828" font-size="14" font-weight="700">投球速度时间曲线</text>
+      <line x1="116" y1="276" x2="678" y2="276" stroke="#667085"/>
+      <line x1="116" y1="88" x2="116" y2="276" stroke="#667085"/>
+      <g stroke="#e4e7ec" stroke-width="1">
+        <line x1="116" y1="182.0" x2="678" y2="182.0"/>
+        <line x1="116" y1="88" x2="678" y2="88"/>
+      </g>
+      <text x="116" y="300" fill="#667085" font-size="12">时间（秒）</text>
+      <text x="24" y="72" fill="#667085" font-size="12">公里/小时</text>
+      <rect x="18" y="264" width="84" height="20" rx="8" fill="#ffffff"/>
+      <rect x="18" y="76" width="84" height="20" rx="8" fill="#ffffff"/>
+      <text x="102" y="280" text-anchor="end" fill="#98a2b3" font-size="11">-2.09 公里/小时</text>
+      <text x="102" y="92" text-anchor="end" fill="#98a2b3" font-size="11">21.5 公里/小时</text>
+      <line x1="160.2" y1="88" x2="160.2" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="116.0" y="29" width="104.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M168.0 49 L160.2 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="168.0" y="44" text-anchor="middle" fill="#101828" font-size="11">动作阶段开始</text><line x1="215.1" y1="88" x2="215.1" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="177.1" y="53" width="76.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M215.1 73 L215.1 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="215.1" y="68" text-anchor="middle" fill="#101828" font-size="11">关键事件</text><line x1="336.4" y1="88" x2="336.4" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="284.4" y="29" width="104.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M336.4 49 L336.4 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="336.4" y="44" text-anchor="middle" fill="#101828" font-size="11">动作阶段结束</text>
+      <g clip-path="url(#clip-5081202184290862230)"><path d="M 116.0 235.2 L 127.0 231.3 L 138.0 227.6 L 149.1 223.7 L 160.1 220.2 L 171.1 222.5 L 182.1 225.0 L 193.1 227.5 L 204.2 229.8 L 215.2 231.9 L 226.2 233.7 L 237.2 235.3 L 248.2 237.1 L 259.3 238.7 L 270.3 240.0 L 281.3 240.9 L 292.3 241.7 L 303.3 242.3 L 314.4 243.1 L 325.4 244.0 L 336.4 245.0 L 347.4 246.0 L 358.4 247.1 L 369.5 248.1 L 380.5 249.1 L 391.5 250.2 L 402.5 251.2 L 413.5 252.3 L 424.5 253.3 L 435.6 254.5 L 446.6 255.6 L 457.6 256.6 L 468.6 257.4 L 479.6 257.8 L 490.7 257.8 L 501.7 257.6 L 512.7 257.3 L 523.7 256.8 L 534.7 256.2 L 545.8 255.6 L 556.8 255.0 L 567.8 254.5 L 578.8 254.2 L 589.8 253.9 L 600.9 253.8 L 611.9 253.7 L 622.9 253.7 L 633.9 253.7 L 644.9 254.3 L 656.0 254.9 L 667.0 255.5 L 678.0 256.1" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/><circle cx="160.1" cy="220.2" r="4" fill="#2563eb"/><path d="M 116.0 234.6 L 127.0 229.2 L 138.0 223.6 L 149.1 216.8 L 160.1 210.0 L 171.1 208.0 L 182.1 206.9 L 193.1 206.5 L 204.2 207.0 L 215.2 208.5 L 226.2 211.0 L 237.2 214.5 L 248.2 219.6 L 259.3 225.0 L 270.3 230.4 L 281.3 235.6 L 292.3 240.6 L 303.3 245.2 L 314.4 248.7 L 325.4 250.7 L 336.4 251.2 L 347.4 250.9 L 358.4 250.4 L 369.5 250.1 L 380.5 250.1 L 391.5 250.4 L 402.5 251.1 L 413.5 252.0 L 424.5 252.9 L 435.6 253.6 L 446.6 254.0 L 457.6 254.2 L 468.6 254.3 L 479.6 254.6 L 490.7 255.0 L 501.7 255.5 L 512.7 256.1 L 523.7 256.6 L 534.7 257.0 L 545.8 257.2 L 556.8 257.2 L 567.8 257.0 L 578.8 256.8 L 589.8 256.6 L 600.9 256.5 L 611.9 256.5 L 622.9 256.4 L 633.9 256.3 L 644.9 256.6 L 656.0 256.8 L 667.0 257.1 L 678.0 257.5" fill="none" stroke="#7c4dff" stroke-width="3" stroke-linejoin="round"/><circle cx="193.1" cy="206.5" r="4" fill="#7c4dff"/><path d="M 116.0 207.4 L 127.0 200.5 L 138.0 193.1 L 149.1 179.4 L 160.1 164.0 L 171.1 151.4 L 182.1 136.4 L 193.1 122.2 L 204.2 111.6 L 215.2 106.2 L 226.2 106.5 L 237.2 112.5 L 248.2 122.9 L 259.3 137.0 L 270.3 151.7 L 281.3 163.7 L 292.3 172.3 L 303.3 178.4 L 314.4 185.4 L 325.4 195.3 L 336.4 209.1 L 347.4 227.4 L 358.4 248.3 L 369.5 246.5 L 380.5 226.1 L 391.5 209.9 L 402.5 198.2 L 413.5 191.9 L 424.5 189.7 L 435.6 189.9 L 446.6 191.6 L 457.6 193.9 L 468.6 197.0 L 479.6 201.0 L 490.7 205.9 L 501.7 211.5 L 512.7 217.7 L 523.7 223.7 L 534.7 228.8 L 545.8 232.3 L 556.8 233.3 L 567.8 232.4 L 578.8 230.2 L 589.8 227.4 L 600.9 224.5 L 611.9 221.6 L 622.9 218.9 L 633.9 216.5 L 644.9 220.4 L 656.0 224.8 L 667.0 228.8 L 678.0 233.0" fill="none" stroke="#f97316" stroke-width="3" stroke-linejoin="round"/><circle cx="215.2" cy="106.2" r="4" fill="#f97316"/></g>
+      <circle cx="116" cy="326" r="6" fill="#2563eb"/><text x="128" y="331" fill="#344054" font-size="12">髋部中心速度</text><circle cx="266" cy="326" r="6" fill="#7c4dff"/><text x="278" y="331" fill="#344054" font-size="12">躯干中心速度</text><circle cx="416" cy="326" r="6" fill="#f97316"/><text x="428" y="331" fill="#344054" font-size="12">出手侧手部速度</text>
+    </svg></div>
+    <p>怎么看：速度由三维模型空间坐标逐帧差分估算并换算为公里/小时，用于观察峰值顺序和事件附近变化。</p></article>
+        <article class="visual-card"><h4>打击角度时间曲线</h4>
+    <div class="line-chart-scroll"><svg class="line-chart-svg" viewBox="0 0 720 360" role="img" aria-label="打击角度时间曲线">
+      <defs><clipPath id="clip-7676638818045404698"><rect x="116" y="88" width="562" height="188"/></clipPath></defs>
+      <rect width="720" height="360" rx="18" fill="#ffffff"/>
+      <text x="24" y="24" fill="#101828" font-size="14" font-weight="700">打击角度时间曲线</text>
+      <line x1="116" y1="276" x2="678" y2="276" stroke="#667085"/>
+      <line x1="116" y1="88" x2="116" y2="276" stroke="#667085"/>
+      <g stroke="#e4e7ec" stroke-width="1">
+        <line x1="116" y1="182.0" x2="678" y2="182.0"/>
+        <line x1="116" y1="88" x2="678" y2="88"/>
+      </g>
+      <text x="116" y="300" fill="#667085" font-size="12">时间（秒）</text>
+      <text x="24" y="72" fill="#667085" font-size="12">角度</text>
+      <rect x="18" y="264" width="84" height="20" rx="8" fill="#ffffff"/>
+      <rect x="18" y="76" width="84" height="20" rx="8" fill="#ffffff"/>
+      <text x="102" y="280" text-anchor="end" fill="#98a2b3" font-size="11">-19.3度</text>
+      <text x="102" y="92" text-anchor="end" fill="#98a2b3" font-size="11">179.8度</text>
+      <line x1="368.0" y1="88" x2="368.0" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="316.0" y="29" width="104.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M368.0 49 L368.0 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="368.0" y="44" text-anchor="middle" fill="#101828" font-size="11">动作阶段开始</text><line x1="421.8" y1="88" x2="421.8" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="383.8" y="53" width="76.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M421.8 73 L421.8 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="421.8" y="68" text-anchor="middle" fill="#101828" font-size="11">关键事件</text><line x1="475.5" y1="88" x2="475.5" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="423.5" y="29" width="104.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M475.5 49 L475.5 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="475.5" y="44" text-anchor="middle" fill="#101828" font-size="11">动作阶段结束</text>
+      <g clip-path="url(#clip-7676638818045404698)"><path d="M 116.0 108.7 L 120.1 109.2 L 124.3 109.8 L 128.4 110.4 L 132.5 111.1 L 136.7 111.8 L 140.8 112.5 L 144.9 112.9 L 149.1 113.2 L 153.2 113.4 L 157.3 113.4 L 161.5 113.3 L 165.6 113.0 L 169.7 112.6 L 173.9 112.1 L 178.0 111.6 L 182.1 111.1 L 186.2 110.7 L 190.4 110.4 L 194.5 110.3 L 198.6 110.2 L 202.8 110.3 L 206.9 110.4 L 211.0 110.5 L 215.2 110.6 L 219.3 110.7 L 223.4 110.7 L 227.6 110.5 L 231.7 110.3 L 235.8 110.1 L 240.0 109.8 L 244.1 109.6 L 248.2 109.4 L 252.4 109.3 L 256.5 109.3 L 260.6 109.3 L 264.8 109.4 L 268.9 109.5 L 273.0 109.6 L 277.2 109.7 L 281.3 109.8 L 285.4 109.9 L 289.6 110.0 L 293.7 110.0 L 297.8 109.9 L 302.0 109.9 L 306.1 109.8 L 310.2 109.8 L 314.4 109.7 L 318.5 109.6 L 322.6 109.5 L 326.8 109.5 L 330.9 109.5 L 335.0 109.6 L 339.1 109.8 L 343.3 110.2 L 347.4 110.8 L 351.5 111.5 L 355.7 112.5 L 359.8 113.8 L 363.9 115.3 L 368.1 117.1 L 372.2 119.2 L 376.3 121.4 L 380.5 123.8 L 384.6 126.1 L 388.7 128.4 L 392.9 130.4 L 397.0 132.1 L 401.1 133.5 L 405.3 134.6 L 409.4 135.6 L 413.5 136.5 L 417.7 137.2 L 421.8 137.5 L 425.9 137.3 L 430.1 136.4 L 434.2 134.8 L 438.3 132.6 L 442.5 129.8 L 446.6 126.7 L 450.7 123.5 L 454.9 120.5 L 459.0 117.7 L 463.1 115.5 L 467.2 113.9 L 471.4 112.7 L 475.5 111.9 L 479.6 111.2 L 483.8 110.8 L 487.9 110.5 L 492.0 110.2 L 496.2 110.0 L 500.3 109.9 L 504.4 109.8 L 508.6 109.7 L 512.7 109.8 L 516.8 109.8 L 521.0 110.0 L 525.1 110.2 L 529.2 110.4 L 533.4 110.7 L 537.5 110.9 L 541.6 111.1 L 545.8 111.2 L 549.9 111.3 L 554.0 111.4 L 558.2 111.4 L 562.3 111.4 L 566.4 111.4 L 570.6 111.4 L 574.7 111.5 L 578.8 111.6 L 583.0 111.8 L 587.1 112.0 L 591.2 112.2 L 595.4 112.5 L 599.5 112.7 L 603.6 112.8 L 607.8 112.9 L 611.9 112.8 L 616.0 112.7 L 620.1 112.5 L 624.3 112.3 L 628.4 112.0 L 632.5 111.6 L 636.7 111.2 L 640.8 110.8 L 644.9 110.4 L 649.1 110.0 L 653.2 109.5 L 657.3 109.1 L 661.5 108.6 L 665.6 108.2 L 669.7 107.8 L 673.9 107.5 L 678.0 107.2" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/><circle cx="678.0" cy="107.2" r="4" fill="#2563eb"/><path d="M 116.0 202.9 L 120.1 204.0 L 124.3 205.2 L 128.4 206.5 L 132.5 208.1 L 136.7 209.7 L 140.8 211.1 L 144.9 212.3 L 149.1 213.3 L 153.2 214.1 L 157.3 214.8 L 161.5 215.3 L 165.6 215.8 L 169.7 216.1 L 173.9 216.4 L 178.0 216.6 L 182.1 216.8 L 186.2 216.9 L 190.4 216.9 L 194.5 216.9 L 198.6 216.7 L 202.8 216.4 L 206.9 216.1 L 211.0 215.7 L 215.2 215.4 L 219.3 215.0 L 223.4 214.7 L 227.6 214.4 L 231.7 214.2 L 235.8 214.0 L 240.0 213.9 L 244.1 213.7 L 248.2 213.6 L 252.4 213.4 L 256.5 213.1 L 260.6 212.8 L 264.8 212.5 L 268.9 212.1 L 273.0 211.8 L 277.2 211.5 L 281.3 211.3 L 285.4 211.2 L 289.6 211.2 L 293.7 211.3 L 297.8 211.4 L 302.0 211.6 L 306.1 211.8 L 310.2 211.9 L 314.4 212.0 L 318.5 212.1 L 322.6 212.1 L 326.8 212.1 L 330.9 212.1 L 335.0 212.1 L 339.1 212.1 L 343.3 212.1 L 347.4 212.2 L 351.5 212.3 L 355.7 212.5 L 359.8 212.7 L 363.9 212.9 L 368.1 212.9 L 372.2 212.6 L 376.3 211.9 L 380.5 210.7 L 384.6 208.9 L 388.7 206.9 L 392.9 205.1 L 397.0 203.7 L 401.1 202.9 L 405.3 202.7 L 409.4 202.7 L 413.5 201.7 L 417.7 198.2 L 421.8 190.3 L 425.9 178.4 L 430.1 165.2 L 434.2 153.1 L 438.3 143.3 L 442.5 136.9 L 446.6 134.5 L 450.7 136.1 L 454.9 140.6 L 459.0 146.3 L 463.1 151.9 L 467.2 156.9 L 471.4 161.1 L 475.5 164.5 L 479.6 166.9 L 483.8 168.6 L 487.9 169.6 L 492.0 170.0 L 496.2 169.5 L 500.3 168.2 L 504.4 165.8 L 508.6 162.4 L 512.7 157.9 L 516.8 152.5 L 521.0 146.5 L 525.1 140.3 L 529.2 134.0 L 533.4 128.2 L 537.5 123.0 L 541.6 118.6 L 545.8 115.1 L 549.9 112.3 L 554.0 110.1 L 558.2 108.4 L 562.3 107.2 L 566.4 106.5 L 570.6 106.2 L 574.7 106.3 L 578.8 106.9 L 583.0 108.0 L 587.1 109.8 L 591.2 112.5 L 595.4 116.2 L 599.5 120.8 L 603.6 126.3 L 607.8 132.1 L 611.9 138.1 L 616.0 144.0 L 620.1 149.8 L 624.3 155.4 L 628.4 160.9 L 632.5 166.4 L 636.7 171.8 L 640.8 177.3 L 644.9 182.7 L 649.1 188.0 L 653.2 193.0 L 657.3 197.7 L 661.5 202.1 L 665.6 205.8 L 669.7 208.7 L 673.9 211.1 L 678.0 212.9" fill="none" stroke="#f97316" stroke-width="3" stroke-linejoin="round"/><circle cx="570.6" cy="106.2" r="4" fill="#f97316"/><path d="M 116.0 255.0 L 120.1 255.4 L 124.3 255.9 L 128.4 256.4 L 132.5 256.9 L 136.7 257.5 L 140.8 257.7 L 144.9 257.3 L 149.1 257.1 L 153.2 256.9 L 157.3 256.9 L 161.5 256.9 L 165.6 256.9 L 169.7 257.0 L 173.9 257.1 L 178.0 257.1 L 182.1 257.2 L 186.2 257.1 L 190.4 257.0 L 194.5 256.9 L 198.6 256.6 L 202.8 256.4 L 206.9 256.1 L 211.0 255.8 L 215.2 255.5 L 219.3 255.3 L 223.4 255.1 L 227.6 254.9 L 231.7 254.8 L 235.8 254.7 L 240.0 254.7 L 244.1 254.7 L 248.2 254.8 L 252.4 254.8 L 256.5 254.9 L 260.6 255.0 L 264.8 255.1 L 268.9 255.1 L 273.0 255.2 L 277.2 255.3 L 281.3 255.4 L 285.4 255.5 L 289.6 255.6 L 293.7 255.6 L 297.8 255.7 L 302.0 255.8 L 306.1 255.8 L 310.2 255.9 L 314.4 255.9 L 318.5 255.9 L 322.6 256.0 L 326.8 256.0 L 330.9 256.0 L 335.0 256.1 L 339.1 256.1 L 343.3 256.3 L 347.4 256.4 L 351.5 256.7 L 355.7 257.0 L 359.8 257.4 L 363.9 257.8 L 368.1 257.3 L 372.2 256.6 L 376.3 255.9 L 380.5 255.1 L 384.6 254.4 L 388.7 253.7 L 392.9 253.1 L 397.0 252.5 L 401.1 252.0 L 405.3 251.6 L 409.4 251.4 L 413.5 251.1 L 417.7 251.0 L 421.8 250.7 L 425.9 250.4 L 430.1 250.0 L 434.2 249.5 L 438.3 249.0 L 442.5 248.5 L 446.6 247.9 L 450.7 247.4 L 454.9 247.0 L 459.0 246.7 L 463.1 246.5 L 467.2 246.4 L 471.4 246.4 L 475.5 246.5 L 479.6 246.6 L 483.8 246.8 L 487.9 247.0 L 492.0 247.1 L 496.2 247.3 L 500.3 247.5 L 504.4 247.8 L 508.6 248.0 L 512.7 248.2 L 516.8 248.4 L 521.0 248.6 L 525.1 248.7 L 529.2 248.8 L 533.4 248.8 L 537.5 248.8 L 541.6 248.8 L 545.8 248.6 L 549.9 248.5 L 554.0 248.3 L 558.2 248.1 L 562.3 248.0 L 566.4 247.8 L 570.6 247.7 L 574.7 247.6 L 578.8 247.6 L 583.0 247.7 L 587.1 247.9 L 591.2 248.1 L 595.4 248.4 L 599.5 248.9 L 603.6 249.3 L 607.8 249.9 L 611.9 250.4 L 616.0 251.0 L 620.1 251.6 L 624.3 252.2 L 628.4 252.7 L 632.5 253.1 L 636.7 253.5 L 640.8 253.8 L 644.9 254.0 L 649.1 254.2 L 653.2 254.4 L 657.3 254.5 L 661.5 254.5 L 665.6 254.6 L 669.7 254.6 L 673.9 254.6 L 678.0 254.6" fill="none" stroke="#7c4dff" stroke-width="3" stroke-linejoin="round"/><circle cx="467.2" cy="246.4" r="4" fill="#7c4dff"/><path d="M 116.0 256.8 L 120.1 257.7 L 124.3 256.7 L 128.4 255.4 L 132.5 254.0 L 136.7 252.4 L 140.8 251.1 L 144.9 249.9 L 149.1 249.0 L 153.2 248.3 L 157.3 247.8 L 161.5 247.6 L 165.6 247.5 L 169.7 247.6 L 173.9 247.8 L 178.0 248.2 L 182.1 248.7 L 186.2 249.3 L 190.4 249.9 L 194.5 250.5 L 198.6 251.1 L 202.8 251.7 L 206.9 252.3 L 211.0 252.9 L 215.2 253.5 L 219.3 254.1 L 223.4 254.6 L 227.6 255.1 L 231.7 255.6 L 235.8 256.1 L 240.0 256.5 L 244.1 256.9 L 248.2 257.3 L 252.4 257.7 L 256.5 257.5 L 260.6 257.0 L 264.8 256.5 L 268.9 256.0 L 273.0 255.5 L 277.2 255.0 L 281.3 254.5 L 285.4 254.1 L 289.6 253.8 L 293.7 253.5 L 297.8 253.3 L 302.0 253.3 L 306.1 253.3 L 310.2 253.4 L 314.4 253.5 L 318.5 253.6 L 322.6 253.7 L 326.8 253.8 L 330.9 253.9 L 335.0 253.9 L 339.1 253.9 L 343.3 253.8 L 347.4 253.6 L 351.5 253.4 L 355.7 253.0 L 359.8 252.4 L 363.9 251.6 L 368.1 250.5 L 372.2 249.0 L 376.3 246.9 L 380.5 244.5 L 384.6 242.0 L 388.7 239.4 L 392.9 236.9 L 397.0 234.5 L 401.1 232.4 L 405.3 231.0 L 409.4 231.1 L 413.5 234.1 L 417.7 241.6 L 421.8 253.8 L 425.9 248.3 L 430.1 237.4 L 434.2 229.6 L 438.3 224.0 L 442.5 219.3 L 446.6 215.1 L 450.7 211.1 L 454.9 207.3 L 459.0 203.9 L 463.1 200.9 L 467.2 198.6 L 471.4 196.9 L 475.5 195.8 L 479.6 195.2 L 483.8 195.0 L 487.9 195.1 L 492.0 195.5 L 496.2 196.0 L 500.3 196.7 L 504.4 197.5 L 508.6 198.4 L 512.7 199.4 L 516.8 200.4 L 521.0 201.4 L 525.1 202.5 L 529.2 203.5 L 533.4 204.6 L 537.5 205.6 L 541.6 206.5 L 545.8 207.5 L 549.9 208.5 L 554.0 209.6 L 558.2 210.8 L 562.3 212.1 L 566.4 213.8 L 570.6 215.7 L 574.7 218.0 L 578.8 220.6 L 583.0 223.6 L 587.1 226.9 L 591.2 230.6 L 595.4 234.5 L 599.5 238.5 L 603.6 242.5 L 607.8 246.4 L 611.9 250.1 L 616.0 253.4 L 620.1 256.4 L 624.3 256.6 L 628.4 254.3 L 632.5 252.4 L 636.7 250.9 L 640.8 249.6 L 644.9 248.7 L 649.1 248.0 L 653.2 247.6 L 657.3 247.4 L 661.5 247.5 L 665.6 247.7 L 669.7 248.0 L 673.9 248.3 L 678.0 248.6" fill="none" stroke="#16a34a" stroke-width="3" stroke-linejoin="round"/><circle cx="483.8" cy="195.0" r="4" fill="#16a34a"/></g>
+      <circle cx="116" cy="326" r="6" fill="#2563eb"/><text x="128" y="331" fill="#344054" font-size="12">前腿膝角</text><circle cx="266" cy="326" r="6" fill="#f97316"/><text x="278" y="331" fill="#344054" font-size="12">肘角</text><circle cx="416" cy="326" r="6" fill="#7c4dff"/><text x="428" y="331" fill="#344054" font-size="12">躯干倾斜</text><circle cx="566" cy="326" r="6" fill="#16a34a"/><text x="578" y="331" fill="#344054" font-size="12">髋肩分离</text>
+    </svg></div>
+    <p>怎么看：曲线来自打击样本二三维骨架逐帧计算，重点看启动到击球点之间前膝、躯干和髋肩分离的变化。</p></article>
+        <article class="visual-card"><h4>打击速度时间曲线</h4>
+    <div class="line-chart-scroll"><svg class="line-chart-svg" viewBox="0 0 720 360" role="img" aria-label="打击速度时间曲线">
+      <defs><clipPath id="clip-1255785710558038435"><rect x="116" y="88" width="562" height="188"/></clipPath></defs>
+      <rect width="720" height="360" rx="18" fill="#ffffff"/>
+      <text x="24" y="24" fill="#101828" font-size="14" font-weight="700">打击速度时间曲线</text>
+      <line x1="116" y1="276" x2="678" y2="276" stroke="#667085"/>
+      <line x1="116" y1="88" x2="116" y2="276" stroke="#667085"/>
+      <g stroke="#e4e7ec" stroke-width="1">
+        <line x1="116" y1="182.0" x2="678" y2="182.0"/>
+        <line x1="116" y1="88" x2="678" y2="88"/>
+      </g>
+      <text x="116" y="300" fill="#667085" font-size="12">时间（秒）</text>
+      <text x="24" y="72" fill="#667085" font-size="12">公里/小时</text>
+      <rect x="18" y="264" width="84" height="20" rx="8" fill="#ffffff"/>
+      <rect x="18" y="76" width="84" height="20" rx="8" fill="#ffffff"/>
+      <text x="102" y="280" text-anchor="end" fill="#98a2b3" font-size="11">-1.10 公里/小时</text>
+      <text x="102" y="92" text-anchor="end" fill="#98a2b3" font-size="11">11.0 公里/小时</text>
+      <line x1="365.7" y1="88" x2="365.7" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="313.7" y="29" width="104.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M365.7 49 L365.7 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="365.7" y="44" text-anchor="middle" fill="#101828" font-size="11">动作阶段开始</text><line x1="419.9" y1="88" x2="419.9" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="381.9" y="53" width="76.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M419.9 73 L419.9 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="419.9" y="68" text-anchor="middle" fill="#101828" font-size="11">关键事件</text><line x1="474.0" y1="88" x2="474.0" y2="276" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><rect x="422.0" y="29" width="104.0" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/><path d="M474.0 49 L474.0 84" stroke="#98a2b3" stroke-width="1" fill="none"/><text x="474.0" y="44" text-anchor="middle" fill="#101828" font-size="11">动作阶段结束</text>
+      <g clip-path="url(#clip-1255785710558038435)"><path d="M 116.0 240.0 L 120.2 237.3 L 124.3 234.8 L 128.5 232.5 L 132.7 230.5 L 136.8 233.5 L 141.0 236.5 L 145.1 239.7 L 149.3 243.0 L 153.5 246.4 L 157.6 249.8 L 161.8 253.1 L 166.0 255.8 L 170.1 255.2 L 174.3 252.5 L 178.4 249.7 L 182.6 247.1 L 186.8 245.0 L 190.9 243.6 L 195.1 242.8 L 199.3 242.8 L 203.4 243.5 L 207.6 245.0 L 211.7 247.1 L 215.9 250.1 L 220.1 253.7 L 224.2 257.8 L 228.4 255.4 L 232.6 251.0 L 236.7 247.0 L 240.9 243.5 L 245.1 240.8 L 249.2 238.9 L 253.4 238.2 L 257.5 238.5 L 261.7 239.9 L 265.9 242.2 L 270.0 245.3 L 274.2 248.8 L 278.4 252.5 L 282.5 256.1 L 286.7 256.9 L 290.8 254.2 L 295.0 251.4 L 299.2 248.9 L 303.3 246.8 L 307.5 245.1 L 311.7 243.7 L 315.8 242.6 L 320.0 241.9 L 324.1 241.6 L 328.3 241.7 L 332.5 242.5 L 336.6 243.9 L 340.8 245.5 L 345.0 247.2 L 349.1 248.7 L 353.3 249.7 L 357.5 250.0 L 361.6 249.5 L 365.8 248.8 L 369.9 248.2 L 374.1 247.9 L 378.3 247.4 L 382.4 246.1 L 386.6 244.0 L 390.8 241.7 L 394.9 239.6 L 399.1 238.0 L 403.2 237.0 L 407.4 236.6 L 411.6 236.9 L 415.7 237.8 L 419.9 238.8 L 424.1 239.4 L 428.2 239.6 L 432.4 239.3 L 436.5 238.9 L 440.7 238.5 L 444.9 238.0 L 449.0 237.8 L 453.2 238.1 L 457.4 239.5 L 461.5 241.7 L 465.7 244.4 L 469.9 247.5 L 474.0 250.8 L 478.2 253.7 L 482.3 255.7 L 486.5 255.4 L 490.7 253.8 L 494.8 252.4 L 499.0 251.2 L 503.2 250.1 L 507.3 249.3 L 511.5 248.7 L 515.6 248.2 L 519.8 247.7 L 524.0 247.4 L 528.1 247.1 L 532.3 247.1 L 536.5 247.5 L 540.6 248.1 L 544.8 249.0 L 548.9 250.2 L 553.1 251.7 L 557.3 253.3 L 561.4 255.0 L 565.6 256.1 L 569.8 255.5 L 573.9 253.8 L 578.1 251.9 L 582.3 250.3 L 586.4 249.2 L 590.6 248.6 L 594.7 248.5 L 598.9 249.1 L 603.1 250.1 L 607.2 251.3 L 611.4 252.5 L 615.6 253.6 L 619.7 254.4 L 623.9 254.8 L 628.0 255.1 L 632.2 255.3 L 636.4 255.4 L 640.5 255.7 L 644.7 255.9 L 648.9 255.9 L 653.0 255.9 L 657.2 255.7 L 661.3 255.5 L 665.5 255.8 L 669.7 256.2 L 673.8 256.4 L 678.0 256.7" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/><circle cx="132.7" cy="230.5" r="4" fill="#2563eb"/><path d="M 116.0 242.3 L 120.2 239.8 L 124.3 237.6 L 128.5 235.3 L 132.7 233.4 L 136.8 235.7 L 141.0 238.2 L 145.1 240.7 L 149.3 243.5 L 153.5 246.6 L 157.6 249.8 L 161.8 252.9 L 166.0 255.5 L 170.1 254.7 L 174.3 251.7 L 178.4 248.3 L 182.6 245.2 L 186.8 242.6 L 190.9 240.8 L 195.1 239.7 L 199.3 239.5 L 203.4 240.3 L 207.6 241.9 L 211.7 244.4 L 215.9 247.7 L 220.1 251.8 L 224.2 256.0 L 228.4 254.7 L 232.6 250.1 L 236.7 245.6 L 240.9 241.8 L 245.1 238.8 L 249.2 236.8 L 253.4 235.9 L 257.5 236.3 L 261.7 237.8 L 265.9 240.4 L 270.0 243.8 L 274.2 247.6 L 278.4 251.5 L 282.5 255.3 L 286.7 257.2 L 290.8 254.7 L 295.0 251.7 L 299.2 249.0 L 303.3 246.7 L 307.5 244.8 L 311.7 243.2 L 315.8 242.0 L 320.0 241.2 L 324.1 240.9 L 328.3 241.2 L 332.5 242.4 L 336.6 244.4 L 340.8 247.2 L 345.0 250.2 L 349.1 252.8 L 353.3 253.6 L 357.5 251.8 L 361.6 249.1 L 365.8 246.2 L 369.9 243.9 L 374.1 242.7 L 378.3 242.1 L 382.4 241.7 L 386.6 240.9 L 390.8 239.7 L 394.9 238.4 L 399.1 237.4 L 403.2 236.8 L 407.4 236.6 L 411.6 237.1 L 415.7 238.4 L 419.9 240.4 L 424.1 243.0 L 428.2 245.6 L 432.4 247.6 L 436.5 248.2 L 440.7 247.3 L 444.9 245.2 L 449.0 242.9 L 453.2 241.1 L 457.4 240.5 L 461.5 241.3 L 465.7 243.1 L 469.9 245.9 L 474.0 249.2 L 478.2 252.4 L 482.3 254.6 L 486.5 254.6 L 490.7 253.1 L 494.8 251.6 L 499.0 250.3 L 503.2 249.0 L 507.3 248.1 L 511.5 247.5 L 515.6 247.0 L 519.8 246.5 L 524.0 246.2 L 528.1 245.9 L 532.3 246.0 L 536.5 246.7 L 540.6 247.8 L 544.8 249.3 L 548.9 251.3 L 553.1 253.3 L 557.3 255.0 L 561.4 254.7 L 565.6 252.1 L 569.8 249.0 L 573.9 245.9 L 578.1 243.1 L 582.3 240.9 L 586.4 239.7 L 590.6 239.3 L 594.7 239.8 L 598.9 241.2 L 603.1 243.5 L 607.2 246.0 L 611.4 248.3 L 615.6 250.2 L 619.7 251.2 L 623.9 251.4 L 628.0 251.4 L 632.2 251.4 L 636.4 251.7 L 640.5 252.2 L 644.7 252.7 L 648.9 253.2 L 653.0 253.7 L 657.2 253.9 L 661.3 254.1 L 665.5 254.8 L 669.7 255.3 L 673.8 255.8 L 678.0 256.3" fill="none" stroke="#7c4dff" stroke-width="3" stroke-linejoin="round"/><circle cx="132.7" cy="233.4" r="4" fill="#7c4dff"/><path d="M 116.0 244.7 L 120.2 242.8 L 124.3 241.2 L 128.5 240.1 L 132.7 239.2 L 136.8 242.1 L 141.0 244.7 L 145.1 246.8 L 149.3 248.5 L 153.5 249.7 L 157.6 250.6 L 161.8 251.1 L 166.0 251.3 L 170.1 251.2 L 174.3 250.9 L 178.4 250.4 L 182.6 249.7 L 186.8 249.0 L 190.9 248.7 L 195.1 248.6 L 199.3 248.9 L 203.4 249.6 L 207.6 250.6 L 211.7 251.8 L 215.9 252.5 L 220.1 251.8 L 224.2 249.2 L 228.4 245.6 L 232.6 241.8 L 236.7 238.3 L 240.9 235.5 L 245.1 233.4 L 249.2 232.0 L 253.4 231.6 L 257.5 232.1 L 261.7 233.6 L 265.9 236.0 L 270.0 239.1 L 274.2 242.7 L 278.4 246.4 L 282.5 250.0 L 286.7 252.9 L 290.8 254.2 L 295.0 252.9 L 299.2 250.4 L 303.3 247.9 L 307.5 245.8 L 311.7 243.9 L 315.8 242.7 L 320.0 242.1 L 324.1 242.3 L 328.3 243.6 L 332.5 246.0 L 336.6 249.4 L 340.8 252.3 L 345.0 251.4 L 349.1 246.3 L 353.3 239.2 L 357.5 231.7 L 361.6 224.0 L 365.8 216.1 L 369.9 208.6 L 374.1 202.5 L 378.3 198.9 L 382.4 198.1 L 386.6 198.0 L 390.8 195.4 L 394.9 188.1 L 399.1 175.2 L 403.2 157.6 L 407.4 138.9 L 411.6 123.2 L 415.7 112.0 L 419.9 106.2 L 424.1 106.5 L 428.2 110.4 L 432.4 115.4 L 436.5 120.2 L 440.7 122.7 L 444.9 123.4 L 449.0 123.6 L 453.2 125.7 L 457.4 131.9 L 461.5 142.0 L 465.7 154.0 L 469.9 167.5 L 474.0 183.1 L 478.2 200.7 L 482.3 218.8 L 486.5 236.4 L 490.7 247.6 L 494.8 238.2 L 499.0 223.3 L 503.2 208.5 L 507.3 195.6 L 511.5 185.3 L 515.6 178.3 L 519.8 173.2 L 524.0 169.7 L 528.1 167.8 L 532.3 167.3 L 536.5 167.9 L 540.6 169.0 L 544.8 170.0 L 548.9 170.1 L 553.1 169.3 L 557.3 167.6 L 561.4 165.6 L 565.6 163.4 L 569.8 160.8 L 573.9 157.6 L 578.1 154.0 L 582.3 149.2 L 586.4 143.9 L 590.6 138.3 L 594.7 133.4 L 598.9 129.9 L 603.1 128.9 L 607.2 130.9 L 611.4 136.1 L 615.6 143.7 L 619.7 153.3 L 623.9 164.0 L 628.0 175.0 L 632.2 185.1 L 636.4 192.8 L 640.5 199.0 L 644.7 203.6 L 648.9 207.0 L 653.0 209.4 L 657.2 210.9 L 661.3 211.4 L 665.5 217.0 L 669.7 222.7 L 673.8 226.8 L 678.0 231.0" fill="none" stroke="#f97316" stroke-width="3" stroke-linejoin="round"/><circle cx="419.9" cy="106.2" r="4" fill="#f97316"/></g>
+      <circle cx="116" cy="326" r="6" fill="#2563eb"/><text x="128" y="331" fill="#344054" font-size="12">髋部中心速度</text><circle cx="266" cy="326" r="6" fill="#7c4dff"/><text x="278" y="331" fill="#344054" font-size="12">躯干中心速度</text><circle cx="416" cy="326" r="6" fill="#f97316"/><text x="428" y="331" fill="#344054" font-size="12">手部末端速度</text>
+    </svg></div>
+    <p>怎么看：速度由髋部、躯干和出手侧手部轨迹估算；真实球棒杆身速度仍需要球棒检测或光学标记。</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>事件点表</h4><div class="table-scroll"><table><thead><tr><th>样本</th><th>动作</th><th>指标</th><th>数值</th><th>状态</th><th>来源</th></tr></thead><tbody><tr><td>投球样本十</td><td>投球</td><td>动作阶段开始</td><td>0.73 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>关键事件</td><td>0.80 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>动作阶段结束</td><td>1.10 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>动作阶段开始</td><td>0.17 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>关键事件</td><td>0.33 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>动作阶段结束</td><td>0.70 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>打击样本二</td><td>打击</td><td>动作阶段开始</td><td>2.03 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>打击样本二</td><td>打击</td><td>关键事件</td><td>2.47 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>打击样本二</td><td>打击</td><td>动作阶段结束</td><td>2.90 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>打击样本六</td><td>打击</td><td>动作阶段开始</td><td>4.20 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>打击样本六</td><td>打击</td><td>关键事件</td><td>4.47 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>打击样本六</td><td>打击</td><td>动作阶段结束</td><td>5.50 秒</td><td>需复核</td><td>三维姿态</td></tr></tbody></table></div></article>
+        <article class="visual-card"><h4>三维骨架来源表</h4><div class="table-scroll"><table><thead><tr><th>样本</th><th>可用帧</th><th>关节数</th><th>时长</th><th>平均质量</th><th>来源</th></tr></thead><tbody><tr><td>投球样本九</td><td>53</td><td>24</td><td>1.73 秒</td><td>0.94</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>76</td><td>24</td><td>2.50 秒</td><td>0.81</td><td>三维姿态</td></tr><tr><td>打击样本二</td><td>137</td><td>24</td><td>4.53 秒</td><td>0.89</td><td>三维姿态</td></tr><tr><td>打击样本六</td><td>220</td><td>24</td><td>7.30 秒</td><td>0.92</td><td>三维姿态</td></tr></tbody></table></div><p>表内统计直接来自三维骨架序列，用于确认本报告已接入真实姿态数据。</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>Vicon 2026 C3D来源表</h4><div class="table-scroll"><table><thead><tr><th>对象</th><th>动作</th><th>帧数</th><th>时长</th><th>有效点比例</th><th>C3D来源</th></tr></thead><tbody><tr><td>bryan</td><td>打击</td><td>2136</td><td>21.4 秒</td><td>97.9%</td><td>vicon_2026/bryan/001 Cal 04 Bat 05.c3d</td></tr><tr><td>bryan</td><td>投球</td><td>662</td><td>6.62 秒</td><td>99.0%</td><td>vicon_2026/bryan/001 Cal 04 Pitch 05.c3d</td></tr><tr><td>green</td><td>打击</td><td>2089</td><td>20.9 秒</td><td>100.0%</td><td>vicon_2026/green/006 Bat 04.c3d</td></tr><tr><td>green</td><td>投球</td><td>2815</td><td>28.1 秒</td><td>88.7%</td><td>vicon_2026/green/006 Pitch 09.c3d</td></tr></tbody></table></div><p>表内统计由 vicon_2026 文件夹中的 C3D 导出直接解析得到，忽略 macOS 资源分叉文件。</p></article>
+        <article class="visual-card"><h4>Vicon三维点重建图</h4>
+    <svg class="pose-svg" viewBox="0 0 640 320" role="img" aria-label="Green投球C3D点重建">
+      <rect width="640" height="320" rx="18" fill="#ffffff"/>
+      <text x="24" y="28" fill="#101828" font-size="14" font-weight="700">Green投球C3D点重建</text>
+      <text x="24" y="50" fill="#667085" font-size="12">由 C3D marker 中点重建，蓝色为身体点，橙色为球棒点。</text>
+      <g><line x1="117.5" y1="46.5" x2="98.8" y2="44.0" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="117.5" y1="46.5" x2="135.7" y2="88.7" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="98.8" y1="44.0" x2="135.7" y2="88.7" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="135.7" y1="88.7" x2="134.0" y2="119.8" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="145.3" y1="85.4" x2="99.9" y2="83.1" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="145.3" y1="85.4" x2="148.1" y2="93.8" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="148.1" y1="93.8" x2="138.3" y2="82.8" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="148.1" y1="93.8" x2="124.7" y2="87.3" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="99.9" y1="83.1" x2="90.7" y2="112.9" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="90.7" y1="112.9" x2="90.2" y2="159.7" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="90.7" y1="112.9" x2="97.4" y2="157.1" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="116.4" y1="141.9" x2="82.0" y2="140.5" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="116.4" y1="141.9" x2="137.2" y2="222.1" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="137.2" y1="222.1" x2="152.6" y2="273.3" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="82.0" y1="140.5" x2="89.2" y2="223.3" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="89.2" y1="223.3" x2="91.8" y2="274.0" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><circle cx="117.5" cy="46.5" r="4" fill="#101828"/><circle cx="98.8" cy="44.0" r="4" fill="#101828"/><circle cx="135.7" cy="88.7" r="4" fill="#101828"/><circle cx="134.0" cy="119.8" r="4" fill="#101828"/><circle cx="145.3" cy="85.4" r="4" fill="#101828"/><circle cx="99.9" cy="83.1" r="4" fill="#101828"/><circle cx="148.1" cy="93.8" r="4" fill="#101828"/><circle cx="90.7" cy="112.9" r="4" fill="#101828"/><circle cx="138.3" cy="82.8" r="4" fill="#101828"/><circle cx="124.7" cy="87.3" r="4" fill="#101828"/><circle cx="90.2" cy="159.7" r="4" fill="#101828"/><circle cx="97.4" cy="157.1" r="4" fill="#101828"/><circle cx="116.4" cy="141.9" r="4" fill="#101828"/><circle cx="82.0" cy="140.5" r="4" fill="#101828"/><circle cx="137.2" cy="222.1" r="4" fill="#101828"/><circle cx="89.2" cy="223.3" r="4" fill="#101828"/><circle cx="152.6" cy="273.3" r="4" fill="#101828"/><circle cx="91.8" cy="274.0" r="4" fill="#101828"/></g>
+    </svg>
+    <p>怎么看：该图不是截图，而是从 C3D marker 的三维点坐标投影重建，用于检查光学数据的身体点结构。</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>数据质量图</h4><div class="line-chart-scroll"><svg class="line-chart-svg" viewBox="0 0 720 280" role="img" aria-label="三维姿态数据质量图"><rect width="720" height="280" rx="18" fill="#ffffff"/><text x="24" y="26" fill="#101828" font-size="14" font-weight="700">三维姿态数据质量图</text><text x="24" y="49" fill="#101828" font-size="13" font-weight="700">投球样本九</text><text x="24" y="68" fill="#667085" font-size="11">53帧，关节完整率约100.0%</text><line x1="156" y1="44" x2="612" y2="44" stroke="#e8eef6" stroke-width="16" stroke-linecap="round"/><line x1="156" y1="44" x2="585.9" y2="44" stroke="#2563eb" stroke-width="16" stroke-linecap="round"/><text x="622" y="49" fill="#344054" font-size="12">94.3%</text><text x="24" y="99" fill="#101828" font-size="13" font-weight="700">投球样本十</text><text x="24" y="118" fill="#667085" font-size="11">76帧，关节完整率约100.0%</text><line x1="156" y1="94" x2="612" y2="94" stroke="#e8eef6" stroke-width="16" stroke-linecap="round"/><line x1="156" y1="94" x2="523.6" y2="94" stroke="#60a5fa" stroke-width="16" stroke-linecap="round"/><text x="622" y="99" fill="#344054" font-size="12">80.6%</text><text x="24" y="149" fill="#101828" font-size="13" font-weight="700">打击样本二</text><text x="24" y="168" fill="#667085" font-size="11">137帧，关节完整率约100.0%</text><line x1="156" y1="144" x2="612" y2="144" stroke="#e8eef6" stroke-width="16" stroke-linecap="round"/><line x1="156" y1="144" x2="561.2" y2="144" stroke="#f97316" stroke-width="16" stroke-linecap="round"/><text x="622" y="149" fill="#344054" font-size="12">88.9%</text><text x="24" y="199" fill="#101828" font-size="13" font-weight="700">打击样本六</text><text x="24" y="218" fill="#667085" font-size="11">220帧，关节完整率约100.0%</text><line x1="156" y1="194" x2="612" y2="194" stroke="#e8eef6" stroke-width="16" stroke-linecap="round"/><line x1="156" y1="194" x2="575.5" y2="194" stroke="#7c4dff" stroke-width="16" stroke-linecap="round"/><text x="622" y="199" fill="#344054" font-size="12">92.0%</text></svg></div><p>怎么看：条形长度综合输入质量分和关节完整率；研究者应优先检查低质量样本的峰值速度和事件点。</p></article>
+        <article class="visual-card"><h4>Vicon球棒点重建图</h4>
+    <svg class="pose-svg" viewBox="0 0 640 320" role="img" aria-label="Green打击C3D点重建">
+      <rect width="640" height="320" rx="18" fill="#ffffff"/>
+      <text x="24" y="28" fill="#101828" font-size="14" font-weight="700">Green打击C3D点重建</text>
+      <text x="24" y="50" fill="#667085" font-size="12">由 C3D marker 中点重建，蓝色为身体点，橙色为球棒点。</text>
+      <g><line x1="149.7" y1="52.1" x2="158.7" y2="44.0" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="149.7" y1="52.1" x2="148.4" y2="92.3" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="158.7" y1="44.0" x2="148.4" y2="92.3" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="148.4" y1="92.3" x2="142.0" y2="124.9" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="173.9" y1="91.4" x2="157.3" y2="90.1" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="173.9" y1="91.4" x2="186.1" y2="142.3" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="186.1" y1="142.3" x2="200.1" y2="151.1" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="186.1" y1="142.3" x2="193.3" y2="161.3" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="157.3" y1="90.1" x2="190.1" y2="126.1" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="190.1" y1="126.1" x2="211.6" y2="152.4" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="190.1" y1="126.1" x2="199.3" y2="159.7" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="180.4" y1="148.9" x2="149.7" y2="142.5" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="180.4" y1="148.9" x2="201.8" y2="217.2" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="201.8" y1="217.2" x2="217.2" y2="274.0" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="149.7" y1="142.5" x2="113.9" y2="225.7" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="113.9" y1="225.7" x2="82.0" y2="265.3" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/><line x1="302.3" y1="241.7" x2="246.3" y2="197.7" stroke="#f97316" stroke-width="6" stroke-linecap="round"/><circle cx="149.7" cy="52.1" r="4" fill="#101828"/><circle cx="158.7" cy="44.0" r="4" fill="#101828"/><circle cx="148.4" cy="92.3" r="4" fill="#101828"/><circle cx="142.0" cy="124.9" r="4" fill="#101828"/><circle cx="173.9" cy="91.4" r="4" fill="#101828"/><circle cx="157.3" cy="90.1" r="4" fill="#101828"/><circle cx="186.1" cy="142.3" r="4" fill="#101828"/><circle cx="190.1" cy="126.1" r="4" fill="#101828"/><circle cx="200.1" cy="151.1" r="4" fill="#101828"/><circle cx="193.3" cy="161.3" r="4" fill="#101828"/><circle cx="211.6" cy="152.4" r="4" fill="#101828"/><circle cx="199.3" cy="159.7" r="4" fill="#101828"/><circle cx="180.4" cy="148.9" r="4" fill="#101828"/><circle cx="149.7" cy="142.5" r="4" fill="#101828"/><circle cx="201.8" cy="217.2" r="4" fill="#101828"/><circle cx="113.9" cy="225.7" r="4" fill="#101828"/><circle cx="217.2" cy="274.0" r="4" fill="#101828"/><circle cx="82.0" cy="265.3" r="4" fill="#101828"/><circle cx="302.3" cy="241.7" r="4" fill="#f97316"/><circle cx="246.3" cy="197.7" r="4" fill="#f97316"/></g>
+    </svg>
+    <p>怎么看：橙色连线来自 Bat1/Bat5 marker，可用于解释光学棒速；身体点用于确认击球动作的全身姿态背景。</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>光学动作捕捉校准说明</h4><div class="bars">
+        <div class="bar-row">
+          <span>Bryan球棒峰值速度</span>
+          <div class="track"><i style="width:100.0%;background:#16a34a"></i></div>
+          <b>67.0 公里/小时</b>
+        </div>
+        
+
+        <div class="bar-row">
+          <span>Green球棒峰值速度</span>
+          <div class="track"><i style="width:98.6%;background:#60a5fa"></i></div>
+          <b>66.1 公里/小时</b>
+        </div>
+        
+
+        <div class="bar-row">
+          <span>Bryan挥棒高速度窗口</span>
+          <div class="track"><i style="width:4.0%;background:#f97316"></i></div>
+          <b>0.42 秒</b>
+        </div>
+        
+
+        <div class="bar-row">
+          <span>Green挥棒高速度窗口</span>
+          <div class="track"><i style="width:4.0%;background:#60a5fa"></i></div>
+          <b>0.42 秒</b>
+        </div>
+        </div><p>光学动作捕捉来自 vicon_2026 C3D 导出，用于校准和解释视频估算，不直接替代当前视频指标。</p></article>
+        <article class="visual-card"><h4>限制卡片组</h4><div class="grid-2"><article class="card review"><div class="card-head"><h4>真实球速</h4><span class="badge review">需复核</span></div><p>当前速度是视频追踪换算值，不等同雷达枪正式球速。</p></article><article class="card review"><div class="card-head"><h4>换算假设</h4><span class="badge review">需复核</span></div><p>使用源视频分辨率、帧率、画面人体高度，并假设青少年身高一米五五。</p></article><article class="card review"><div class="card-head"><h4>身体重心</h4><span class="badge review">需复核</span></div><p>当前使用髋部和脊柱中心近似，不是力板重心。</p></article><article class="card review"><div class="card-head"><h4>光学与视频对齐</h4><span class="badge review">需复核</span></div><p>不同来源尚未逐帧同步，只能做解释性参考。</p></article></div></article>
+      </div>
+      <article class="visual-card" style="margin-top:18px"><h4>指标来源表</h4><div class="table-scroll"><table><thead><tr><th>样本</th><th>动作</th><th>指标</th><th>数值</th><th>状态</th><th>来源</th></tr></thead><tbody><tr><td>投球样本十</td><td>投球</td><td>动作阶段开始</td><td>0.73 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>关键事件</td><td>0.80 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>动作阶段结束</td><td>1.10 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>髋肩分离</td><td>8.54度</td><td>良好</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>前腿膝角</td><td>126.9度</td><td>良好</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>躯干倾斜</td><td>18.9度</td><td>良好</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>重心转移</td><td>暂无</td><td>不可用</td><td>暂无来源</td></tr><tr><td>投球样本十</td><td>投球</td><td>头部稳定</td><td>92.9%</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>发力侧</td><td>暂无</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>前侧脚</td><td>暂无</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>肘部弯曲</td><td>68.1度</td><td>良好</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>上臂外展</td><td>143.6度</td><td>良好</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>跨步角</td><td>29.4度</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>跨步长度</td><td>0.64 身高比</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>前脚方向</td><td>30.9度</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>手腕翻转</td><td>13.1度</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>手臂速度</td><td>需标定</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>手部速度</td><td>需标定</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本十</td><td>投球</td><td>球速估算</td><td>约15.1 公里/小时</td><td>需复核</td><td>二维球追踪</td></tr><tr><td>投球样本九</td><td>投球</td><td>动作阶段开始</td><td>0.17 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>关键事件</td><td>0.33 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>动作阶段结束</td><td>0.70 秒</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>髋肩分离</td><td>7.24度</td><td>良好</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>前腿膝角</td><td>139.4度</td><td>良好</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>躯干倾斜</td><td>13.4度</td><td>良好</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>重心转移</td><td>暂无</td><td>不可用</td><td>暂无来源</td></tr><tr><td>投球样本九</td><td>投球</td><td>头部稳定</td><td>73.2%</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>发力侧</td><td>暂无</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>前侧脚</td><td>暂无</td><td>需复核</td><td>三维姿态</td></tr><tr><td>投球样本九</td><td>投球</td><td>肘部弯曲</td><td>92.0度</td><td>良好</td><td>三维姿态</td></tr></tbody></table></div></article>
+    </section>
+  </main>
+  <footer>三维视频动作分析报告，仅用于训练参考。缺少数据的指标已保留占位和限制说明。</footer>
+</body>
+</html>

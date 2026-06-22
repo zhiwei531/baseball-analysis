@@ -52,6 +52,88 @@ scripts/              thin command-line wrappers
 tests/                contract and utility tests
 ```
 
+## Reusable Pipeline Playbook
+
+Before creating another script, check
+[docs/pipeline_playbook.md](docs/pipeline_playbook.md). Most repeated work is
+already covered by `src/baseball_pose/cli.py` plus an experiment config. For
+future agent sessions, [AGENTS.md](AGENTS.md) records the same rule and the
+current high-frequency pipeline map.
+
+The current project focus is RTMPose 2D plus GVHMR 3D:
+
+```text
+RTMPose: run-image-proposal-roi
+  -> complete-poses
+  -> smooth-poses
+  -> extract-features
+
+GVHMR: build/export external 3D
+  -> lift-pose-3d
+  -> smooth-pose-3d
+  -> render-overlays-3d
+```
+
+Use `configs/experiments/rtmpose_benchmark_baseball_1.yaml` for the 2D backbone
+and `configs/experiments/gvhmr_benchmark_baseball_1.yaml` for the 3D handoff.
+YOLO bat/ball tracking is documented as a downstream benchmark/report layer.
+The older local four-video and Suzhou 2D flows are still documented in the
+playbook, but they are no longer the active center of the project.
+
+## Benchmark HTML Report
+
+The current Chinese benchmark report is generated from local benchmark CSVs,
+GVHMR/RTMPose 3D pose CSVs, SlyMask-style metrics, and the 2026 Vicon C3D
+exports in `../vicon_2026`.
+
+Entry points:
+
+```bash
+.venv312/bin/python scripts/build_vicon_2026_metrics.py
+python3 scripts/build_benchmark_report_html.py
+```
+
+Inputs:
+
+```text
+reports/slymask_benchmark_metrics.csv
+output/data/benchmark_pitch_vertical_09_motion_metrics_full.csv
+output/data/benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv
+data_full/benchmark_rtmpose_test/processed/poses3d/*/image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv
+data_full/coach_pose3d/gvhmr/pitch_horizontal_coach.csv
+../vicon_2026/*/*.c3d
+```
+
+Generated report artifacts:
+
+```text
+reports/vicon_2026_metrics.csv
+reports/vicon_2026_point_summary.csv
+report.html
+```
+
+`build_vicon_2026_metrics.py` includes a lightweight C3D reader for the local
+Vicon exports. It ignores macOS `._*.c3d` resource-fork files, extracts marker
+labels, frame rate, 3D marker points, bat markers, and full-body model points
+when present, then writes report-ready optical reference metrics. Some report
+figures reconstruct 3D body/bat structure directly from those C3D points.
+
+Report design rules live in [DESIGN.md](DESIGN.md). Keep the final HTML Chinese,
+use compact graph x-axes, avoid text/curve overlap, and convert user-facing
+speed values into common units such as kilometers per hour.
+
+Maintenance rule: when a conversation changes source code, make a focused git
+commit for those code changes before finishing the turn. Stage only files that
+belong to the current request, and do not mix unrelated dirty outputs into the
+commit. See [AGENTS.md](AGENTS.md) for the working rule future agents should
+follow.
+
+For the Suzhou batch, still prefer the existing wrapper:
+
+```bash
+scripts/run_suzhou_full_2d.sh
+```
+
 ## Setup
 
 ```bash

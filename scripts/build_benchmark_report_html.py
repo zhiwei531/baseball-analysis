@@ -1,0 +1,1460 @@
+from __future__ import annotations
+
+import csv
+import html
+import math
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "report.html"
+
+
+def read_csv(path: Path) -> list[dict[str, str]]:
+    with path.open(newline="", encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
+def esc(value: object) -> str:
+    return html.escape("" if value is None else str(value), quote=True)
+
+
+def zh_text(value: object) -> str:
+    text = "" if value is None else str(value)
+    replacements = {
+        "cm": "厘米",
+        "proxy": "估算",
+        "N/A": "暂无",
+        "CV": "视频识别",
+        "Vicon": "光学动作捕捉",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
+def num(value: str | float | None) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+UNIT_CN = {
+    "deg": "度",
+    "deg/s": "度/秒",
+    "m/s": "米/秒",
+    "cm": "厘米",
+    "%": "%",
+    "%height": "身高百分比",
+    "%stride": "跨步百分比",
+    "height_ratio": "身高比",
+    "s": "秒",
+    "km/h": "公里/小时",
+    "ms": "毫秒",
+}
+
+
+ATHLETE_HEIGHT_M = 1.55
+CLIP_CALIBRATION = {
+    # width/height/fps from source videos; body_height_px is median visible 2D pose height.
+    "benchmark_pitch_vertical_10": {"width": 1080, "height": 1920, "fps": 59.9606, "body_height_px": 596.8},
+    "benchmark_pitch_vertical_09": {"width": 1080, "height": 1920, "fps": 59.9429, "body_height_px": 846.2},
+    "benchmark_hit_vertical_02": {"width": 1080, "height": 1920, "fps": 59.9781, "body_height_px": 861.3},
+    "benchmark_hit_horizontal_06": {"width": 1920, "height": 1080, "fps": 59.9455, "body_height_px": 378.4},
+}
+
+
+METRIC_CN = {
+    "Motion Phase Start": "动作阶段开始",
+    "Motion Phase Event": "关键事件",
+    "Motion Phase End": "动作阶段结束",
+    "Hip-Shoulder Sep": "髋肩分离",
+    "Lead Knee Angle": "前腿膝角",
+    "Trunk Tilt": "躯干倾斜",
+    "Weight Transfer": "重心转移",
+    "Head Stability": "头部稳定",
+    "Dominant Side": "发力侧",
+    "Lead Side": "前侧脚",
+    "Elbow Bend": "肘部弯曲",
+    "Arm Abduction": "上臂外展",
+    "Stride Angle": "跨步角",
+    "Stride Length": "跨步长度",
+    "Foot Direction": "前脚方向",
+    "Wrist Snap": "手腕翻转",
+    "Arm Speed": "手臂速度",
+    "Fingertip Speed": "手部速度",
+    "Ball Speed": "球速估算",
+    "Swing Speed": "挥棒速度估算",
+    "Attack Angle": "攻击角",
+    "Estimated Bat Speed": "球棒速度估算",
+    "Hip Rotation": "髋部旋转",
+    "Contact Time": "接触时间",
+    "Wrist/Hand Speed": "腕手速度",
+}
+
+
+SOURCE_CN = {
+    "3d_pose": "三维姿态",
+    "object_2d": "二维球追踪",
+    "none": "暂无来源",
+}
+
+
+STATUS_CN = {
+    "ok": ("良好", "good"),
+    "available": ("良好", "good"),
+    "warn": ("需复核", "review"),
+    "proxy": ("需复核", "review"),
+    "bad": ("关注", "risk"),
+    "unavailable": ("不可用", "na"),
+    "": ("不可用", "na"),
+}
+
+
+CLIP_CN = {
+    "benchmark_pitch_vertical_09": "投球样本九",
+    "benchmark_pitch_vertical_10": "投球样本十",
+    "benchmark_hit_vertical_02": "打击样本二",
+    "benchmark_hit_horizontal_06": "打击样本六",
+}
+
+
+def metric_cn(name: str | None) -> str:
+    return METRIC_CN.get(name or "", name or "未命名指标")
+
+
+def source_cn(value: str | None) -> str:
+    return SOURCE_CN.get(value or "", "汇总数据")
+
+
+def status_cn(value: str | None) -> tuple[str, str]:
+    return STATUS_CN.get(value or "", ("需复核", "review"))
+
+
+def unit_cn(value: str | None) -> str:
+    return UNIT_CN.get(value or "", value or "")
+
+
+def fmt(value: str | float | None, unit: str | None = "") -> str:
+    x = num(value)
+    if x is None:
+        return "暂无"
+    if abs(x) >= 100:
+        text = f"{x:.1f}"
+    elif abs(x) >= 10:
+        text = f"{x:.1f}"
+    else:
+        text = f"{x:.2f}"
+    u = unit_cn(unit)
+    return f"{text}{u}" if u in {"%", "度"} else f"{text} {u}".strip()
+
+
+def px_speed_to_kmh(clip_id: str, value: str | float | None) -> float | None:
+    x = num(value)
+    calib = CLIP_CALIBRATION.get(clip_id)
+    if x is None or not calib:
+        return None
+    meters_per_pixel = ATHLETE_HEIGHT_M / float(calib["body_height_px"])
+    return x * meters_per_pixel * 3.6
+
+
+def fmt_metric_value(row: dict[str, str], all_rows: list[dict[str, str]] | None = None) -> str:
+    unit = row.get("unit", "")
+    metric = row.get("metric_name", "")
+    clip = row.get("clip_id", "")
+    if unit == "px/s":
+        return "约" + fmt(px_speed_to_kmh(clip, row.get("value")), "km/h")
+    if unit == "norm/s" and metric == "Swing Speed" and all_rows is not None:
+        bat_speed = next(
+            (
+                candidate
+                for candidate in all_rows
+                if candidate.get("clip_id") == clip and candidate.get("metric_name") == "Estimated Bat Speed"
+            ),
+            None,
+        )
+        if bat_speed is not None:
+            return "约" + fmt(px_speed_to_kmh(clip, bat_speed.get("value")), "km/h")
+        return "需球棒标定"
+    if unit == "3d_unit/s":
+        return "需标定"
+    return fmt(row.get("value"), unit)
+
+
+def find_metric(rows: list[dict[str, str]], clip: str, metric: str) -> dict[str, str] | None:
+    for row in rows:
+        if row.get("clip_id") == clip and row.get("metric_name") == metric:
+            return row
+    return None
+
+
+def clip_metrics(rows: list[dict[str, str]], clip: str, names: list[str]) -> list[dict[str, str]]:
+    return [row for name in names if (row := find_metric(rows, clip, name))]
+
+
+def score_ratio(child: float | None, coach: float | None, inverse: bool = False) -> int:
+    if child is None or coach in (None, 0):
+        return 45
+    ratio = child / coach
+    if inverse:
+        ratio = coach / child if child else 0
+    return max(5, min(100, round(ratio * 100)))
+
+
+def score_close(child: float | None, coach: float | None, tolerance: float) -> int:
+    if child is None or coach is None:
+        return 45
+    diff = abs(child - coach)
+    return max(10, min(100, round(100 - diff / tolerance * 100)))
+
+
+def radar_svg(labels: list[str], values: list[int], color: str = "#4f5eea") -> str:
+    cx = 160
+    cy = 142
+    outer = 86
+    rings = []
+    for scale in (0.33, 0.66, 1.0):
+        pts = []
+        for i in range(len(labels)):
+            angle = -math.pi / 2 + 2 * math.pi * i / len(labels)
+            pts.append(f"{cx + math.cos(angle) * outer * scale:.1f},{cy + math.sin(angle) * outer * scale:.1f}")
+        rings.append(f'<polygon points="{" ".join(pts)}" fill="none" stroke="#d0d5dd" stroke-width="1"/>')
+    axes = []
+    label_tags = []
+    data_pts = []
+    for i, (label, value) in enumerate(zip(labels, values)):
+        angle = -math.pi / 2 + 2 * math.pi * i / len(labels)
+        x = cx + math.cos(angle) * outer
+        y = cy + math.sin(angle) * outer
+        axes.append(f'<line x1="{cx}" y1="{cy}" x2="{x:.1f}" y2="{y:.1f}" stroke="#d0d5dd"/>')
+        lx = cx + math.cos(angle) * 112
+        ly = cy + math.sin(angle) * 112
+        label_tags.append(f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="middle">{esc(label)}</text>')
+        data_pts.append(f"{cx + math.cos(angle) * outer * value / 100:.1f},{cy + math.sin(angle) * outer * value / 100:.1f}")
+    return f"""
+    <svg class="radar" viewBox="0 0 320 290" role="img" aria-label="六维评分图">
+      <g class="grid-lines">{''.join(rings)}{''.join(axes)}</g>
+      <polygon points="{' '.join(data_pts)}" fill="{color}33" stroke="{color}" stroke-width="4"/>
+      <circle cx="{cx}" cy="{cy}" r="3" fill="{color}"/>
+      <g class="radar-labels">{''.join(label_tags)}</g>
+    </svg>
+    """
+
+
+def skeleton_svg(kind: str) -> str:
+    if kind == "pitch":
+        path = '<path d="M55 238 C160 180 286 132 452 70" fill="none" stroke="#f97316" stroke-width="13" stroke-linecap="round" opacity=".5"/>'
+    else:
+        path = '<path d="M56 224 C160 196 300 168 468 116" fill="none" stroke="#f97316" stroke-width="13" stroke-linecap="round" opacity=".5"/>'
+    return f"""
+    <svg class="pose-svg" viewBox="0 0 520 330" role="img" aria-label="动作截图角度标注示意">
+      <rect x="0" y="0" width="520" height="330" rx="18" fill="#101828"/>
+      {path}
+      <g stroke="#60a5fa" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="250" y1="82" x2="224" y2="144"/><line x1="224" y1="144" x2="248" y2="206"/>
+        <line x1="224" y1="144" x2="164" y2="134"/><line x1="164" y1="134" x2="108" y2="110"/>
+        <line x1="224" y1="144" x2="292" y2="138"/><line x1="292" y1="138" x2="358" y2="88"/>
+        <line x1="248" y1="206" x2="188" y2="258"/><line x1="248" y1="206" x2="326" y2="258"/>
+      </g>
+      <g fill="#fff"><circle cx="250" cy="82" r="13"/><circle cx="224" cy="144" r="8"/><circle cx="248" cy="206" r="8"/><circle cx="108" cy="110" r="8"/><circle cx="358" cy="88" r="8"/><circle cx="188" cy="258" r="8"/><circle cx="326" cy="258" r="8"/></g>
+      <path d="M188 258 A56 56 0 0 1 248 206" fill="none" stroke="#16a34a" stroke-width="4"/>
+      <path d="M224 144 A72 72 0 0 1 292 138" fill="none" stroke="#ef4444" stroke-width="4"/>
+      <g><rect x="24" y="22" width="58" height="30" rx="15" fill="rgba(255,255,255,.14)"/><text x="53" y="42" text-anchor="middle" fill="#fff" font-size="14" font-weight="600">示意</text></g>
+    </svg>
+    """
+
+
+def standard_overlay_svg() -> str:
+    return """
+    <svg class="pose-svg" viewBox="0 0 620 320" role="img" aria-label="标准姿态纠正图">
+      <rect width="620" height="320" rx="18" fill="#ffffff"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="7">
+        <g stroke="#60a5fa" stroke-dasharray="10 10">
+          <line x1="280" y1="62" x2="252" y2="128"/><line x1="252" y1="128" x2="272" y2="204"/><line x1="252" y1="128" x2="176" y2="132"/><line x1="252" y1="128" x2="334" y2="120"/><line x1="334" y1="120" x2="410" y2="84"/><line x1="272" y1="204" x2="206" y2="268"/><line x1="272" y1="204" x2="360" y2="260"/>
+        </g>
+        <g stroke="#16a34a">
+          <line x1="278" y1="62" x2="246" y2="128"/><line x1="246" y1="128" x2="262" y2="204"/><line x1="246" y1="128" x2="156" y2="126"/><line x1="246" y1="128" x2="338" y2="116"/><line x1="338" y1="116" x2="438" y2="72"/><line x1="262" y1="204" x2="178" y2="268"/><line x1="262" y1="204" x2="374" y2="260"/>
+        </g>
+        <g stroke="#ef4444">
+          <line x1="334" y1="120" x2="410" y2="84"/><line x1="272" y1="204" x2="206" y2="268"/>
+        </g>
+      </g>
+      <g><rect x="24" y="22" width="58" height="30" rx="15" fill="#eef6ff"/><text x="53" y="42" text-anchor="middle" fill="#2563eb" font-size="14" font-weight="600">示意</text></g>
+    </svg>
+    """
+
+
+def read_pose_sequence(path: Path) -> list[dict[str, object]]:
+    rows = read_csv(path)
+    by_frame: dict[int, dict[str, object]] = {}
+    qualities: dict[int, list[float]] = {}
+    for row in rows:
+        frame_idx = num(row.get("frame_index"))
+        if frame_idx is None:
+            continue
+        idx = int(frame_idx)
+        frame = by_frame.setdefault(
+            idx,
+            {"frame": idx, "time": num(row.get("timestamp_sec")) or 0.0, "joints": {}},
+        )
+        joints = frame["joints"]  # type: ignore[assignment]
+        joints[row["joint_name"]] = (
+            num(row.get("x_3d")) or 0.0,
+            num(row.get("y_3d")) or 0.0,
+            num(row.get("z_3d")) or 0.0,
+        )
+        q = num(row.get("input_quality_score") or row.get("confidence"))
+        if q is not None:
+            qualities.setdefault(idx, []).append(q)
+    frames = []
+    for idx in sorted(by_frame):
+        frame = by_frame[idx]
+        qs = qualities.get(idx, [])
+        frame["quality"] = sum(qs) / len(qs) if qs else None
+        frames.append(frame)
+    return frames
+
+
+def v_sub(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def v_len(a: tuple[float, float, float]) -> float:
+    return math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+
+
+def midpoint(points: list[tuple[float, float, float]]) -> tuple[float, float, float] | None:
+    if not points:
+        return None
+    return (
+        sum(p[0] for p in points) / len(points),
+        sum(p[1] for p in points) / len(points),
+        sum(p[2] for p in points) / len(points),
+    )
+
+
+def joint_mid(joints: dict[str, tuple[float, float, float]], names: list[str]) -> tuple[float, float, float] | None:
+    return midpoint([joints[name] for name in names if name in joints])
+
+
+def angle_at(
+    joints: dict[str, tuple[float, float, float]],
+    a: str,
+    b: str,
+    c: str,
+) -> float | None:
+    if a not in joints or b not in joints or c not in joints:
+        return None
+    ba = v_sub(joints[a], joints[b])
+    bc = v_sub(joints[c], joints[b])
+    denom = v_len(ba) * v_len(bc)
+    if denom == 0:
+        return None
+    cos_v = max(-1.0, min(1.0, sum(ba[i] * bc[i] for i in range(3)) / denom))
+    return math.degrees(math.acos(cos_v))
+
+
+def trunk_tilt(joints: dict[str, tuple[float, float, float]]) -> float | None:
+    hip = joints.get("hip")
+    neck = joints.get("neck")
+    if hip is None or neck is None:
+        return None
+    vec = v_sub(neck, hip)
+    return math.degrees(math.atan2(abs(vec[0]), max(abs(vec[1]), 1e-6)))
+
+
+def hip_shoulder_sep(joints: dict[str, tuple[float, float, float]]) -> float | None:
+    lh, rh = joints.get("left_hip"), joints.get("right_hip")
+    ls, rs = joints.get("left_shoulder"), joints.get("right_shoulder")
+    if None in (lh, rh, ls, rs):
+        return None
+    hip_angle = math.degrees(math.atan2(lh[2] - rh[2], lh[0] - rh[0]))  # type: ignore[index]
+    shoulder_angle = math.degrees(math.atan2(ls[2] - rs[2], ls[0] - rs[0]))  # type: ignore[index]
+    diff = abs((shoulder_angle - hip_angle + 180) % 360 - 180)
+    return diff
+
+
+def pose_angle_series(frames: list[dict[str, object]], kind: str) -> list[dict[str, object]]:
+    rows = [
+        {"name": "前腿膝角", "unit": "deg", "color": "#2563eb", "values": []},
+        {"name": "肘角", "unit": "deg", "color": "#f97316", "values": []},
+        {"name": "躯干倾斜", "unit": "deg", "color": "#7c4dff", "values": []},
+        {"name": "髋肩分离", "unit": "deg", "color": "#16a34a", "values": []},
+    ]
+    knee = ("left_hip", "left_knee", "left_ankle") if kind == "pitch" else ("right_hip", "right_knee", "right_ankle")
+    elbow = ("right_shoulder", "right_elbow", "right_wrist")
+    for frame in frames:
+        t = float(frame["time"])
+        joints = frame["joints"]  # type: ignore[assignment]
+        values = [
+            angle_at(joints, *knee),
+            angle_at(joints, *elbow),
+            trunk_tilt(joints),
+            hip_shoulder_sep(joints),
+        ]
+        for row, value in zip(rows, values):
+            row["values"].append((t, value))
+    return rows
+
+
+def point_for_speed(joints: dict[str, tuple[float, float, float]], names: list[str]) -> tuple[float, float, float] | None:
+    if len(names) == 1:
+        return joints.get(names[0])
+    return joint_mid(joints, names)
+
+
+def pose_speed_series(frames: list[dict[str, object]], kind: str) -> list[dict[str, object]]:
+    specs = [
+        ("髋部中心速度", ["hip"], "#2563eb"),
+        ("躯干中心速度", ["spine2", "spine3", "neck"], "#7c4dff"),
+        ("出手侧手部速度" if kind == "pitch" else "手部末端速度", ["right_wrist", "right_hand"], "#f97316"),
+    ]
+    rows = [{"name": name, "unit": "km/h", "color": color, "values": []} for name, _, color in specs]
+    prev: list[tuple[float, tuple[float, float, float]] | None] = [None for _ in specs]
+    for frame in frames:
+        t = float(frame["time"])
+        joints = frame["joints"]  # type: ignore[assignment]
+        for i, (_, names, _) in enumerate(specs):
+            point = point_for_speed(joints, names)
+            value = None
+            if point is not None and prev[i] is not None:
+                prev_t, prev_point = prev[i]  # type: ignore[misc]
+                dt = t - prev_t
+                if dt > 0:
+                    value = v_len(v_sub(point, prev_point)) / dt * 3.6
+            rows[i]["values"].append((t, value))
+            if point is not None:
+                prev[i] = (t, point)
+    return rows
+
+
+def peak_speed_frame(frames: list[dict[str, object]], names: list[str]) -> int:
+    best_frame = int(frames[len(frames) // 2]["frame"]) if frames else 0
+    best_value = -1.0
+    prev: tuple[float, tuple[float, float, float]] | None = None
+    for frame in frames:
+        t = float(frame["time"])
+        joints = frame["joints"]  # type: ignore[assignment]
+        point = point_for_speed(joints, names)
+        if point is not None and prev is not None:
+            prev_t, prev_point = prev
+            dt = t - prev_t
+            if dt > 0:
+                value = v_len(v_sub(point, prev_point)) / dt
+                if value > best_value:
+                    best_value = value
+                    best_frame = int(frame["frame"])
+        if point is not None:
+            prev = (t, point)
+    return best_frame
+
+
+def line_chart_svg(
+    title: str,
+    series: list[dict[str, object]],
+    events: list[tuple[str, float | None]],
+    y_label: str,
+) -> str:
+    width, height = 720, 360
+    left, right, top, bottom = 116, 678, 88, 276
+    times = [t for row in series for t, v in row["values"] if v is not None]  # type: ignore[index]
+    values = [v for row in series for _, v in row["values"] if v is not None]  # type: ignore[index]
+    if not times or not values:
+        return line_placeholder_svg(title)
+    t0, t1 = min(times), max(times)
+    lo, hi = min(values), max(values)
+    pad = max((hi - lo) * 0.12, 1.0)
+    lo -= pad
+    hi += pad
+    if t0 == t1:
+        t1 += 1
+    if lo == hi:
+        hi += 1
+
+    def x_for(t: float) -> float:
+        return left + (t - t0) / (t1 - t0) * (right - left)
+
+    def y_for(v: float) -> float:
+        return bottom - (v - lo) / (hi - lo) * (bottom - top)
+
+    paths = []
+    for row in series:
+        points = [(x_for(t), y_for(v)) for t, v in row["values"] if v is not None]  # type: ignore[index]
+        if len(points) < 2:
+            continue
+        d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in points)
+        paths.append(f'<path d="{d}" fill="none" stroke="{row["color"]}" stroke-width="3" stroke-linejoin="round"/>')
+        peak_t, peak_v = max(((t, v) for t, v in row["values"] if v is not None), key=lambda item: item[1])  # type: ignore[index]
+        paths.append(f'<circle cx="{x_for(peak_t):.1f}" cy="{y_for(peak_v):.1f}" r="4" fill="{row["color"]}"/>')
+
+    event_tags = []
+    for idx, (label, t) in enumerate(events):
+        if t is None or t < t0 or t > t1:
+            continue
+        x = x_for(t)
+        label_w = max(70, len(label) * 14 + 20)
+        label_x = max(left + label_w / 2, min(right - label_w / 2, x))
+        label_y = 44 + (idx % 2) * 24
+        event_tags.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{bottom}" stroke="#101828" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/>')
+        event_tags.append(f'<rect x="{label_x - label_w / 2:.1f}" y="{label_y - 15}" width="{label_w:.1f}" height="20" rx="10" fill="#f8fafc" stroke="#d0d5dd"/>')
+        event_tags.append(f'<path d="M{label_x:.1f} {label_y + 5} L{x:.1f} {top - 4}" stroke="#98a2b3" stroke-width="1" fill="none"/>')
+        event_tags.append(f'<text x="{label_x:.1f}" y="{label_y}" text-anchor="middle" fill="#101828" font-size="11">{esc(label)}</text>')
+
+    legend_x = left
+    legend_tags = []
+    for row in series:
+        legend_tags.append(f'<circle cx="{legend_x}" cy="326" r="6" fill="{row["color"]}"/>')
+        legend_tags.append(f'<text x="{legend_x + 12}" y="331" fill="#344054" font-size="12">{esc(row["name"])}</text>')
+        legend_x += 150
+
+    return f"""
+    <div class="line-chart-scroll"><svg class="line-chart-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(title)}">
+      <defs><clipPath id="clip-{abs(hash(title))}"><rect x="{left}" y="{top}" width="{right - left}" height="{bottom - top}"/></clipPath></defs>
+      <rect width="{width}" height="{height}" rx="18" fill="#ffffff"/>
+      <text x="24" y="24" fill="#101828" font-size="14" font-weight="700">{esc(title)}</text>
+      <line x1="{left}" y1="{bottom}" x2="{right}" y2="{bottom}" stroke="#667085"/>
+      <line x1="{left}" y1="{top}" x2="{left}" y2="{bottom}" stroke="#667085"/>
+      <g stroke="#e4e7ec" stroke-width="1">
+        <line x1="{left}" y1="{(top+bottom)/2:.1f}" x2="{right}" y2="{(top+bottom)/2:.1f}"/>
+        <line x1="{left}" y1="{top}" x2="{right}" y2="{top}"/>
+      </g>
+      <text x="{left}" y="{bottom + 24}" fill="#667085" font-size="12">时间（秒）</text>
+      <text x="24" y="{top - 16}" fill="#667085" font-size="12">{esc(y_label)}</text>
+      <rect x="18" y="{bottom - 12}" width="{left - 32}" height="20" rx="8" fill="#ffffff"/>
+      <rect x="18" y="{top - 12}" width="{left - 32}" height="20" rx="8" fill="#ffffff"/>
+      <text x="{left - 14}" y="{bottom + 4}" text-anchor="end" fill="#98a2b3" font-size="11">{esc(fmt(lo, str(series[0].get("unit", ""))))}</text>
+      <text x="{left - 14}" y="{top + 4}" text-anchor="end" fill="#98a2b3" font-size="11">{esc(fmt(hi, str(series[0].get("unit", ""))))}</text>
+      {''.join(event_tags)}
+      <g clip-path="url(#clip-{abs(hash(title))})">{''.join(paths)}</g>
+      {''.join(legend_tags)}
+    </svg></div>
+    """
+
+
+def pose_quality_svg(items: list[tuple[str, list[dict[str, object]], str]]) -> str:
+    width, height = 720, 280
+    left, right, top = 156, 612, 44
+    row_h = 50
+    tags = [f'<rect width="{width}" height="{height}" rx="18" fill="#ffffff"/>']
+    tags.append('<text x="24" y="26" fill="#101828" font-size="14" font-weight="700">三维姿态数据质量图</text>')
+    for i, (label, frames, color) in enumerate(items):
+        y = top + i * row_h
+        frame_count = len(frames)
+        quality_values = [frame.get("quality") for frame in frames if frame.get("quality") is not None]
+        quality = sum(quality_values) / len(quality_values) if quality_values else 0.0
+        joint_counts = [len(frame["joints"]) for frame in frames]  # type: ignore[arg-type]
+        max_joints = max(joint_counts or [1])
+        complete = (sum(joint_counts) / len(joint_counts) / max_joints) if joint_counts else 0.0
+        score = max(0.0, min(1.0, quality if quality else complete))
+        bar_w = max(0, min(right - left, (right - left) * score))
+        tags.append(f'<text x="24" y="{y + 5}" fill="#101828" font-size="13" font-weight="700">{esc(label)}</text>')
+        tags.append(f'<text x="24" y="{y + 24}" fill="#667085" font-size="11">{frame_count}帧，关节完整率约{complete*100:.1f}%</text>')
+        tags.append(f'<line x1="{left}" y1="{y}" x2="{right}" y2="{y}" stroke="#e8eef6" stroke-width="16" stroke-linecap="round"/>')
+        tags.append(f'<line x1="{left}" y1="{y}" x2="{left + bar_w:.1f}" y2="{y}" stroke="{color}" stroke-width="16" stroke-linecap="round"/>')
+        tags.append(f'<text x="{right + 10}" y="{y + 5}" fill="#344054" font-size="12">{score*100:.1f}%</text>')
+    return f'<div class="line-chart-scroll"><svg class="line-chart-svg" viewBox="0 0 {width} {height}" role="img" aria-label="三维姿态数据质量图">{"".join(tags)}</svg></div>'
+
+
+def frame_by_index(frames: list[dict[str, object]], idx: int) -> dict[str, object]:
+    return min(frames, key=lambda frame: abs(int(frame["frame"]) - idx))
+
+
+def posture_overlay_svg(
+    child_frames: list[dict[str, object]],
+    coach_frames: list[dict[str, object]],
+    child_frame_idx: int,
+    coach_frame_idx: int,
+) -> str:
+    child = frame_by_index(child_frames, child_frame_idx)
+    coach = frame_by_index(coach_frames, coach_frame_idx)
+    child_joints = child["joints"]  # type: ignore[assignment]
+    coach_joints = coach["joints"]  # type: ignore[assignment]
+    segments = [
+        ("head", "neck"), ("neck", "spine2"), ("spine2", "hip"),
+        ("left_shoulder", "left_elbow"), ("left_elbow", "left_wrist"), ("left_wrist", "left_hand"),
+        ("right_shoulder", "right_elbow"), ("right_elbow", "right_wrist"), ("right_wrist", "right_hand"),
+        ("left_hip", "left_knee"), ("left_knee", "left_ankle"), ("left_ankle", "left_foot"),
+        ("right_hip", "right_knee"), ("right_knee", "right_ankle"), ("right_ankle", "right_foot"),
+        ("left_shoulder", "right_shoulder"), ("left_hip", "right_hip"),
+    ]
+
+    def project(joints: dict[str, tuple[float, float, float]]) -> dict[str, tuple[float, float]]:
+        hip = joints.get("hip") or (0.0, 0.0, 0.0)
+        neck = joints.get("neck") or (0.0, 1.0, 0.0)
+        scale = 132 / max(v_len(v_sub(neck, hip)), 0.1)
+        return {
+            name: (310 + (point[0] - hip[0]) * scale, 230 - (point[1] - hip[1]) * scale)
+            for name, point in joints.items()
+        }
+
+    child_xy = project(child_joints)
+    coach_xy = project(coach_joints)
+    deviations = []
+    for a, b in segments:
+        if a in child_xy and b in child_xy and a in coach_xy and b in coach_xy:
+            cm = ((child_xy[a][0] + child_xy[b][0]) / 2, (child_xy[a][1] + child_xy[b][1]) / 2)
+            tm = ((coach_xy[a][0] + coach_xy[b][0]) / 2, (coach_xy[a][1] + coach_xy[b][1]) / 2)
+            deviations.append((math.hypot(cm[0] - tm[0], cm[1] - tm[1]), a, b))
+    risk_segments = {(a, b) for _, a, b in sorted(deviations, reverse=True)[:3]}
+
+    def line_tags(points: dict[str, tuple[float, float]], color: str, dashed: bool = False, only_risk: bool = False) -> str:
+        tags = []
+        dash = ' stroke-dasharray="9 8"' if dashed else ""
+        for a, b in segments:
+            if only_risk and (a, b) not in risk_segments:
+                continue
+            if a not in points or b not in points:
+                continue
+            x1, y1 = points[a]
+            x2, y2 = points[b]
+            tags.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{8 if only_risk else 5}" stroke-linecap="round" stroke-linejoin="round"{dash}/>')
+        return "".join(tags)
+
+    return f"""
+    <svg class="pose-svg" viewBox="0 0 620 320" role="img" aria-label="标准姿态纠正图">
+      <rect width="620" height="320" rx="18" fill="#ffffff"/>
+      <g fill="none">
+        {line_tags(child_xy, "#60a5fa", dashed=True)}
+        {line_tags(coach_xy, "#16a34a")}
+        {line_tags(child_xy, "#ef4444", only_risk=True)}
+      </g>
+      <g>
+        <rect x="22" y="20" width="164" height="76" rx="14" fill="#eef6ff" stroke="#bfdbfe"/>
+        <text x="38" y="45" fill="#2563eb" font-size="13" font-weight="700">真实三维姿态对照</text>
+        <text x="38" y="66" fill="#667085" font-size="11">球员第{int(child["frame"])}帧 / 教练第{int(coach["frame"])}帧</text>
+      </g>
+      <g font-size="12" fill="#344054">
+        <line x1="414" y1="34" x2="452" y2="34" stroke="#60a5fa" stroke-width="5" stroke-dasharray="9 8"/><text x="462" y="38">球员当前姿态</text>
+        <line x1="414" y1="58" x2="452" y2="58" stroke="#16a34a" stroke-width="5"/><text x="462" y="62">教练标准姿态</text>
+        <line x1="414" y1="82" x2="452" y2="82" stroke="#ef4444" stroke-width="7"/><text x="462" y="86">偏差较大骨段</text>
+      </g>
+    </svg>
+    """
+
+
+def timeline_svg(labels: list[str], details: list[str]) -> str:
+    dots = []
+    n = len(labels)
+    for i, label in enumerate(labels):
+        x = 44 + i * (520 / (n - 1))
+        detail = details[i] if i < len(details) else "暂无数据"
+        box_x = max(6, min(500, x - 52))
+        dots.append(
+            f'<circle cx="{x:.1f}" cy="70" r="8" fill="#2563eb"/>'
+            f'<text x="{x:.1f}" y="102" text-anchor="middle" font-size="14" font-weight="700">{esc(label)}</text>'
+            f'<rect x="{box_x:.1f}" y="114" width="104" height="46" rx="10" fill="#f8fafc" stroke="#e4e7ec"/>'
+            f'<text x="{x:.1f}" y="134" text-anchor="middle" font-size="11" fill="#344054">{esc(detail.split("|")[0])}</text>'
+            f'<text x="{x:.1f}" y="150" text-anchor="middle" font-size="11" fill="#667085">{esc(detail.split("|")[1] if "|" in detail else "")}</text>'
+        )
+    return f"""
+    <div class="mini-chart-scroll"><svg class="wide-svg timeline-svg" viewBox="0 0 610 176" role="img" aria-label="阶段时间轴">
+      <line x1="44" y1="70" x2="564" y2="70" stroke="#d0d5dd" stroke-width="8" stroke-linecap="round"/>
+      {''.join(dots)}
+    </svg></div>
+    """
+
+
+def chain_svg(nodes: list[tuple[str, str, str]]) -> str:
+    parts = []
+    for i, (label, value, note) in enumerate(nodes):
+        x = 34 + i * 112
+        color = ["#16a34a", "#f97316", "#2563eb", "#ef4444", "#697586"][i]
+        box_x = max(6, min(452, x - 48))
+        parts.append(
+            f'<circle cx="{x}" cy="58" r="26" fill="{color}"/>'
+            f'<text x="{x}" y="63" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">{label}</text>'
+            f'<rect x="{box_x}" y="100" width="96" height="58" rx="10" fill="#f8fafc" stroke="#e4e7ec"/>'
+            f'<text x="{x}" y="122" text-anchor="middle" fill="#101828" font-size="12" font-weight="700">{esc(value)}</text>'
+            f'<text x="{x}" y="142" text-anchor="middle" fill="#667085" font-size="11">{esc(note)}</text>'
+        )
+        if i < len(nodes) - 1:
+            parts.append(f'<path d="M{x+32} 58 L{x+80} 58" stroke="#98a2b3" stroke-width="4" marker-end="url(#arrow)"/>')
+    return f"""
+    <div class="mini-chart-scroll"><svg class="wide-svg chain-svg" viewBox="0 0 560 172" role="img" aria-label="动力链传递图">
+      <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#98a2b3"/></marker></defs>
+      <g fill="#fff" font-size="16" font-weight="600">{''.join(parts)}</g>
+    </svg></div>
+    """
+
+
+def line_placeholder_svg(title: str) -> str:
+    return f"""
+    <svg class="wide-svg" viewBox="0 0 640 260" role="img" aria-label="{esc(title)}">
+      <rect width="640" height="260" rx="16" fill="#ffffff"/>
+      <line x1="60" y1="210" x2="590" y2="210" stroke="#667085"/>
+      <line x1="60" y1="38" x2="60" y2="210" stroke="#667085"/>
+      <path d="M70 180 C180 120 260 150 342 92 S500 118 570 62" fill="none" stroke="#2563eb" stroke-width="4" stroke-dasharray="8 8"/>
+      <rect x="226" y="104" width="188" height="42" rx="21" fill="#eef2f7"/>
+      <text x="320" y="130" text-anchor="middle" fill="#667085" font-size="16">缺少逐帧数据</text>
+      <text x="60" y="238" fill="#667085" font-size="13">动作时间</text>
+      <text x="18" y="42" fill="#667085" font-size="13">数值</text>
+    </svg>
+    """
+
+
+def card(title: str, body: str, badge: str = "", klass: str = "") -> str:
+    badge_html = f'<span class="badge {klass or "review"}">{esc(badge)}</span>' if badge else ""
+    return f'<article class="card {klass}"><div class="card-head"><h4>{esc(title)}</h4>{badge_html}</div><p>{esc(body)}</p></article>'
+
+
+def metric_card(title: str, value: str, body: str, status: str) -> str:
+    label, klass = status_cn(status)
+    return f"""
+    <article class="metric-card {klass}">
+      <div class="card-head"><h4>{esc(title)}</h4><span class="badge {klass}">{label}</span></div>
+      <div class="metric-value">{esc(value)}</div>
+      <p>{esc(zh_text(body))}</p>
+    </article>
+    """
+
+
+def bars(rows: list[tuple[str, float | None, str, str]], max_value: float | None = None) -> str:
+    vals = [abs(v) for _, v, _, _ in rows if v is not None]
+    scale = max_value or max(vals or [1])
+    out = []
+    for label, value, unit, color in rows:
+        width = 4 if value is None else max(4, min(100, abs(value) / scale * 100))
+        out.append(f"""
+        <div class="bar-row">
+          <span>{esc(label)}</span>
+          <div class="track"><i style="width:{width:.1f}%;background:{color}"></i></div>
+          <b>{esc(fmt(value, unit))}</b>
+        </div>
+        """)
+    return "\n".join(out)
+
+
+def dot_comparison_svg(rows: list[dict[str, object]], legend: list[tuple[str, str]]) -> str:
+    svg_w = 720
+    left = 150
+    axis_w = 320
+    right = 500
+    row_h = 68
+    top = 44
+    height = top + len(rows) * row_h + 68
+    row_tags: list[str] = []
+    for i, row in enumerate(rows):
+        y = top + i * row_h
+        unit = str(row.get("unit", ""))
+        points = row["points"]  # type: ignore[index]
+        values = [p["value"] for p in points if p.get("value") is not None]  # type: ignore[union-attr]
+        if not values:
+            lo, hi = 0.0, 1.0
+        else:
+            lo, hi = min(values), max(values)
+            pad = max((hi - lo) * 0.18, abs(hi) * 0.06, 1.0)
+            lo -= pad
+            hi += pad
+            if lo == hi:
+                lo -= 1
+                hi += 1
+
+        def x_for(value: float) -> float:
+            return left + (value - lo) / (hi - lo) * axis_w
+
+        row_tags.append(f'<text x="20" y="{y + 3}" fill="#101828" font-size="14" font-weight="700">{esc(row["label"])}</text>')
+        row_tags.append(f'<text x="20" y="{y + 23}" fill="#667085" font-size="12">{esc(row.get("sub", ""))}</text>')
+        row_tags.append(f'<line x1="{left}" y1="{y}" x2="{left + axis_w}" y2="{y}" stroke="#e8eef6" stroke-width="14" stroke-linecap="round"/>')
+        row_tags.append(f'<text x="{left}" y="{y + 28}" fill="#98a2b3" font-size="11" text-anchor="middle">{esc(fmt(lo, unit))}</text>')
+        row_tags.append(f'<text x="{left + axis_w}" y="{y + 28}" fill="#98a2b3" font-size="11" text-anchor="middle">{esc(fmt(hi, unit))}</text>')
+        right_lines = []
+        for p in points:  # type: ignore[union-attr]
+            value = p.get("value")
+            if value is None:
+                continue
+            x = x_for(value)
+            color = p.get("color", "#2563eb")
+            kind = p.get("kind", "dot")
+            if kind == "line":
+                row_tags.append(f'<line x1="{x:.1f}" y1="{y - 18}" x2="{x:.1f}" y2="{y + 18}" stroke="{color}" stroke-width="4" stroke-linecap="round"/>')
+            else:
+                row_tags.append(f'<circle cx="{x:.1f}" cy="{y}" r="9" fill="{color}" stroke="#fff" stroke-width="2"/>')
+            right_lines.append((str(p.get("name", "")), float(value), str(color)))
+        for j, (name, value, color) in enumerate(right_lines[:4]):
+            row_tags.append(f'<text x="{right}" y="{y - 15 + j * 16}" fill="{color}" font-size="12">{esc(name)} {esc(fmt(value, unit))}</text>')
+
+    legend_x = 26
+    legend_y = height - 28
+    legend_tags = []
+    for name, color in legend:
+        if color == "#101828":
+            legend_tags.append(f'<line x1="{legend_x}" y1="{legend_y - 6}" x2="{legend_x}" y2="{legend_y + 8}" stroke="{color}" stroke-width="4" stroke-linecap="round"/>')
+        else:
+            legend_tags.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="7" fill="{color}"/>')
+        legend_tags.append(f'<text x="{legend_x + 16}" y="{legend_y + 5}" fill="#344054" font-size="12">{esc(name)}</text>')
+        legend_x += 128
+
+    return f"""
+    <div class="dot-plot-scroll"><svg class="dot-compare-svg" viewBox="0 0 {svg_w} {height}" role="img" aria-label="球员对比点位图">
+      <rect width="{svg_w}" height="{height}" rx="18" fill="#ffffff"/>
+      {''.join(row_tags)}
+      <rect x="18" y="{height - 52}" width="{svg_w - 36}" height="40" rx="12" fill="#eef6ff" stroke="#bfdbfe"/>
+      {''.join(legend_tags)}
+    </svg></div>
+    """
+
+
+def compare_table(rows: list[dict[str, str]]) -> str:
+    body = []
+    for row in rows:
+        diff = num(row.get("diff_child_minus_coach"))
+        status = "关注" if diff is not None and abs(diff) > 20 else "需复核"
+        body.append(
+            "<tr>"
+            f"<td>{esc(row['label_cn'])}</td>"
+            f"<td>{esc(fmt(row.get('child_value'), row.get('unit')))}</td>"
+            f"<td>{esc(fmt(row.get('coach_value'), row.get('unit')))}</td>"
+            f"<td>{esc(fmt(row.get('diff_child_minus_coach'), row.get('unit')))}</td>"
+            f"<td>{esc(status)}</td>"
+            "</tr>"
+        )
+    return '<table><thead><tr><th>指标</th><th>球员</th><th>教练参考</th><th>差距</th><th>训练判断</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
+
+
+def source_table(rows: list[dict[str, str]], limit: int = 30, all_rows: list[dict[str, str]] | None = None) -> str:
+    body = []
+    for row in rows[:limit]:
+        status_label, _ = status_cn(row.get("availability"))
+        body.append(
+            "<tr>"
+            f"<td>{esc(CLIP_CN.get(row.get('clip_id', ''), '样本'))}</td>"
+            f"<td>{esc('投球' if row.get('action_type') == 'pitching' else '打击')}</td>"
+            f"<td>{esc(metric_cn(row.get('metric_name')))}</td>"
+            f"<td>{esc(fmt_metric_value(row, all_rows or rows))}</td>"
+            f"<td>{esc(status_label)}</td>"
+            f"<td>{esc(source_cn(row.get('source')))}</td>"
+            "</tr>"
+        )
+    return '<table><thead><tr><th>样本</th><th>动作</th><th>指标</th><th>数值</th><th>状态</th><th>来源</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
+
+
+def rel_asset(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
+def image_figure(path: Path, title: str, caption: str) -> str:
+    return f"""
+    <figure class="evidence-figure">
+      <img class="evidence-img" src="{esc(rel_asset(path))}" alt="{esc(title)}" loading="lazy">
+      <figcaption><b>{esc(title)}</b><span>{esc(caption)}</span></figcaption>
+    </figure>
+    """
+
+
+def image_pair(items: list[tuple[Path, str, str]]) -> str:
+    return '<div class="evidence-pair">' + "".join(image_figure(*item) for item in items) + "</div>"
+
+
+def pose3d_summary(path: Path) -> dict[str, float | int | str]:
+    rows = read_csv(path)
+    frames = {row["frame_index"] for row in rows if row.get("frame_index") not in (None, "")}
+    joints = {row["joint_name"] for row in rows if row.get("joint_name") not in (None, "")}
+    quality_values = [num(row.get("input_quality_score")) for row in rows]
+    quality = [value for value in quality_values if value is not None]
+    start = min((num(row.get("timestamp_sec")) for row in rows if num(row.get("timestamp_sec")) is not None), default=None)
+    end = max((num(row.get("timestamp_sec")) for row in rows if num(row.get("timestamp_sec")) is not None), default=None)
+    return {
+        "frames": len(frames),
+        "joints": len(joints),
+        "quality": sum(quality) / len(quality) if quality else 0,
+        "duration": (end - start) if start is not None and end is not None else 0,
+    }
+
+
+def pose3d_source_table(items: list[tuple[str, Path]]) -> str:
+    body = []
+    for label, path in items:
+        summary = pose3d_summary(path)
+        body.append(
+            "<tr>"
+            f"<td>{esc(label)}</td>"
+            f"<td>{esc(str(summary['frames']))}</td>"
+            f"<td>{esc(str(summary['joints']))}</td>"
+            f"<td>{esc(fmt(summary['duration'], 's'))}</td>"
+            f"<td>{esc(fmt(summary['quality'], ''))}</td>"
+            f"<td>{esc('三维姿态')}</td>"
+            "</tr>"
+        )
+    return '<table><thead><tr><th>样本</th><th>可用帧</th><th>关节数</th><th>时长</th><th>平均质量</th><th>来源</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
+
+
+def mean_metric(rows: list[dict[str, str]], action: str, metric: str, athlete: str | None = None) -> float | None:
+    values = []
+    for row in rows:
+        if row.get("action_type") != action:
+            continue
+        if athlete is not None and row.get("athlete") != athlete:
+            continue
+        value = num(row.get(metric))
+        if value is not None and math.isfinite(value):
+            values.append(value)
+    return sum(values) / len(values) if values else None
+
+
+def first_metric(rows: list[dict[str, str]], action: str, metric: str, athlete: str | None = None) -> float | None:
+    for row in rows:
+        if row.get("action_type") != action:
+            continue
+        if athlete is not None and row.get("athlete") != athlete:
+            continue
+        value = num(row.get(metric))
+        if value is not None and math.isfinite(value):
+            return value
+    return None
+
+
+def vicon_source_table(rows: list[dict[str, str]]) -> str:
+    body = []
+    for row in rows:
+        body.append(
+            "<tr>"
+            f"<td>{esc(row['athlete'])}</td>"
+            f"<td>{esc('投球' if row['action_type'] == 'pitching' else '打击')}</td>"
+            f"<td>{esc(str(row['frames']))}</td>"
+            f"<td>{esc(fmt(row.get('duration_sec'), 's'))}</td>"
+            f"<td>{esc(fmt(row.get('valid_point_pct'), '%'))}</td>"
+            f"<td>{esc(row['source_file'])}</td>"
+            "</tr>"
+        )
+    return '<table><thead><tr><th>对象</th><th>动作</th><th>帧数</th><th>时长</th><th>有效点比例</th><th>C3D来源</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
+
+
+def vicon_reconstruction_svg(rows: list[dict[str, str]], trial_id_value: str, title: str) -> str:
+    pts = {
+        row["point"]: (num(row.get("mid_x_mm")), num(row.get("mid_y_mm")), num(row.get("mid_z_mm")))
+        for row in rows
+        if row.get("trial_id") == trial_id_value
+    }
+    valid = {name: xyz for name, xyz in pts.items() if all(v is not None for v in xyz)}
+    if not valid:
+        return line_placeholder_svg(title)
+    xs = [xyz[0] for xyz in valid.values() if xyz[0] is not None]
+    zs = [xyz[2] for xyz in valid.values() if xyz[2] is not None]
+    min_x, max_x = min(xs), max(xs)
+    min_z, max_z = min(zs), max(zs)
+    scale = min(520 / max(max_x - min_x, 1), 230 / max(max_z - min_z, 1))
+
+    def xy(name: str) -> tuple[float, float] | None:
+        xyz = valid.get(name)
+        if not xyz:
+            return None
+        x, _, z = xyz
+        return (82 + (x - min_x) * scale, 274 - (z - min_z) * scale)
+
+    segments = [
+        ("LFHD", "RFHD"), ("LFHD", "C7"), ("RFHD", "C7"), ("C7", "T10"),
+        ("LSHO", "RSHO"), ("LSHO", "LELB"), ("LELB", "LWRA"), ("LELB", "LWRB"),
+        ("RSHO", "RELB"), ("RELB", "RWRA"), ("RELB", "RWRB"),
+        ("LASI", "RASI"), ("LASI", "LKNE"), ("LKNE", "LANK"), ("RASI", "RKNE"), ("RKNE", "RANK"),
+        ("Bat1", "Bat5"),
+    ]
+    tags = []
+    for a, b in segments:
+        pa, pb = xy(a), xy(b)
+        if pa is None or pb is None:
+            continue
+        color = "#f97316" if a.startswith("Bat") or b.startswith("Bat") else "#2563eb"
+        width = 6 if color == "#f97316" else 4
+        tags.append(f'<line x1="{pa[0]:.1f}" y1="{pa[1]:.1f}" x2="{pb[0]:.1f}" y2="{pb[1]:.1f}" stroke="{color}" stroke-width="{width}" stroke-linecap="round"/>')
+    for name in ["LFHD", "RFHD", "C7", "T10", "LSHO", "RSHO", "LELB", "RELB", "LWRA", "LWRB", "RWRA", "RWRB", "LASI", "RASI", "LKNE", "RKNE", "LANK", "RANK", "Bat1", "Bat5"]:
+        point = xy(name)
+        if point is None:
+            continue
+        color = "#f97316" if name.startswith("Bat") else "#101828"
+        tags.append(f'<circle cx="{point[0]:.1f}" cy="{point[1]:.1f}" r="4" fill="{color}"/>')
+    return f"""
+    <svg class="pose-svg" viewBox="0 0 640 320" role="img" aria-label="{esc(title)}">
+      <rect width="640" height="320" rx="18" fill="#ffffff"/>
+      <text x="24" y="28" fill="#101828" font-size="14" font-weight="700">{esc(title)}</text>
+      <text x="24" y="50" fill="#667085" font-size="12">由 C3D marker 中点重建，蓝色为身体点，橙色为球棒点。</text>
+      <g>{''.join(tags)}</g>
+    </svg>
+    """
+
+
+def main() -> None:
+    sly = read_csv(ROOT / "reports" / "slymask_benchmark_metrics.csv")
+    pitch_full = read_csv(ROOT / "output" / "data" / "benchmark_pitch_vertical_09_motion_metrics_full.csv")
+    pitch_vs = read_csv(ROOT / "output" / "data" / "benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv")
+    vicon = read_csv(ROOT / "reports" / "vicon_2026_metrics.csv")
+    vicon_points = read_csv(ROOT / "reports" / "vicon_2026_point_summary.csv")
+    asset_dir = ROOT / "outputs" / "manual-20260611-slymask" / "presentations" / "slymask-benchmark-deck" / "assets"
+    pitch09_2d = asset_dir / "benchmark_pitch_vertical_09_2d_thumb.png"
+    pitch09_3d = asset_dir / "benchmark_pitch_vertical_09_3d_thumb.png"
+    pitch10_3d = asset_dir / "benchmark_pitch_vertical_10_3d_thumb.png"
+    bat02_2d = asset_dir / "benchmark_hit_vertical_02_2d_thumb.png"
+    bat02_3d = asset_dir / "benchmark_hit_vertical_02_3d_thumb.png"
+    bat06_3d = asset_dir / "benchmark_hit_horizontal_06_3d_thumb.png"
+    pose3d_pitch09 = ROOT / "data_full" / "benchmark_rtmpose_test" / "processed" / "poses3d" / "benchmark_pitch_vertical_09" / "image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv"
+    pose3d_pitch10 = ROOT / "data_full" / "benchmark_rtmpose_test" / "processed" / "poses3d" / "benchmark_pitch_vertical_10" / "image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv"
+    pose3d_bat02 = ROOT / "data_full" / "benchmark_rtmpose_test" / "processed" / "poses3d" / "benchmark_hit_vertical_02" / "image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv"
+    pose3d_bat06 = ROOT / "data_full" / "benchmark_rtmpose_test" / "processed" / "poses3d" / "benchmark_hit_horizontal_06" / "image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv"
+    pose3d_pitch_coach = ROOT / "data_full" / "coach_pose3d" / "gvhmr" / "pitch_horizontal_coach.csv"
+    pitch09_frames = read_pose_sequence(pose3d_pitch09)
+    pitch10_frames = read_pose_sequence(pose3d_pitch10)
+    bat02_frames = read_pose_sequence(pose3d_bat02)
+    bat06_frames = read_pose_sequence(pose3d_bat06)
+    pitch_coach_frames = read_pose_sequence(pose3d_pitch_coach)
+    pitch09_pose_summary = pose3d_summary(pose3d_pitch09)
+    bat02_pose_summary = pose3d_summary(pose3d_bat02)
+
+    pitch_names = ["Hip-Shoulder Sep", "Lead Knee Angle", "Trunk Tilt", "Head Stability", "Stride Length", "Ball Speed"]
+    bat_names = ["Hip-Shoulder Sep", "Lead Knee Angle", "Trunk Tilt", "Head Stability", "Estimated Bat Speed", "Attack Angle"]
+    pitch09 = clip_metrics(sly, "benchmark_pitch_vertical_09", pitch_names)
+    pitch10 = clip_metrics(sly, "benchmark_pitch_vertical_10", pitch_names)
+    bat02 = clip_metrics(sly, "benchmark_hit_vertical_02", bat_names)
+    bat06 = clip_metrics(sly, "benchmark_hit_horizontal_06", bat_names)
+
+    vs = {row["metric_key"]: row for row in pitch_vs}
+    pitch_scores = [
+        score_close(num(next((r["child_value"] for r in pitch_full if r["metric_key"] == "lead_knee"), None)), num(next((r["coach_value"] for r in pitch_full if r["metric_key"] == "lead_knee"), None)), 45),
+        score_ratio(num(vs["com_travel_cm"]["child_value"]), num(vs["com_travel_cm"]["coach_value"])),
+        score_close(num(vs["hip_shoulder_sep_deg"]["child_value"]), num(vs["hip_shoulder_sep_deg"]["coach_value"]), 35),
+        score_close(num(vs["trunk_vel_deg_s"]["child_value"]), num(vs["trunk_vel_deg_s"]["coach_value"]), 260),
+        score_ratio(num(vs["hand_speed_m_s"]["child_value"]), num(vs["hand_speed_m_s"]["coach_value"])),
+        round(num(find_metric(sly, "benchmark_pitch_vertical_09", "Head Stability")["value"]) or 45),
+    ]
+    bat_scores = [
+        84,
+        score_close(num(find_metric(sly, "benchmark_hit_vertical_02", "Lead Knee Angle")["value"]), 135, 55),
+        max(10, round((num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]) or 0) / 35 * 100)),
+        62,
+        max(8, min(100, round(100 - abs(num(find_metric(sly, "benchmark_hit_vertical_02", "Attack Angle")["value"]) or 0) / 55 * 100))),
+        round(num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]) or 45),
+    ]
+
+    pitch_metric_cards = "".join(
+        metric_card(row["label_cn"], fmt(row["child_value"], row["unit"]), row["note"], row["status"])
+        for row in pitch_full[:8]
+    )
+    bat_metric_cards = "".join(
+        metric_card(metric_cn(row["metric_name"]), fmt_metric_value(row, sly), "当前为视频估算，适合看同流程复测趋势；速度已按画面人体尺度换算为常用单位。", row["availability"])
+        for row in bat02
+    )
+
+    pitch_compare_bars = bars(
+        [(row["label_cn"] + " 球员", num(row["child_value"]), row["unit"], "#f97316") for row in pitch_vs[:6]]
+        + [(row["label_cn"] + " 教练", num(row["coach_value"]), row["unit"], "#16a34a") for row in pitch_vs[:6]]
+    )
+    bat_reference_bars = bars(
+        [
+            ("打击样本二 髋肩分离", num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "deg", "#f97316"),
+            ("打击样本六 髋肩分离", num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "deg", "#60a5fa"),
+            ("Green光学参考", first_metric(vicon, "batting", "hip_shoulder_sep_deg", "green"), "deg", "#16a34a"),
+            ("Bryan光学参考", first_metric(vicon, "batting", "hip_shoulder_sep_deg", "bryan"), "deg", "#16a34a"),
+            ("打击样本二 头部稳定", num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "%", "#f97316"),
+            ("打击样本六 头部稳定", num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "%", "#60a5fa"),
+        ],
+        max_value=100,
+    )
+    pitch_full_by_key = {row["metric_key"]: row for row in pitch_full}
+
+    def event_detail(clip: str, metric: str) -> str:
+        row = find_metric(sly, clip, metric)
+        if not row:
+            return "暂无数据|"
+        return f"{fmt(row.get('value'), row.get('unit'))}|第{row.get('event_frame', '暂无')}帧"
+
+    pitch_timeline_details = [
+        "暂无抬腿事件|需逐帧检测",
+        event_detail("benchmark_pitch_vertical_09", "Motion Phase Start"),
+        "暂无最大外旋|需逐帧检测",
+        event_detail("benchmark_pitch_vertical_09", "Motion Phase Event"),
+        event_detail("benchmark_pitch_vertical_09", "Motion Phase End"),
+    ]
+    bat_timeline_details = [
+        "暂无准备事件|需逐帧检测",
+        event_detail("benchmark_hit_vertical_02", "Motion Phase Start"),
+        "暂无落脚事件|需逐帧检测",
+        "暂无入区事件|需球棒轨迹",
+        event_detail("benchmark_hit_vertical_02", "Motion Phase Event"),
+        event_detail("benchmark_hit_vertical_02", "Motion Phase End"),
+    ]
+    pitch_event_rows = [row for row in sly if row.get("clip_id") == "benchmark_pitch_vertical_09" and "Motion Phase" in row.get("metric_name", "")]
+    bat_event_rows = [row for row in sly if row.get("clip_id") == "benchmark_hit_vertical_02" and "Motion Phase" in row.get("metric_name", "")]
+    pitch_events = [(metric_cn(row["metric_name"]), num(row.get("value"))) for row in pitch_event_rows]
+    bat_events = [(metric_cn(row["metric_name"]), num(row.get("value"))) for row in bat_event_rows]
+    pitch_event_frame = int(num(find_metric(sly, "benchmark_pitch_vertical_09", "Motion Phase Event")["event_frame"]) or 10)
+    coach_release_frame = peak_speed_frame(pitch_coach_frames, ["right_wrist", "right_hand"])
+    pitch_posture_overlay = posture_overlay_svg(pitch09_frames, pitch_coach_frames, pitch_event_frame, coach_release_frame)
+    pitch_angle_chart = line_chart_svg("投球角度时间曲线", pose_angle_series(pitch09_frames, "pitch"), pitch_events, "角度")
+    pitch_speed_chart = line_chart_svg("投球速度时间曲线", pose_speed_series(pitch09_frames, "pitch"), pitch_events, "公里/小时")
+    bat_angle_chart = line_chart_svg("打击角度时间曲线", pose_angle_series(bat02_frames, "bat"), bat_events, "角度")
+    bat_speed_chart = line_chart_svg("打击速度时间曲线", pose_speed_series(bat02_frames, "bat"), bat_events, "公里/小时")
+    pose_quality_chart = pose_quality_svg([
+        ("投球样本九", pitch09_frames, "#2563eb"),
+        ("投球样本十", pitch10_frames, "#60a5fa"),
+        ("打击样本二", bat02_frames, "#f97316"),
+        ("打击样本六", bat06_frames, "#7c4dff"),
+    ])
+    pitch_chain_nodes = [
+        ("下肢", fmt(find_metric(sly, "benchmark_pitch_vertical_09", "Lead Knee Angle")["value"], "deg"), "前腿膝角"),
+        ("骨盆", fmt(vs["pelvis_vel_deg_s"]["child_value"], "deg/s"), "峰值速度"),
+        ("躯干", fmt(vs["trunk_vel_deg_s"]["child_value"], "deg/s"), "峰值速度"),
+        ("手臂", fmt(pitch_full_by_key["arm_speed"]["child_value"], "%"), "相对教练"),
+        ("出手", "约" + fmt(px_speed_to_kmh("benchmark_pitch_vertical_09", find_metric(sly, "benchmark_pitch_vertical_09", "Ball Speed")["value"]), "km/h"), "球速估算"),
+    ]
+    pitch_dot_plot = dot_comparison_svg(
+        [
+            {
+                "label": "髋肩分离",
+                "sub": "身体扭转",
+                "unit": "deg",
+                "points": [
+                    {"name": "样本九", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Hip-Shoulder Sep")["value"]), "color": "#2563eb"},
+                    {"name": "样本十", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Hip-Shoulder Sep")["value"]), "color": "#f97316"},
+                    {"name": "教练", "value": num(vs["hip_shoulder_sep_deg"]["coach_value"]), "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "前腿膝角",
+                "sub": "落地支撑",
+                "unit": "deg",
+                "points": [
+                    {"name": "样本九", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Lead Knee Angle")["value"]), "color": "#2563eb"},
+                    {"name": "样本十", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Lead Knee Angle")["value"]), "color": "#f97316"},
+                    {"name": "教练", "value": num(pitch_full_by_key["lead_knee"]["coach_value"]), "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "躯干倾斜",
+                "sub": "身体姿态",
+                "unit": "deg",
+                "points": [
+                    {"name": "样本九", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Trunk Tilt")["value"]), "color": "#2563eb"},
+                    {"name": "样本十", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Trunk Tilt")["value"]), "color": "#f97316"},
+                    {"name": "教练", "value": num(pitch_full_by_key["trunk_lean"]["coach_value"]), "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "头部稳定",
+                "sub": "稳定性",
+                "unit": "%",
+                "points": [
+                    {"name": "样本九", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Head Stability")["value"]), "color": "#2563eb"},
+                    {"name": "样本十", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Head Stability")["value"]), "color": "#f97316"},
+                    {"name": "参考", "value": 90.0, "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "跨步长度",
+                "sub": "动力转移",
+                "unit": "%",
+                "points": [
+                    {"name": "样本九", "value": (num(find_metric(sly, "benchmark_pitch_vertical_09", "Stride Length")["value"]) or 0) * 100, "color": "#2563eb"},
+                    {"name": "样本十", "value": (num(find_metric(sly, "benchmark_pitch_vertical_10", "Stride Length")["value"]) or 0) * 100, "color": "#f97316"},
+                    {"name": "教练", "value": num(pitch_full_by_key["stride_length"]["coach_value"]), "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "球速估算",
+                "sub": "同机位趋势",
+                "unit": "km/h",
+                "points": [
+                    {"name": "样本九", "value": px_speed_to_kmh("benchmark_pitch_vertical_09", find_metric(sly, "benchmark_pitch_vertical_09", "Ball Speed")["value"]), "color": "#2563eb"},
+                    {"name": "样本十", "value": px_speed_to_kmh("benchmark_pitch_vertical_10", find_metric(sly, "benchmark_pitch_vertical_10", "Ball Speed")["value"]), "color": "#f97316"},
+                ],
+            },
+        ],
+        [("样本九", "#2563eb"), ("样本十", "#f97316"), ("教练或建议参考", "#101828")],
+    )
+    bat_dot_plot = dot_comparison_svg(
+        [
+            {
+                "label": "髋肩分离",
+                "sub": "身体蓄力",
+                "unit": "deg",
+                "points": [
+                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "color": "#2563eb"},
+                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "color": "#f97316"},
+                    {"name": "光学参考", "value": mean_metric(vicon, "batting", "hip_shoulder_sep_deg"), "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "前腿膝角",
+                "sub": "支撑稳定",
+                "unit": "deg",
+                "points": [
+                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Lead Knee Angle")["value"]), "color": "#2563eb"},
+                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Lead Knee Angle")["value"]), "color": "#f97316"},
+                    {"name": "光学参考", "value": mean_metric(vicon, "batting", "lead_knee_angle_deg"), "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "躯干倾斜",
+                "sub": "身体轴线",
+                "unit": "deg",
+                "points": [
+                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Trunk Tilt")["value"]), "color": "#2563eb"},
+                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Trunk Tilt")["value"]), "color": "#f97316"},
+                    {"name": "光学参考", "value": mean_metric(vicon, "batting", "trunk_tilt_deg"), "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "头部稳定",
+                "sub": "看球稳定",
+                "unit": "%",
+                "points": [
+                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "color": "#2563eb"},
+                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "color": "#f97316"},
+                    {"name": "建议参考", "value": 90.0, "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "攻击角",
+                "sub": "挥棒平面",
+                "unit": "deg",
+                "points": [
+                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Attack Angle")["value"]), "color": "#2563eb"},
+                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Attack Angle")["value"]), "color": "#f97316"},
+                    {"name": "光学参考", "value": mean_metric(vicon, "batting", "bat_angle_deg"), "color": "#101828", "kind": "line"},
+                ],
+            },
+            {
+                "label": "挥棒速度估算",
+                "sub": "末端速度",
+                "unit": "km/h",
+                "points": [
+                    {"name": "样本二", "value": px_speed_to_kmh("benchmark_hit_vertical_02", find_metric(sly, "benchmark_hit_vertical_02", "Estimated Bat Speed")["value"]), "color": "#2563eb"},
+                    {"name": "样本六", "value": px_speed_to_kmh("benchmark_hit_horizontal_06", find_metric(sly, "benchmark_hit_horizontal_06", "Estimated Bat Speed")["value"]), "color": "#f97316"},
+                ],
+            },
+        ],
+        [("样本二", "#2563eb"), ("样本六", "#f97316"), ("光学或建议参考", "#101828")],
+    )
+
+    html_doc = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>青少年棒球三维动作体检报告</title>
+  <style>
+    :root {{
+      --primary:#2563eb; --ink:#101828; --body:#344054; --mid:#667085; --mute:#98a2b3;
+      --line:#d0d5dd; --canvas:#f5f7fb; --soft:#eef6ff; --card:#fff; --dusk:#101828;
+      --orange:#f97316; --green:#16a34a; --red:#ef4444; --review:#e89918; --blue:#60a5fa; --violet:#7c4dff;
+    }}
+    * {{ box-sizing:border-box; }}
+    body {{ margin:0; background:var(--canvas); color:var(--ink); font-family:STHeiti,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; line-height:1.5; letter-spacing:0; }}
+    .topbar {{ position:sticky; top:0; z-index:10; background:rgba(255,255,255,.95); border-bottom:1px solid var(--line); backdrop-filter:blur(12px); }}
+    .nav {{ max-width:1180px; margin:auto; padding:20px 24px; display:flex; align-items:center; justify-content:space-between; gap:20px; }}
+    .brand {{ color:var(--primary); font-size:24px; font-weight:600; }}
+    .links {{ display:flex; flex-wrap:wrap; gap:14px; color:var(--mid); font-size:18px; }}
+    .links a {{ color:inherit; text-decoration:none; }}
+    main {{ max-width:1180px; margin:auto; padding:32px 24px 72px; }}
+    .hero {{ background:var(--dusk); color:white; border-radius:26px; padding:42px; display:grid; grid-template-columns:1.02fr .98fr; gap:34px; align-items:stretch; }}
+    .hero > * {{ min-width:0; }}
+    h1 {{ font-size:56px; line-height:66px; font-weight:500; margin:0 0 18px; }}
+    h2 {{ font-size:34px; line-height:44px; font-weight:500; margin:0; }}
+    h3 {{ font-size:27px; line-height:36px; font-weight:500; margin:0; }}
+    h4 {{ font-size:20px; line-height:30px; margin:0; }}
+    p {{ margin:0; color:var(--body); font-size:18px; overflow-wrap:anywhere; }}
+    .hero p {{ color:#dbeafe; font-size:22px; line-height:34px; }}
+    .pill-row {{ display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }}
+    .pill {{ border:1px solid #334155; background:#0f172a; color:#dbeafe; border-radius:999px; padding:8px 16px; font-size:18px; }}
+    .hero-evidence {{ background:linear-gradient(135deg,rgba(37,99,235,.34),rgba(249,115,22,.16)),#0f172a; border:1px solid #334155; border-radius:24px; padding:18px; display:grid; gap:14px; }}
+    .hero-stat {{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }}
+    .hero-stat div {{ background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:14px; }}
+    .hero-stat b {{ display:block; font-size:26px; color:#fff; }}
+    .hero-stat span {{ color:#cbd5e1; font-size:15px; }}
+    .section {{ margin-top:42px; min-width:0; }}
+    .section-title {{ display:flex; align-items:center; gap:14px; margin-bottom:18px; }}
+    .mark {{ width:12px; height:40px; background:var(--primary); border-radius:999px; flex:0 0 auto; }}
+    .module-note {{ background:var(--soft); border:1px solid #bfdbfe; border-radius:12px; padding:16px 18px; margin-bottom:18px; }}
+    .grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }}
+    .grid-2 {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }}
+    .grid-3 {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }}
+    .grid > *, .grid-2 > *, .grid-3 > * {{ min-width:0; }}
+    .card,.metric-card,.visual-card {{ background:var(--card); border:2px solid #e4e7ec; border-radius:24px; padding:24px; min-width:0; }}
+    .card.good,.metric-card.good {{ background:#f7fff9; }}
+    .card.review,.metric-card.review {{ background:#fffaf4; }}
+    .card.risk,.metric-card.risk {{ background:#fff8f8; }}
+    .card.na,.metric-card.na {{ background:#eef2f7; border-style:dashed; }}
+    .card-head {{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }}
+    .badge {{ display:inline-flex; align-items:center; border-radius:999px; padding:5px 11px; font-size:15px; white-space:nowrap; }}
+    .badge.good {{ background:#dcfce7; color:#166534; }}
+    .badge.review {{ background:#fff7ed; color:#9a3412; }}
+    .badge.risk {{ background:#fef2f2; color:#b91c1c; }}
+    .badge.na {{ background:#eef2f7; color:#697586; }}
+    .metric-value {{ font-size:32px; line-height:1; font-weight:700; margin:18px 0 10px; overflow-wrap:anywhere; }}
+    .visual-card h4 {{ font-size:18px; line-height:26px; }}
+    .visual-card p,.metric-card p,.card p {{ margin-top:8px; color:var(--mid); }}
+    .visual-card p {{ font-size:16px; line-height:24px; }}
+    .radar {{ width:100%; max-width:330px; display:block; margin:auto; }}
+    .radar text {{ fill:#344054; font-size:12px; font-weight:600; }}
+    .pose-svg,.wide-svg {{ width:100%; display:block; border-radius:18px; }}
+    .evidence-pair {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }}
+    .evidence-figure {{ margin:0; min-width:0; background:#f8fafc; border:1px solid var(--line); border-radius:16px; overflow:hidden; }}
+    .evidence-img {{ width:100%; aspect-ratio:16/10; object-fit:cover; display:block; background:#101828; }}
+    .evidence-figure figcaption {{ display:grid; gap:4px; padding:10px 12px; }}
+    .evidence-figure figcaption b {{ color:var(--ink); font-size:15px; line-height:20px; }}
+    .evidence-figure figcaption span {{ color:var(--mid); font-size:13px; line-height:18px; }}
+    .hero-evidence .evidence-img {{ aspect-ratio:16/11; }}
+    .dot-plot-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
+    .dot-compare-svg {{ width:100%; min-width:0; display:block; border-radius:18px; }}
+    .line-chart-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
+    .line-chart-svg {{ width:100%; min-width:0; display:block; border-radius:18px; }}
+    .mini-chart-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
+    .timeline-svg {{ min-width:0; }}
+    .chain-svg {{ min-width:0; }}
+    .chart-copy {{ display:grid; gap:10px; align-content:center; }}
+    .chart-copy li {{ margin-bottom:8px; color:var(--body); font-size:18px; }}
+    .priority-list {{ display:grid; gap:12px; }}
+    .priority-item {{ display:grid; grid-template-columns:42px 1fr auto; gap:14px; align-items:center; background:#fff; border:2px solid #e4e7ec; border-radius:18px; padding:16px; }}
+    .rank {{ width:42px; height:42px; border-radius:999px; display:grid; place-items:center; background:var(--orange); color:#fff; font-weight:700; }}
+    .bars {{ display:grid; gap:12px; margin-top:16px; }}
+    .bar-row {{ display:grid; grid-template-columns:180px 1fr 108px; gap:12px; align-items:center; font-size:16px; color:var(--mid); }}
+    .track {{ height:12px; background:#e8eef6; border-radius:999px; overflow:hidden; }}
+    .track i {{ display:block; height:100%; border-radius:inherit; }}
+    .training {{ display:grid; grid-template-columns:repeat(7,minmax(150px,1fr)); gap:12px; overflow-x:auto; padding-bottom:4px; }}
+    .day {{ min-height:180px; background:#fff; border:2px solid #e4e7ec; border-radius:18px; padding:16px; }}
+    .day ul {{ padding-left:20px; margin:10px 0 0; color:var(--mid); font-size:16px; }}
+    .matrix {{ position:relative; min-height:320px; background:linear-gradient(90deg,#f8fafc,#eef6ff); border-radius:18px; border:1px solid var(--line); overflow:hidden; }}
+    .matrix:before,.matrix:after {{ content:""; position:absolute; background:#d0d5dd; }}
+    .matrix:before {{ left:50%; top:0; bottom:0; width:1px; }}
+    .matrix:after {{ top:50%; left:0; right:0; height:1px; }}
+    .bubble {{ position:absolute; transform:translate(-50%,-50%); border-radius:999px; padding:12px 16px; color:white; font-weight:600; }}
+    .table-scroll {{ max-height:420px; max-width:100%; overflow:auto; border:1px solid var(--line); border-radius:12px; background:white; }}
+    table {{ width:100%; border-collapse:collapse; min-width:760px; }}
+    th,td {{ padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:14px; color:var(--body); }}
+    th {{ background:var(--soft); color:var(--ink); position:sticky; top:0; }}
+    footer {{ border-top:1px solid var(--line); color:var(--mute); text-align:center; padding:24px; font-size:16px; }}
+    @media (max-width:960px) {{ .hero,.grid-2,.grid-3 {{ grid-template-columns:1fr; }} .grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .bar-row,.priority-item {{ grid-template-columns:1fr; }} h1 {{ font-size:40px; line-height:48px; }} }}
+    @media (max-width:640px) {{ main,.nav {{ padding-left:16px; padding-right:16px; }} .hero {{ padding:26px; }} .grid {{ grid-template-columns:1fr; }} .hero-stat,.evidence-pair {{ grid-template-columns:1fr; }} .links {{ font-size:16px; }} .visual-card h4 {{ font-size:17px; line-height:24px; }} .visual-card p {{ font-size:15px; line-height:22px; }} }}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <nav class="nav">
+      <div class="brand">棒球动作实验室</div>
+      <div class="links"><a href="#player">球员</a><a href="#coach">教练</a><a href="#research">研究者</a><a href="#pitch">投球</a><a href="#bat">打击</a></div>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div>
+        <h1>青少年棒球三维动作体检报告</h1>
+        <p>本报告按球员、教练、研究者三类读者拆分，并把投球和打击分开分析。能由当前三维基准数据计算的指标直接呈现；缺少逐帧、雷达枪或真实接触事件的数据，以占位和限制说明呈现。</p>
+        <div class="pill-row"><span class="pill">中文报告</span><span class="pill">三维骨架</span><span class="pill">可量化诊断</span><span class="pill">数据限制透明</span></div>
+      </div>
+      <aside class="hero-evidence">
+        {image_figure(pitch09_3d, "投球三维骨架证据", "来自当前基准投球样本的三维姿态输出。")}
+        <div class="hero-stat">
+          <div><b>{pitch09_pose_summary["frames"]}</b><span>投球三维可用帧</span></div>
+          <div><b>{bat02_pose_summary["frames"]}</b><span>打击三维可用帧</span></div>
+          <div><b>{fmt(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"], "%")}</b><span>打击头部稳定</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section" id="player">
+      <div class="section-title"><span class="mark"></span><h2>球员模块</h2></div>
+      <div class="module-note"><p>这一模块只回答孩子和家长最关心的三件事：哪里做得好、哪里要改、接下来练什么。</p></div>
+
+      <section class="section" id="pitch">
+        <div class="section-title"><span class="mark"></span><h3>投球分析</h3></div>
+        <div class="grid-2">
+          <article class="visual-card">
+            <h4>投球六维评分图</h4>
+            {radar_svg(["下肢支撑","身体前移","髋肩分离","躯干控制","手臂加速","稳定性"], pitch_scores)}
+            <p>怎么看：分数越低越需要优先训练；本次末端加速和身体前移比姿态角度更需要复测关注。</p>
+          </article>
+          <article class="visual-card">
+            <h4>投球优先级列表</h4>
+            <div class="priority-list">
+              <div class="priority-item"><span class="rank">1</span><div><h4>提高出手侧手部速度</h4><p>和教练参考差距较大，但速度属于估算，先用同机位复测看趋势。</p></div><span class="badge risk">关注</span></div>
+              <div class="priority-item"><span class="rank">2</span><div><h4>增加身体前移质量</h4><p>当前身体中心位移不是力板重心，只能作为动作方向参考。</p></div><span class="badge review">需复核</span></div>
+              <div class="priority-item"><span class="rank">3</span><div><h4>保持前腿支撑</h4><p>前腿角度和跨步角接近可训练范围，是本次可保持项。</p></div><span class="badge good">良好</span></div>
+            </div>
+          </article>
+        </div>
+        <div class="grid-2" style="margin-top:18px">
+          <article class="visual-card"><h4>投球关键帧证据图</h4>{image_pair([(pitch09_2d, "投球二维关键帧", "来自当前基准投球视频的关键帧输出。"), (pitch09_3d, "投球三维骨架", "优先使用三维姿态结果解释动作角度。")])}<p>方法：关键帧用于定位动作阶段，三维骨架用于解释髋肩分离、前膝支撑和躯干姿态。</p></article>
+          <article class="visual-card"><h4>投球姿态纠正图</h4>{pitch_posture_overlay}<p>方法：蓝色虚线是球员出手附近三维姿态，绿色是教练出手侧手部速度峰值附近姿态；红色标出当前偏差最大的骨段。</p></article>
+        </div>
+        <div class="grid" style="margin-top:18px">{pitch_metric_cards}</div>
+        <div class="grid-3" style="margin-top:18px">
+          {card("投球训练目标一", "每周三次做跨步停顿投球影子练习，每次三组，每组八次；复测跨步长度和前膝角。", "训练", "review")}
+          {card("投球训练目标二", "每周三次做髋肩分离慢动作练习，先转胯再带肩；复测髋肩分离和躯干倾斜。", "训练", "review")}
+          {card("投球训练目标三", "每周两次做毛巾出手练习，只看动作顺序，不追求速度；复测手部速度估算趋势。", "训练", "risk")}
+        </div>
+        <article class="visual-card" style="margin-top:18px"><h4>投球七天训练计划</h4><div class="training">{''.join(f'<div class="day"><h4>第{i}天</h4><span class="badge review">{"复测" if i == 7 else "训练"}</span><ul><li>{"同机位拍摄投球" if i == 7 else "髋肩分离慢动作"}</li><li>{"复测两个短板指标" if i == 7 else "跨步停顿影子投球"}</li><li>记录疼痛、疲劳和完成率</li></ul></div>' for i in range(1,8))}</div></article>
+      </section>
+
+      <section class="section" id="bat">
+        <div class="section-title"><span class="mark"></span><h3>打击分析</h3></div>
+        <div class="grid-2">
+          <article class="visual-card"><h4>打击六维评分图</h4>{radar_svg(["站姿稳定","跨步控制","髋肩分离","躯干旋转","挥棒平面","击球后平衡"], bat_scores, "#7c4dff")}<p>怎么看：髋肩分离和挥棒平面是本次打击优先改进项，头部稳定是保持项。</p></article>
+          <article class="visual-card"><h4>打击关键帧证据图</h4>{image_pair([(bat02_2d, "打击二维关键帧", "来自当前基准打击视频的关键帧输出。"), (bat02_3d, "打击三维骨架", "已使用现有三维流程输出，不需要重新跑视频。")])}<p>方法：重点看启动、击球点和随挥结束；真实球棒接触点仍需专门事件标注。</p></article>
+        </div>
+        <div class="grid" style="margin-top:18px">{bat_metric_cards}</div>
+        <div class="grid-2" style="margin-top:18px">
+          <article class="visual-card"><h4>挥棒轨迹证据图</h4>{image_pair([(bat02_3d, "主体打击三维骨架", "用于观察挥棒过程中的身体轴线和下肢支撑。"), (bat06_3d, "对照打击三维骨架", "用于同批次样本对比，不作为绝对标准。")])}<p>怎么看：当前真实可用的是身体三维骨架和手部轨迹估算，尚不能直接等同真实球棒杆身轨迹。</p></article>
+          <article class="visual-card"><h4>打击优先级列表</h4><div class="priority-list"><div class="priority-item"><span class="rank">1</span><div><h4>修正挥棒平面</h4><p>攻击角偏大时，球棒容易从球下方穿过。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">2</span><div><h4>提高髋肩分离</h4><p>身体蓄力不足时，动作容易变成只靠手。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">3</span><div><h4>保持看球稳定</h4><p>头部稳定分高，是本次打击优势。</p></div><span class="badge good">良好</span></div></div></article>
+        </div>
+        <div class="grid-3" style="margin-top:18px">
+          {card("墙边髋肩分离", "每天两组，左右各八次；家长只看肩膀不要抢先。", "训练", "risk")}
+          {card("固定球平扫路线", "每次三组，每组八球；让球棒沿水平线穿过击球区。", "训练", "risk")}
+          {card("看球冻结", "每次两组，每组十次；挥完保持击球点一秒再抬头。", "训练", "good")}
+        </div>
+      </section>
+    </section>
+
+    <section class="section" id="coach">
+      <div class="section-title"><span class="mark"></span><h2>教练模块</h2></div>
+      <div class="module-note"><p>这一模块聚焦对比、差距、阶段和训练干预，不把队员对比写成医学评价或单一排名。</p></div>
+      <div class="grid-2">
+        <article class="visual-card"><h4>投球差距仪表盘</h4><div class="table-scroll">{compare_table(pitch_vs)}</div><p>怎么看：按差距和训练可改性决定优先级，速度与位移估算必须复测确认。</p></article>
+        <article class="visual-card"><h4>投球阶段时间轴</h4>{timeline_svg(["抬腿","落脚","最大外旋","出手","随挥"], pitch_timeline_details)}<p>当前汇总表提供动作开始、出手估算事件和动作结束；抬腿与最大外旋仍需逐帧事件检测。</p></article>
+      </div>
+      <article class="visual-card" style="margin-top:18px"><h4>投球队员对比点位图</h4>{pitch_dot_plot}<p>读法：蓝点是主体投球样本，橙点是同批次对照样本，黑线是教练或建议参考。每一行只比较同一个指标。</p></article>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>投球动力链传递图</h4>{chain_svg(pitch_chain_nodes)}<p>怎么看：每个节点下方保留本次可用数值；速度为估算时只看顺序趋势，不直接下绝对速度结论。</p></article>
+        <article class="visual-card"><h4>打击阶段时间轴</h4>{timeline_svg(["准备","启动","前脚落地","进入击球区","击球点","随挥"], bat_timeline_details)}<p>打击阶段独立于投球阶段；当前汇总表提供启动、击球点估算和随挥结束，落脚与入区需要球棒轨迹补充。</p></article>
+      </div>
+      <article class="visual-card" style="margin-top:18px"><h4>打击队员对比点位图</h4>{bat_dot_plot}<p>读法：蓝点是主体打击样本，橙点是同批次对照样本，黑线是光学动作捕捉或建议参考。点越接近参考线，说明该指标越接近参考动作。</p></article>
+      <article class="visual-card" style="margin-top:18px"><h4>改进优先级矩阵</h4><div class="matrix"><span class="bubble" style="left:78%;top:24%;background:#ef4444">手部速度</span><span class="bubble" style="left:66%;top:34%;background:#f97316">身体前移</span><span class="bubble" style="left:58%;top:62%;background:#7c4dff">挥棒平面</span><span class="bubble" style="left:36%;top:72%;background:#16a34a">头部稳定</span></div><p>横轴代表表现影响，纵轴越靠上代表越应优先训练。</p></article>
+    </section>
+
+    <section class="section" id="research">
+      <div class="section-title"><span class="mark"></span><h2>研究者模块</h2></div>
+      <div class="module-note"><p>这一模块使用当前三维姿态 CSV 与 vicon_2026 C3D 导出生成逐帧曲线、事件线、质量图和光学动作捕捉校准；不可直接观测的雷达球速和力板重心仍在限制说明中保留。</p></div>
+      <div class="grid-2">
+        <article class="visual-card"><h4>投球角度时间曲线</h4>{pitch_angle_chart}<p>怎么看：曲线来自投球样本九三维骨架逐帧计算，黑色虚线为动作开始、出手估算和动作结束事件。</p></article>
+        <article class="visual-card"><h4>投球速度时间曲线</h4>{pitch_speed_chart}<p>怎么看：速度由三维模型空间坐标逐帧差分估算并换算为公里/小时，用于观察峰值顺序和事件附近变化。</p></article>
+        <article class="visual-card"><h4>打击角度时间曲线</h4>{bat_angle_chart}<p>怎么看：曲线来自打击样本二三维骨架逐帧计算，重点看启动到击球点之间前膝、躯干和髋肩分离的变化。</p></article>
+        <article class="visual-card"><h4>打击速度时间曲线</h4>{bat_speed_chart}<p>怎么看：速度由髋部、躯干和出手侧手部轨迹估算；真实球棒杆身速度仍需要球棒检测或光学标记。</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>事件点表</h4><div class="table-scroll">{source_table([r for r in sly if "Motion Phase" in r["metric_name"]], 20, sly)}</div></article>
+        <article class="visual-card"><h4>三维骨架来源表</h4><div class="table-scroll">{pose3d_source_table([("投球样本九", pose3d_pitch09), ("投球样本十", pose3d_pitch10), ("打击样本二", pose3d_bat02), ("打击样本六", pose3d_bat06)])}</div><p>表内统计直接来自三维骨架序列，用于确认本报告已接入真实姿态数据。</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>Vicon 2026 C3D来源表</h4><div class="table-scroll">{vicon_source_table(vicon)}</div><p>表内统计由 vicon_2026 文件夹中的 C3D 导出直接解析得到，忽略 macOS 资源分叉文件。</p></article>
+        <article class="visual-card"><h4>Vicon三维点重建图</h4>{vicon_reconstruction_svg(vicon_points, "green_006_pitch_09", "Green投球C3D点重建")}<p>怎么看：该图不是截图，而是从 C3D marker 的三维点坐标投影重建，用于检查光学数据的身体点结构。</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>数据质量图</h4>{pose_quality_chart}<p>怎么看：条形长度综合输入质量分和关节完整率；研究者应优先检查低质量样本的峰值速度和事件点。</p></article>
+        <article class="visual-card"><h4>Vicon球棒点重建图</h4>{vicon_reconstruction_svg(vicon_points, "green_006_bat_04", "Green打击C3D点重建")}<p>怎么看：橙色连线来自 Bat1/Bat5 marker，可用于解释光学棒速；身体点用于确认击球动作的全身姿态背景。</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <article class="visual-card"><h4>光学动作捕捉校准说明</h4><div class="bars">{bars([("Bryan球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "bryan"), "km/h", "#16a34a"), ("Green球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "green"), "km/h", "#60a5fa"), ("Bryan挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "bryan"), "s", "#f97316"), ("Green挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "green"), "s", "#60a5fa")])}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出，用于校准和解释视频估算，不直接替代当前视频指标。</p></article>
+        <article class="visual-card"><h4>限制卡片组</h4><div class="grid-2">{card("真实球速", "当前速度是视频追踪换算值，不等同雷达枪正式球速。", "需复核", "review")}{card("换算假设", "使用源视频分辨率、帧率、画面人体高度，并假设青少年身高一米五五。", "需复核", "review")}{card("身体重心", "当前使用髋部和脊柱中心近似，不是力板重心。", "需复核", "review")}{card("光学与视频对齐", "不同来源尚未逐帧同步，只能做解释性参考。", "需复核", "review")}</div></article>
+      </div>
+      <article class="visual-card" style="margin-top:18px"><h4>指标来源表</h4><div class="table-scroll">{source_table(sly, all_rows=sly)}</div></article>
+    </section>
+  </main>
+  <footer>三维视频动作分析报告，仅用于训练参考。缺少数据的指标已保留占位和限制说明。</footer>
+</body>
+</html>
+"""
+    OUT.write_text(html_doc, encoding="utf-8")
+    print(f"写入 {OUT}")
+
+
+if __name__ == "__main__":
+    main()

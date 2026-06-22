@@ -427,6 +427,65 @@ $PY scripts/import_vicon_xlsx.py \
   --out data/processed/poses/vicon_trial/vicon_xy_projected.csv
 ```
 
+Vicon 2026 C3D exports for the current Chinese benchmark HTML report:
+
+```bash
+.venv312/bin/python scripts/build_vicon_2026_metrics.py \
+  --input-dir ../vicon_2026 \
+  --metrics-out reports/vicon_2026_metrics.csv \
+  --points-out reports/vicon_2026_point_summary.csv
+```
+
+Inputs:
+
+```text
+../vicon_2026/bryan/001 Cal 04 Bat 05.c3d
+../vicon_2026/bryan/001 Cal 04 Pitch 05.c3d
+../vicon_2026/green/006 Bat 04.c3d
+../vicon_2026/green/006 Pitch 09.c3d
+```
+
+Notes:
+
+- Ignore `../vicon_2026/*/._*.c3d`; those are macOS resource-fork files.
+- The script has a small built-in C3D parser for `POINT:LABELS`, frame rate,
+  point scale/data start, and float point frames. It does not require `ezc3d`.
+- It outputs trial-level optical reference metrics and a point-summary table
+  used by `report.html` to reconstruct body/bat 3D projection figures.
+- Pitching C3D files include full-body AI/model points; batting C3D files
+  include body markers plus `Bat:Bat1` through `Bat:Bat5`.
+
+Current benchmark HTML report:
+
+```bash
+.venv312/bin/python scripts/build_vicon_2026_metrics.py
+python3 scripts/build_benchmark_report_html.py
+```
+
+Report inputs:
+
+```text
+reports/slymask_benchmark_metrics.csv
+output/data/benchmark_pitch_vertical_09_motion_metrics_full.csv
+output/data/benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv
+reports/vicon_2026_metrics.csv
+reports/vicon_2026_point_summary.csv
+data_full/benchmark_rtmpose_test/processed/poses3d/*/image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv
+data_full/coach_pose3d/gvhmr/pitch_horizontal_coach.csv
+outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/*.png
+```
+
+Report output:
+
+```text
+report.html
+```
+
+Design constraints for this report are in `DESIGN.md`: Chinese-only user-facing
+copy, compact graph x-axes, no graph text/curve overlap, real graphs whenever
+CSV/C3D data can compute them, and no user-facing units such as `px/s` or
+`3d_unit/s`.
+
 RealSense report:
 
 ```bash
@@ -542,6 +601,8 @@ $PY scripts/build_pdf_report.py \
 | `scripts/run_yolo_object_sample.py` | Latest YOLO bat/ball detector sample runner; useful for small fast iterations. |
 | `scripts/benchmark_slymask_metrics.py` | SlyMask-style benchmark metrics with explicit proxy/unavailable statuses. |
 | `scripts/analyze_vicon_wave_metrics.py` | Vicon swing metric analysis and report figures. |
+| `scripts/build_vicon_2026_metrics.py` | C3D parser and Vicon 2026 report metrics/point-summary builder. |
+| `scripts/build_benchmark_report_html.py` | Current Chinese benchmark HTML report builder using SlyMask, GVHMR/RTMPose, and Vicon 2026 data. |
 | `scripts/build_realsense_task3_report.py` | RealSense D435 comparison report and figures. |
 | `scripts/build_pitch_report_template.py` | Local Chinese pitching report template; currently untracked. |
 | `scripts/export_gvhmr_joints.py` | External GVHMR `.pt` to project 3D CSV handoff. |
