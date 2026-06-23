@@ -115,10 +115,10 @@ STATUS_CN = {
 
 
 CLIP_CN = {
-    "benchmark_pitch_vertical_09": "投球样本九",
-    "benchmark_pitch_vertical_10": "投球样本十",
-    "benchmark_hit_vertical_02": "打击样本二",
-    "benchmark_hit_horizontal_06": "打击样本六",
+    "benchmark_pitch_vertical_09": "投球09",
+    "benchmark_pitch_vertical_10": "投球10",
+    "benchmark_hit_vertical_02": "打击02",
+    "benchmark_hit_horizontal_06": "打击06",
 }
 
 
@@ -912,7 +912,7 @@ def first_metric(rows: list[dict[str, str]], action: str, metric: str, athlete: 
 
 def vicon_source_table(rows: list[dict[str, str]]) -> str:
     body = []
-    for row in rows:
+    for row in sorted(rows, key=lambda item: (sample_name(item), item.get("action_type", ""), item.get("source_file", ""))):
         body.append(
             "<tr>"
             f"<td>{esc(sample_name(row))}</td>"
@@ -926,12 +926,11 @@ def vicon_source_table(rows: list[dict[str, str]]) -> str:
     return '<table><thead><tr><th>样本名</th><th>动作</th><th>帧数</th><th>时长</th><th>有效点比例</th><th>C3D来源</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
 
 
-def vicon_trial(rows: list[dict[str, str]], action: str, preferred_sample: str = "green") -> dict[str, str] | None:
-    candidates = [row for row in rows if row.get("action_type") == action]
-    for row in candidates:
-        if sample_name(row) == preferred_sample:
-            return row
-    return candidates[0] if candidates else None
+def vicon_trials(rows: list[dict[str, str]], action: str) -> list[dict[str, str]]:
+    return sorted(
+        [row for row in rows if row.get("action_type") == action],
+        key=lambda item: (sample_name(item), item.get("source_file", "")),
+    )
 
 
 def vicon_reconstruction_image(rows: list[dict[str, str]], trial_id_value: str, title: str) -> str:
@@ -951,6 +950,43 @@ def vicon_reconstruction_image(rows: list[dict[str, str]], trial_id_value: str, 
       </figcaption>
     </figure>
     """
+
+
+def vicon_reconstruction_cards(
+    vicon_rows: list[dict[str, str]],
+    point_rows: list[dict[str, str]],
+    action: str,
+) -> str:
+    action_text = "投球" if action == "pitching" else "打击"
+    note = (
+        "该图不是全局点云截图，而是先提取投球关键动作帧，再从 C3D marker 的毫米坐标渲染独立重建截图。"
+        if action == "pitching"
+        else "先提取球棒峰值速度附近的关键动作窗口，再用独立 PNG 展示 Bat1-Bat5 和身体点；橙色连线用于解释光学棒速。"
+    )
+    cards = []
+    for trial in vicon_trials(vicon_rows, action):
+        title = f"{sample_name(trial)}{action_text}C3D重建截图"
+        cards.append(
+            f'<article class="visual-card"><h4>{esc(title)}</h4>'
+            f'{vicon_reconstruction_image(point_rows, trial["trial_id"], title)}'
+            f'<p>怎么看：{esc(note)}</p></article>'
+        )
+    return "".join(cards)
+
+
+def vicon_calibration_items(rows: list[dict[str, str]]) -> list[tuple[str, float | None, str, str]]:
+    colors = ["#16a34a", "#60a5fa", "#f97316", "#7c4dff", "#2563eb", "#ef4444"]
+    items: list[tuple[str, float | None, str, str]] = []
+    batting = vicon_trials(rows, "batting")
+    for i, row in enumerate(batting):
+        color = colors[i % len(colors)]
+        name = sample_name(row)
+        items.append((f"{name}球棒峰值速度", num(row.get("bat_speed_kmh")), "km/h", color))
+    for i, row in enumerate(batting):
+        color = colors[(i + len(batting)) % len(colors)]
+        name = sample_name(row)
+        items.append((f"{name}挥棒高速度窗口", num(row.get("swing_time_sec")), "s", color))
+    return items
 
 
 def main() -> None:
@@ -978,14 +1014,8 @@ def main() -> None:
     pitch_coach_frames = read_pose_sequence(pose3d_pitch_coach)
     pitch09_pose_summary = pose3d_summary(pose3d_pitch09)
     bat02_pose_summary = pose3d_summary(pose3d_bat02)
-    vicon_pitch_trial = vicon_trial(vicon, "pitching")
-    vicon_bat_trial = vicon_trial(vicon, "batting")
-    vicon_pitch_title = (
-        f"{sample_name(vicon_pitch_trial)}投球C3D重建截图" if vicon_pitch_trial else "投球C3D重建截图"
-    )
-    vicon_bat_title = (
-        f"{sample_name(vicon_bat_trial)}打击C3D重建截图" if vicon_bat_trial else "打击C3D重建截图"
-    )
+    vicon_pitch_cards = vicon_reconstruction_cards(vicon, vicon_points, "pitching")
+    vicon_bat_cards = vicon_reconstruction_cards(vicon, vicon_points, "batting")
 
     pitch_names = ["Hip-Shoulder Sep", "Lead Knee Angle", "Trunk Tilt", "Head Stability", "Stride Length", "Ball Speed"]
     bat_names = ["Hip-Shoulder Sep", "Lead Knee Angle", "Trunk Tilt", "Head Stability", "Estimated Bat Speed", "Attack Angle"]
@@ -1027,12 +1057,14 @@ def main() -> None:
     )
     bat_reference_bars = bars(
         [
-            ("打击样本二 髋肩分离", num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "deg", "#f97316"),
-            ("打击样本六 髋肩分离", num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "deg", "#60a5fa"),
-            ("green光学参考", first_metric(vicon, "batting", "hip_shoulder_sep_deg", "green"), "deg", "#16a34a"),
-            ("bryan光学参考", first_metric(vicon, "batting", "hip_shoulder_sep_deg", "bryan"), "deg", "#16a34a"),
-            ("打击样本二 头部稳定", num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "%", "#f97316"),
-            ("打击样本六 头部稳定", num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "%", "#60a5fa"),
+            ("打击02 髋肩分离", num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "deg", "#f97316"),
+            ("打击06 髋肩分离", num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "deg", "#60a5fa"),
+            *[
+                (f"{sample_name(row)}光学参考", num(row.get("hip_shoulder_sep_deg")), "deg", "#16a34a")
+                for row in vicon_trials(vicon, "batting")
+            ],
+            ("打击02 头部稳定", num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "%", "#f97316"),
+            ("打击06 头部稳定", num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "%", "#60a5fa"),
         ],
         max_value=100,
     )
@@ -1071,10 +1103,10 @@ def main() -> None:
     bat_angle_chart = line_chart_svg("打击角度时间曲线", pose_angle_series(bat02_frames, "bat"), bat_events, "角度")
     bat_speed_chart = line_chart_svg("打击速度时间曲线", pose_speed_series(bat02_frames, "bat"), bat_events, "公里/小时")
     pose_quality_chart = pose_quality_svg([
-        ("投球样本九", pitch09_frames, "#2563eb"),
-        ("投球样本十", pitch10_frames, "#60a5fa"),
-        ("打击样本二", bat02_frames, "#f97316"),
-        ("打击样本六", bat06_frames, "#7c4dff"),
+        ("投球09", pitch09_frames, "#2563eb"),
+        ("投球10", pitch10_frames, "#60a5fa"),
+        ("打击02", bat02_frames, "#f97316"),
+        ("打击06", bat06_frames, "#7c4dff"),
     ])
     pitch_chain_nodes = [
         ("下肢", fmt(find_metric(sly, "benchmark_pitch_vertical_09", "Lead Knee Angle")["value"], "deg"), "前腿膝角"),
@@ -1090,8 +1122,8 @@ def main() -> None:
                 "sub": "身体扭转",
                 "unit": "deg",
                 "points": [
-                    {"name": "样本九", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Hip-Shoulder Sep")["value"]), "color": "#2563eb"},
-                    {"name": "样本十", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Hip-Shoulder Sep")["value"]), "color": "#f97316"},
+                    {"name": "投球09", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Hip-Shoulder Sep")["value"]), "color": "#2563eb"},
+                    {"name": "投球10", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Hip-Shoulder Sep")["value"]), "color": "#f97316"},
                     {"name": "教练", "value": num(vs["hip_shoulder_sep_deg"]["coach_value"]), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1100,8 +1132,8 @@ def main() -> None:
                 "sub": "落地支撑",
                 "unit": "deg",
                 "points": [
-                    {"name": "样本九", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Lead Knee Angle")["value"]), "color": "#2563eb"},
-                    {"name": "样本十", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Lead Knee Angle")["value"]), "color": "#f97316"},
+                    {"name": "投球09", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Lead Knee Angle")["value"]), "color": "#2563eb"},
+                    {"name": "投球10", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Lead Knee Angle")["value"]), "color": "#f97316"},
                     {"name": "教练", "value": num(pitch_full_by_key["lead_knee"]["coach_value"]), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1110,8 +1142,8 @@ def main() -> None:
                 "sub": "身体姿态",
                 "unit": "deg",
                 "points": [
-                    {"name": "样本九", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Trunk Tilt")["value"]), "color": "#2563eb"},
-                    {"name": "样本十", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Trunk Tilt")["value"]), "color": "#f97316"},
+                    {"name": "投球09", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Trunk Tilt")["value"]), "color": "#2563eb"},
+                    {"name": "投球10", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Trunk Tilt")["value"]), "color": "#f97316"},
                     {"name": "教练", "value": num(pitch_full_by_key["trunk_lean"]["coach_value"]), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1120,8 +1152,8 @@ def main() -> None:
                 "sub": "稳定性",
                 "unit": "%",
                 "points": [
-                    {"name": "样本九", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Head Stability")["value"]), "color": "#2563eb"},
-                    {"name": "样本十", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Head Stability")["value"]), "color": "#f97316"},
+                    {"name": "投球09", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Head Stability")["value"]), "color": "#2563eb"},
+                    {"name": "投球10", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Head Stability")["value"]), "color": "#f97316"},
                     {"name": "参考", "value": 90.0, "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1130,8 +1162,8 @@ def main() -> None:
                 "sub": "动力转移",
                 "unit": "%",
                 "points": [
-                    {"name": "样本九", "value": (num(find_metric(sly, "benchmark_pitch_vertical_09", "Stride Length")["value"]) or 0) * 100, "color": "#2563eb"},
-                    {"name": "样本十", "value": (num(find_metric(sly, "benchmark_pitch_vertical_10", "Stride Length")["value"]) or 0) * 100, "color": "#f97316"},
+                    {"name": "投球09", "value": (num(find_metric(sly, "benchmark_pitch_vertical_09", "Stride Length")["value"]) or 0) * 100, "color": "#2563eb"},
+                    {"name": "投球10", "value": (num(find_metric(sly, "benchmark_pitch_vertical_10", "Stride Length")["value"]) or 0) * 100, "color": "#f97316"},
                     {"name": "教练", "value": num(pitch_full_by_key["stride_length"]["coach_value"]), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1140,12 +1172,12 @@ def main() -> None:
                 "sub": "同机位趋势",
                 "unit": "km/h",
                 "points": [
-                    {"name": "样本九", "value": px_speed_to_kmh("benchmark_pitch_vertical_09", find_metric(sly, "benchmark_pitch_vertical_09", "Ball Speed")["value"]), "color": "#2563eb"},
-                    {"name": "样本十", "value": px_speed_to_kmh("benchmark_pitch_vertical_10", find_metric(sly, "benchmark_pitch_vertical_10", "Ball Speed")["value"]), "color": "#f97316"},
+                    {"name": "投球09", "value": px_speed_to_kmh("benchmark_pitch_vertical_09", find_metric(sly, "benchmark_pitch_vertical_09", "Ball Speed")["value"]), "color": "#2563eb"},
+                    {"name": "投球10", "value": px_speed_to_kmh("benchmark_pitch_vertical_10", find_metric(sly, "benchmark_pitch_vertical_10", "Ball Speed")["value"]), "color": "#f97316"},
                 ],
             },
         ],
-        [("样本九", "#2563eb"), ("样本十", "#f97316"), ("教练或建议参考", "#101828")],
+        [("投球09", "#2563eb"), ("投球10", "#f97316"), ("教练或建议参考", "#101828")],
     )
     bat_dot_plot = dot_comparison_svg(
         [
@@ -1154,8 +1186,8 @@ def main() -> None:
                 "sub": "身体蓄力",
                 "unit": "deg",
                 "points": [
-                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "color": "#2563eb"},
-                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "color": "#f97316"},
+                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "color": "#2563eb"},
+                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "color": "#f97316"},
                     {"name": "光学参考", "value": mean_metric(vicon, "batting", "hip_shoulder_sep_deg"), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1164,8 +1196,8 @@ def main() -> None:
                 "sub": "支撑稳定",
                 "unit": "deg",
                 "points": [
-                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Lead Knee Angle")["value"]), "color": "#2563eb"},
-                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Lead Knee Angle")["value"]), "color": "#f97316"},
+                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Lead Knee Angle")["value"]), "color": "#2563eb"},
+                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Lead Knee Angle")["value"]), "color": "#f97316"},
                     {"name": "光学参考", "value": mean_metric(vicon, "batting", "lead_knee_angle_deg"), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1174,8 +1206,8 @@ def main() -> None:
                 "sub": "身体轴线",
                 "unit": "deg",
                 "points": [
-                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Trunk Tilt")["value"]), "color": "#2563eb"},
-                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Trunk Tilt")["value"]), "color": "#f97316"},
+                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Trunk Tilt")["value"]), "color": "#2563eb"},
+                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Trunk Tilt")["value"]), "color": "#f97316"},
                     {"name": "光学参考", "value": mean_metric(vicon, "batting", "trunk_tilt_deg"), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1184,8 +1216,8 @@ def main() -> None:
                 "sub": "看球稳定",
                 "unit": "%",
                 "points": [
-                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "color": "#2563eb"},
-                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "color": "#f97316"},
+                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "color": "#2563eb"},
+                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "color": "#f97316"},
                     {"name": "建议参考", "value": 90.0, "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1194,8 +1226,8 @@ def main() -> None:
                 "sub": "挥棒平面",
                 "unit": "deg",
                 "points": [
-                    {"name": "样本二", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Attack Angle")["value"]), "color": "#2563eb"},
-                    {"name": "样本六", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Attack Angle")["value"]), "color": "#f97316"},
+                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Attack Angle")["value"]), "color": "#2563eb"},
+                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Attack Angle")["value"]), "color": "#f97316"},
                     {"name": "光学参考", "value": mean_metric(vicon, "batting", "bat_angle_deg"), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1204,12 +1236,12 @@ def main() -> None:
                 "sub": "末端速度",
                 "unit": "km/h",
                 "points": [
-                    {"name": "样本二", "value": px_speed_to_kmh("benchmark_hit_vertical_02", find_metric(sly, "benchmark_hit_vertical_02", "Estimated Bat Speed")["value"]), "color": "#2563eb"},
-                    {"name": "样本六", "value": px_speed_to_kmh("benchmark_hit_horizontal_06", find_metric(sly, "benchmark_hit_horizontal_06", "Estimated Bat Speed")["value"]), "color": "#f97316"},
+                    {"name": "打击02", "value": px_speed_to_kmh("benchmark_hit_vertical_02", find_metric(sly, "benchmark_hit_vertical_02", "Estimated Bat Speed")["value"]), "color": "#2563eb"},
+                    {"name": "打击06", "value": px_speed_to_kmh("benchmark_hit_horizontal_06", find_metric(sly, "benchmark_hit_horizontal_06", "Estimated Bat Speed")["value"]), "color": "#f97316"},
                 ],
             },
         ],
-        [("样本二", "#2563eb"), ("样本六", "#f97316"), ("光学或建议参考", "#101828")],
+        [("打击02", "#2563eb"), ("打击06", "#f97316"), ("光学或建议参考", "#101828")],
     )
 
     html_doc = f"""<!doctype html>
@@ -1415,25 +1447,25 @@ def main() -> None:
       <div class="section-title"><span class="mark"></span><h2>研究者模块</h2></div>
       <div class="module-note"><p>这一模块使用当前三维姿态 CSV 与 vicon_2026 C3D 导出生成逐帧曲线、事件线、质量图和光学动作捕捉校准；不可直接观测的雷达球速和力板重心仍在限制说明中保留。</p></div>
       <div class="grid-2">
-        <article class="visual-card"><h4>投球角度时间曲线</h4>{pitch_angle_chart}<p>怎么看：曲线来自投球样本九三维骨架逐帧计算，黑色虚线为动作开始、出手估算和动作结束事件。</p></article>
+        <article class="visual-card"><h4>投球角度时间曲线</h4>{pitch_angle_chart}<p>怎么看：曲线来自投球09三维骨架逐帧计算，黑色虚线为动作开始、出手估算和动作结束事件。</p></article>
         <article class="visual-card"><h4>投球速度时间曲线</h4>{pitch_speed_chart}<p>怎么看：速度由三维模型空间坐标逐帧差分估算并换算为公里/小时，用于观察峰值顺序和事件附近变化。</p></article>
-        <article class="visual-card"><h4>打击角度时间曲线</h4>{bat_angle_chart}<p>怎么看：曲线来自打击样本二三维骨架逐帧计算，重点看启动到击球点之间前膝、躯干和髋肩分离的变化。</p></article>
+        <article class="visual-card"><h4>打击角度时间曲线</h4>{bat_angle_chart}<p>怎么看：曲线来自打击02三维骨架逐帧计算，重点看启动到击球点之间前膝、躯干和髋肩分离的变化。</p></article>
         <article class="visual-card"><h4>打击速度时间曲线</h4>{bat_speed_chart}<p>怎么看：速度由髋部、躯干和出手侧手部轨迹估算；真实球棒杆身速度仍需要球棒检测或光学标记。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>事件点表</h4><div class="table-scroll">{source_table([r for r in sly if "Motion Phase" in r["metric_name"]], 20, sly)}</div></article>
-        <article class="visual-card"><h4>三维骨架来源表</h4><div class="table-scroll">{pose3d_source_table([("投球样本九", pose3d_pitch09), ("投球样本十", pose3d_pitch10), ("打击样本二", pose3d_bat02), ("打击样本六", pose3d_bat06)])}</div><p>表内统计直接来自三维骨架序列，用于确认本报告已接入真实姿态数据。</p></article>
+        <article class="visual-card"><h4>三维骨架来源表</h4><div class="table-scroll">{pose3d_source_table([("投球09", pose3d_pitch09), ("投球10", pose3d_pitch10), ("打击02", pose3d_bat02), ("打击06", pose3d_bat06)])}</div><p>表内统计直接来自三维骨架序列，用于确认本报告已接入真实姿态数据。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>Vicon 2026 C3D来源表</h4><div class="table-scroll">{vicon_source_table(vicon)}</div><p>表内统计由 vicon_2026 文件夹中的 C3D 导出直接解析得到，忽略 macOS 资源分叉文件。</p></article>
-        <article class="visual-card"><h4>Vicon三维点重建图</h4>{vicon_reconstruction_image(vicon_points, vicon_pitch_trial["trial_id"], vicon_pitch_title) if vicon_pitch_trial else line_placeholder_svg("投球C3D重建截图")}<p>怎么看：该图不是全局点云截图，而是先提取投球关键动作帧，再从 C3D marker 的毫米坐标渲染独立重建截图。</p></article>
+        {vicon_pitch_cards or '<article class="visual-card"><h4>投球C3D重建截图</h4>' + line_placeholder_svg("投球C3D重建截图") + '<p>暂无投球 C3D 点位数据。</p></article>'}
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>数据质量图</h4>{pose_quality_chart}<p>怎么看：条形长度综合输入质量分和关节完整率；研究者应优先检查低质量样本的峰值速度和事件点。</p></article>
-        <article class="visual-card"><h4>Vicon球棒点重建图</h4>{vicon_reconstruction_image(vicon_points, vicon_bat_trial["trial_id"], vicon_bat_title) if vicon_bat_trial else line_placeholder_svg("打击C3D重建截图")}<p>怎么看：先提取球棒峰值速度附近的关键动作窗口，再用独立 PNG 展示 Bat1/Bat5 和身体点；橙色连线用于解释光学棒速。</p></article>
+        {vicon_bat_cards or '<article class="visual-card"><h4>打击C3D重建截图</h4>' + line_placeholder_svg("打击C3D重建截图") + '<p>暂无打击 C3D 点位数据。</p></article>'}
       </div>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>光学动作捕捉校准说明</h4><div class="bars">{bars([("bryan球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "bryan"), "km/h", "#16a34a"), ("green球棒峰值速度", first_metric(vicon, "batting", "bat_speed_kmh", "green"), "km/h", "#60a5fa"), ("bryan挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "bryan"), "s", "#f97316"), ("green挥棒高速度窗口", first_metric(vicon, "batting", "swing_time_sec", "green"), "s", "#60a5fa")])}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出，用于校准和解释视频估算，不直接替代当前视频指标。</p></article>
+        <article class="visual-card"><h4>光学动作捕捉校准说明</h4><div class="bars">{bars(vicon_calibration_items(vicon))}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出；条目名称直接使用 C3D 所在子文件夹名，用于校准和解释视频估算，不直接替代当前视频指标。</p></article>
         <article class="visual-card"><h4>限制卡片组</h4><div class="grid-2">{card("真实球速", "当前速度是视频追踪换算值，不等同雷达枪正式球速。", "需复核", "review")}{card("换算假设", "使用源视频分辨率、帧率、画面人体高度，并假设青少年身高一米五五。", "需复核", "review")}{card("身体重心", "当前使用髋部和脊柱中心近似，不是力板重心。", "需复核", "review")}{card("光学与视频对齐", "不同来源尚未逐帧同步，只能做解释性参考。", "需复核", "review")}</div></article>
       </div>
       <article class="visual-card" style="margin-top:18px"><h4>指标来源表</h4><div class="table-scroll">{source_table(sly, all_rows=sly)}</div></article>
