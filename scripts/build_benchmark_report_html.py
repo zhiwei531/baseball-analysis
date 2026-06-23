@@ -946,7 +946,7 @@ def vicon_reconstruction_image(rows: list[dict[str, str]], trial_id_value: str, 
       <img class="reconstruction-img" src="{esc(rel_asset(image_path))}" alt="{esc(title)}" loading="lazy">
       <figcaption>
         <b>{esc(title)}</b>
-        <span>先定位{esc(event_text)}，再用第{esc(frame_text)}帧附近窗口截图式重建；时间 {esc(time_text)}。深色为原始标记点，浅蓝为模型点，绿色为质心点，橙色为球棒点；不是全局点位平均。</span>
+        <span>先定位{esc(event_text)}，再用第{esc(frame_text)}帧附近窗口截图式重建；时间 {esc(time_text)}。颜色按头颈、躯干、骨盆、左右臂、左右腿、模型点、质心点和球棒区分；不是全局点位平均。</span>
       </figcaption>
     </figure>
     """

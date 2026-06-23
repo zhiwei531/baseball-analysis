@@ -19,60 +19,72 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POINTS = ROOT / "reports" / "vicon_2026_point_summary.csv"
 DEFAULT_OUT_DIR = ROOT / "reports" / "assets" / "vicon_reconstruction"
 
+PART_COLORS = {
+    "头颈": "#7c3aed",
+    "躯干": "#2563eb",
+    "左臂": "#16a34a",
+    "右臂": "#dc2626",
+    "骨盆": "#0891b2",
+    "左腿": "#f59e0b",
+    "右腿": "#0ea5e9",
+    "模型点": "#94a3b8",
+    "质心点": "#22c55e",
+    "球棒": "#f97316",
+}
 BODY_SEGMENTS = [
-    ("LFHD", "RFHD"),
-    ("LFHD", "C7"),
-    ("RFHD", "C7"),
-    ("C7", "T10"),
-    ("LSHO", "RSHO"),
-    ("LSHO", "LELB"),
-    ("LELB", "LWRA"),
-    ("LELB", "LWRB"),
-    ("RSHO", "RELB"),
-    ("RELB", "RWRA"),
-    ("RELB", "RWRB"),
-    ("LASI", "RASI"),
-    ("LASI", "LKNE"),
-    ("LKNE", "LANK"),
-    ("RASI", "RKNE"),
-    ("RKNE", "RANK"),
+    ("LFHD", "RFHD", "头颈"),
+    ("LFHD", "C7", "头颈"),
+    ("RFHD", "C7", "头颈"),
+    ("C7", "T10", "躯干"),
+    ("LSHO", "RSHO", "躯干"),
+    ("LASI", "RASI", "骨盆"),
+    ("LSHO", "LELB", "左臂"),
+    ("LELB", "LWRA", "左臂"),
+    ("LELB", "LWRB", "左臂"),
+    ("RSHO", "RELB", "右臂"),
+    ("RELB", "RWRA", "右臂"),
+    ("RELB", "RWRB", "右臂"),
+    ("LASI", "LKNE", "左腿"),
+    ("LKNE", "LANK", "左腿"),
+    ("RASI", "RKNE", "右腿"),
+    ("RKNE", "RANK", "右腿"),
 ]
 MODEL_SEGMENTS = [
-    ("PELO", "PELA"),
-    ("PELO", "PELL"),
-    ("PELO", "PELP"),
-    ("TRXO", "TRXA"),
-    ("TRXO", "TRXL"),
-    ("TRXO", "TRXP"),
-    ("HEDO", "HEDA"),
-    ("HEDO", "HEDL"),
-    ("HEDO", "HEDP"),
-    ("LCLO", "LCLA"),
-    ("LCLO", "LCLL"),
-    ("RCLO", "RCLA"),
-    ("RCLO", "RCLL"),
-    ("LHUO", "LHUA"),
-    ("LHUO", "LHUL"),
-    ("LRAO", "LRAA"),
-    ("LRAO", "LRAL"),
-    ("LHNO", "LHNA"),
-    ("RHUO", "RHUA"),
-    ("RHUO", "RHUL"),
-    ("RRAO", "RRAA"),
-    ("RRAO", "RRAL"),
-    ("RHNO", "RHNA"),
-    ("LFEO", "LFEA"),
-    ("LFEO", "LFEL"),
-    ("LTIO", "LTIA"),
-    ("LTIO", "LTIL"),
-    ("LFOO", "LFOA"),
-    ("LTOO", "LTOA"),
-    ("RFEO", "RFEA"),
-    ("RFEO", "RFEL"),
-    ("RTIO", "RTIA"),
-    ("RTIO", "RTIL"),
-    ("RFOO", "RFOA"),
-    ("RTOO", "RTOA"),
+    ("PELO", "PELA", "骨盆"),
+    ("PELO", "PELL", "骨盆"),
+    ("PELO", "PELP", "骨盆"),
+    ("TRXO", "TRXA", "躯干"),
+    ("TRXO", "TRXL", "躯干"),
+    ("TRXO", "TRXP", "躯干"),
+    ("HEDO", "HEDA", "头颈"),
+    ("HEDO", "HEDL", "头颈"),
+    ("HEDO", "HEDP", "头颈"),
+    ("LCLO", "LCLA", "左臂"),
+    ("LCLO", "LCLL", "左臂"),
+    ("RCLO", "RCLA", "右臂"),
+    ("RCLO", "RCLL", "右臂"),
+    ("LHUO", "LHUA", "左臂"),
+    ("LHUO", "LHUL", "左臂"),
+    ("LRAO", "LRAA", "左臂"),
+    ("LRAO", "LRAL", "左臂"),
+    ("LHNO", "LHNA", "左臂"),
+    ("RHUO", "RHUA", "右臂"),
+    ("RHUO", "RHUL", "右臂"),
+    ("RRAO", "RRAA", "右臂"),
+    ("RRAO", "RRAL", "右臂"),
+    ("RHNO", "RHNA", "右臂"),
+    ("LFEO", "LFEA", "左腿"),
+    ("LFEO", "LFEL", "左腿"),
+    ("LTIO", "LTIA", "左腿"),
+    ("LTIO", "LTIL", "左腿"),
+    ("LFOO", "LFOA", "左腿"),
+    ("LTOO", "LTOA", "左腿"),
+    ("RFEO", "RFEA", "右腿"),
+    ("RFEO", "RFEL", "右腿"),
+    ("RTIO", "RTIA", "右腿"),
+    ("RTIO", "RTIL", "右腿"),
+    ("RFOO", "RFOA", "右腿"),
+    ("RTOO", "RTOA", "右腿"),
 ]
 BAT_SEGMENTS = [("Bat1", "Bat2"), ("Bat2", "Bat3"), ("Bat3", "Bat4"), ("Bat4", "Bat5")]
 LABEL_POINTS = ["LFHD", "RFHD", "C7", "T10", "LSHO", "RSHO", "LASI", "RASI", "CentreOfMass", "Bat1", "Bat5"]
@@ -82,6 +94,15 @@ RAW_MARKERS = {
     "RSHO", "RUPA", "RELB", "RFRM", "RWRA", "RWRB", "RFIN",
     "LASI", "RASI", "LPSI", "RPSI", "LTHI", "LKNE", "LTIB", "LANK", "LHEE", "LTOE",
     "RTHI", "RKNE", "RTIB", "RANK", "RHEE", "RTOE",
+}
+RAW_MARKER_PARTS = {
+    "头颈": {"LFHD", "RFHD", "LBHD", "RBHD"},
+    "躯干": {"C7", "T10", "CLAV", "STRN", "RBAK"},
+    "左臂": {"LSHO", "LUPA", "LELB", "LFRM", "LWRA", "LWRB", "LFIN"},
+    "右臂": {"RSHO", "RUPA", "RELB", "RFRM", "RWRA", "RWRB", "RFIN"},
+    "骨盆": {"LASI", "RASI", "LPSI", "RPSI"},
+    "左腿": {"LTHI", "LKNE", "LTIB", "LANK", "LHEE", "LTOE"},
+    "右腿": {"RTHI", "RKNE", "RTIB", "RANK", "RHEE", "RTOE"},
 }
 ZH_FONT_PATHS = [
     Path("/System/Library/Fonts/PingFang.ttc"),
@@ -143,6 +164,20 @@ def draw_segment(ax, points: dict[str, tuple[float, float, float]], a: str, b: s
     ax.plot([pa[0], pb[0]], [pa[1], pb[1]], [pa[2], pb[2]], color=color, linewidth=width, solid_capstyle="round")
 
 
+def marker_part(name: str) -> str:
+    for part, labels in RAW_MARKER_PARTS.items():
+        if name in labels:
+            return part
+    return "模型点"
+
+
+def scatter_points(ax, points: dict[str, tuple[float, float, float]], label: str, color: str, size: float, alpha: float = 1.0) -> None:
+    if not points:
+        return
+    coords = np.array(list(points.values()), dtype=float)
+    ax.scatter(coords[:, 0], coords[:, 1], coords[:, 2], s=size, c=color, alpha=alpha, depthshade=False, label=label)
+
+
 def render_trial(rows: list[dict[str, str]], out_dir: Path) -> Path | None:
     if not rows:
         return None
@@ -170,25 +205,20 @@ def render_trial(rows: list[dict[str, str]], out_dir: Path) -> Path | None:
     fig.patch.set_facecolor("#ffffff")
     ax.view_init(elev=17, azim=-66)
 
-    for a, b in MODEL_SEGMENTS:
-        draw_segment(ax, points, a, b, "#93c5fd", 1.4)
-    for a, b in BODY_SEGMENTS:
-        draw_segment(ax, points, a, b, "#2563eb", 2.0)
+    for a, b, part in MODEL_SEGMENTS:
+        draw_segment(ax, points, a, b, PART_COLORS[part], 1.2)
+    for a, b, part in BODY_SEGMENTS:
+        draw_segment(ax, points, a, b, PART_COLORS[part], 2.4)
     for a, b in BAT_SEGMENTS:
-        draw_segment(ax, points, a, b, "#f97316", 3.4)
+        draw_segment(ax, points, a, b, PART_COLORS["球棒"], 3.4)
 
     if model_points:
-        model = np.array(list(model_points.values()), dtype=float)
-        ax.scatter(model[:, 0], model[:, 1], model[:, 2], s=12, c="#93c5fd", depthshade=False, label="模型点")
-    if raw_points:
-        raw = np.array(list(raw_points.values()), dtype=float)
-        ax.scatter(raw[:, 0], raw[:, 1], raw[:, 2], s=18, c="#101828", depthshade=False, label="标记点")
-    if com_points:
-        com = np.array(list(com_points.values()), dtype=float)
-        ax.scatter(com[:, 0], com[:, 1], com[:, 2], s=26, c="#16a34a", depthshade=False, label="质心点")
-    if bat_points:
-        bat = np.array(list(bat_points.values()), dtype=float)
-        ax.scatter(bat[:, 0], bat[:, 1], bat[:, 2], s=30, c="#f97316", depthshade=False, label="球棒点")
+        scatter_points(ax, model_points, "模型点", PART_COLORS["模型点"], 9, alpha=0.45)
+    for part in ("头颈", "躯干", "骨盆", "左臂", "右臂", "左腿", "右腿"):
+        part_points = {name: value for name, value in raw_points.items() if marker_part(name) == part}
+        scatter_points(ax, part_points, part, PART_COLORS[part], 18)
+    scatter_points(ax, com_points, "质心点", PART_COLORS["质心点"], 34)
+    scatter_points(ax, bat_points, "球棒点", PART_COLORS["球棒"], 34)
 
     for name in LABEL_POINTS:
         if name not in points:
