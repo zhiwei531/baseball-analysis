@@ -53,11 +53,11 @@
     .badge.risk { background:#fef2f2; color:#b91c1c; }
     .badge.na { background:#eef2f7; color:#697586; }
     .metric-value { font-size:32px; line-height:1; font-weight:700; margin:18px 0 10px; overflow-wrap:anywhere; }
-    .pitch-metrics .metric-card { padding:18px; border-radius:18px; }
-    .pitch-metrics .metric-card h4 { font-size:17px; line-height:24px; }
-    .pitch-metrics .metric-value { font-size:24px; line-height:28px; margin:12px 0 8px; }
-    .pitch-metrics .metric-card p { font-size:14px; line-height:21px; }
-    .pitch-metrics .badge { font-size:13px; padding:4px 9px; }
+    .compact-metrics .metric-card { padding:18px; border-radius:18px; }
+    .compact-metrics .metric-card h4 { font-size:17px; line-height:24px; }
+    .compact-metrics .metric-value { font-size:24px; line-height:28px; margin:12px 0 8px; }
+    .compact-metrics .metric-card p { font-size:14px; line-height:21px; }
+    .compact-metrics .badge { font-size:13px; padding:4px 9px; }
     .visual-card h4 { font-size:18px; line-height:26px; }
     .visual-card p,.metric-card p,.card p { margin-top:8px; color:var(--mid); }
     .visual-card p { font-size:16px; line-height:24px; }
@@ -200,47 +200,47 @@
     </svg>
     <p>方法：蓝色虚线是 bryan 出手附近三维姿态，绿色是临时 coach 参考姿态，红色标出偏差较大的骨段。这个图用于看身体段落排列，不用于单独判断好坏；真正的训练重点要结合速度峰值顺序和前腿支撑。</p></article>
         </div>
-        <div class="grid pitch-metrics" style="margin-top:18px">
+        <div class="grid compact-metrics" style="margin-top:18px">
     <article class="metric-card good">
       <div class="card-head"><h4>髋肩分离</h4><span class="badge good">良好</span></div>
       <div class="metric-value">28.0度</div>
-      <p>髋肩分离反映下肢和骨盆先启动、躯干稍后跟上的蓄力顺序。投球中分离不足通常会让出手更多依赖手臂；过大或时机太晚则可能影响控球和肩肘负荷。光学动作捕捉 marker 计算髋部轴与肩部轴的 yaw 分离角。 数据源：vicon_2026/bryan/001 Cal 04 Pitch 05.c3d。</p>
+      <p>看下肢先启动、肩部延迟的蓄力。过低会让手臂更容易代偿。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>前腿膝角</h4><span class="badge good">良好</span></div>
       <div class="metric-value">160.9度</div>
-      <p>前腿膝角代表落脚后前腿能否形成稳定支点。较稳定的前腿有助于把水平动量制动并传到骨盆和躯干；膝盖持续塌陷会削弱能量传递。光学动作捕捉 marker 计算髋-膝-踝三点夹角。 数据源：vicon_2026/bryan/001 Cal 04 Pitch 05.c3d。</p>
+      <p>看落脚后前腿能否制动。支点稳，动量才更容易传到躯干和手端。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>躯干倾斜</h4><span class="badge good">良好</span></div>
       <div class="metric-value">45.3度</div>
-      <p>躯干倾斜影响出手点高度、身体轴线和肩肘受力。投球中过早侧倒或前倒会改变手臂槽位；适度前倾通常来自下肢制动后的躯干前移。光学动作捕捉 marker 计算躯干相对竖直方向的倾角。 数据源：vicon_2026/bryan/001 Cal 04 Pitch 05.c3d。</p>
+      <p>影响出手点、身体轴线和肩肘负荷。需要和前腿支撑一起看。</p>
     </article>
     
     <article class="metric-card review">
       <div class="card-head"><h4>头部稳定</h4><span class="badge review">需复核</span></div>
       <div class="metric-value">99.0%</div>
-      <p>这里显示的是 C3D 有效点比例，用来判断本次光学数据是否足够可靠；它不是严格的头部稳定评分。真正的头部稳定会影响视线、平衡和出手重复性，需要用头部相对骨盆的位移另算。 数据源：vicon_2026/bryan/001 Cal 04 Pitch 05.c3d。</p>
+      <p>数据质量参考值，不是头部稳定评分。低值会降低曲线可信度。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>手部速度</h4><span class="badge good">良好</span></div>
       <div class="metric-value">29.3 公里/小时</div>
-      <p>手部速度是动力链末端输出，受前腿制动、骨盆旋转、躯干旋转和肩肘腕顺序共同影响。它不能单独代表好动作，但峰值过低常提示前序能量没有顺畅传到手端。光学动作捕捉 手腕 marker 三维速度峰值。 数据源：vicon_2026/bryan/001 Cal 04 Pitch 05.c3d。</p>
+      <p>动力链末端输出。低值通常提示前序段落传递不足。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>躯干速度</h4><span class="badge good">良好</span></div>
       <div class="metric-value">6.04 公里/小时</div>
-      <p>躯干速度反映骨盆之后的躯干加速能力。理想顺序通常是骨盆先加速、躯干随后加速、手端最后达到峰值；若躯干速度低或峰值太早，手臂容易补偿。光学动作捕捉 躯干中心三维速度峰值。 数据源：vicon_2026/bryan/001 Cal 04 Pitch 05.c3d。</p>
+      <p>看躯干加速能力。应在髋部之后、手端之前完成主要加速。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>髋部速度</h4><span class="badge good">良好</span></div>
       <div class="metric-value">5.69 公里/小时</div>
-      <p>髋部速度反映下肢推动和身体质心移动。它不是力板重心转移，但能帮助判断投手是否有足够的下肢驱动进入落脚和出手阶段。光学动作捕捉 髋部中心三维速度峰值。 数据源：vicon_2026/bryan/001 Cal 04 Pitch 05.c3d。</p>
+      <p>看下肢推动和身体进入前腿支点的趋势，不等同力板重心。</p>
     </article>
     </div>
         <div class="grid-3" style="margin-top:18px">
@@ -272,53 +272,53 @@
     </figure>
     <p>方法：关键帧来自 Vicon C3D 球棒速度峰值。该时刻接近挥棒输出最高点，适合检查前腿是否制动、髋肩是否分离、躯干和手是否把速度传到球棒。</p></article>
         </div>
-        <div class="grid" style="margin-top:18px">
+        <div class="grid compact-metrics" style="margin-top:18px">
     <article class="metric-card good">
       <div class="card-head"><h4>髋肩分离</h4><span class="badge good">良好</span></div>
       <div class="metric-value">26.4度</div>
-      <p>打击中的髋肩分离代表下半身先开、上半身延迟的旋转蓄力。适度分离有助于把地面反作用力和髋部旋转传到躯干、手和球棒；不足时容易变成只用手推棒。光学动作捕捉 marker 计算髋部轴与肩部轴的 yaw 分离角。 数据源：vicon_2026/bryan/001 Cal 04 Bat 05.c3d。</p>
+      <p>看下半身先开、上半身延迟的蓄力。过低容易只靠手推棒。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>前腿膝角</h4><span class="badge good">良好</span></div>
       <div class="metric-value">155.2度</div>
-      <p>前腿膝角反映前脚落地后的支撑和制动。稳定的前腿能帮助骨盆减速、躯干和球棒继续加速；膝盖过度弯曲或漂移会让挥棒轴线不稳定。光学动作捕捉 marker 计算髋-膝-踝三点夹角。 数据源：vicon_2026/bryan/001 Cal 04 Bat 05.c3d。</p>
+      <p>看前脚落地后的支撑和制动。前腿稳，球棒路径更容易稳定。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>躯干倾斜</h4><span class="badge good">良好</span></div>
       <div class="metric-value">32.0度</div>
-      <p>躯干倾斜影响挥棒平面、击球点高度和身体平衡。过度前倾会让挥棒路径变陡，过度后仰会增加上捞和失衡风险；理想值要结合球路高度和站姿看。光学动作捕捉 marker 计算躯干相对竖直方向的倾角。 数据源：vicon_2026/bryan/001 Cal 04 Bat 05.c3d。</p>
+      <p>影响挥棒平面和击球点高度。过度倾斜会让路径变陡或失衡。</p>
     </article>
     
     <article class="metric-card review">
       <div class="card-head"><h4>头部稳定</h4><span class="badge review">需复核</span></div>
       <div class="metric-value">97.9%</div>
-      <p>这里显示的是 C3D 有效点比例，用来判断本次光学数据是否足够可靠；它不是严格的头部稳定评分。真正的头部稳定会影响看球、击球点识别和挥棒重复性，需要用头部相对骨盆位移另算。 数据源：vicon_2026/bryan/001 Cal 04 Bat 05.c3d。</p>
+      <p>数据质量参考值，不是头部稳定评分。低值会影响判断可信度。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>手部速度</h4><span class="badge good">良好</span></div>
       <div class="metric-value">15.8 公里/小时</div>
-      <p>手部速度反映上肢和躯干把能量传到握棒端的能力。手快但球棒不快可能提示腕手提前、杆身释放效率不足；手慢则可能来自下肢和躯干启动不足。光学动作捕捉 手腕 marker 三维速度峰值。 数据源：vicon_2026/bryan/001 Cal 04 Bat 05.c3d。</p>
+      <p>看能量传到握棒端的能力。需和球棒速度一起解释。</p>
     </article>
     
     <article class="metric-card good">
       <div class="card-head"><h4>球棒速度</h4><span class="badge good">良好</span></div>
       <div class="metric-value">67.0 公里/小时</div>
-      <p>球棒速度是打击表现最直接的输出之一，来自下肢支撑、髋肩分离、躯干旋转和腕手释放的综合结果。速度高但平面差仍可能影响击球质量，因此必须和攻击角、支撑和时机一起看。光学动作捕捉 Bat1/Bat5 球棒 marker 三维速度峰值。 数据源：vicon_2026/bryan/001 Cal 04 Bat 05.c3d。</p>
+      <p>末端输出指标。速度高仍要配合攻击角和击球区停留时间看。</p>
     </article>
     
     <article class="metric-card review">
       <div class="card-head"><h4>攻击角</h4><span class="badge review">需复核</span></div>
       <div class="metric-value">37.7度</div>
-      <p>攻击角描述球棒进入击球区时相对水平面的方向。过陡容易砍球，过上仰容易从球下方穿过；理想角度要结合来球轨迹和接触点判断。当前值是球棒轴角度，严格 attack angle 仍需真实接触帧。 数据源：vicon_2026/bryan/001 Cal 04 Bat 05.c3d。</p>
+      <p>看球棒进入击球区的方向。偏离时容易砍球或从球下方穿过。</p>
     </article>
     
     <article class="metric-card review">
       <div class="card-head"><h4>接触时间</h4><span class="badge review">需复核</span></div>
       <div class="metric-value">0.42 秒</div>
-      <p>这里是高速度挥棒窗口，不是球棒触球时长。较短窗口可能表示挥棒爆发集中，较长窗口可能表示加速拖长或节奏慢；需要结合球棒速度峰值和击球点时机解释。 数据源：vicon_2026/bryan/001 Cal 04 Bat 05.c3d。</p>
+      <p>这里是高速挥棒窗口，不是真实触球时间。用于看节奏和加速集中度。</p>
     </article>
     </div>
         <div class="grid-2" style="margin-top:18px">

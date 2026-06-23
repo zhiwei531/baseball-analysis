@@ -1090,9 +1090,32 @@ def metric_value(rows: list[dict[str, str]], metric: str) -> float | None:
 
 def vicon_metric_cards(rows: list[dict[str, str]]) -> str:
     return "".join(
-        metric_card(row["label_cn"], fmt(row.get("value"), row.get("unit")), row["note"], row["status"])
+        metric_card(row["label_cn"], fmt(row.get("value"), row.get("unit")), metric_explanation(row), row["status"])
         for row in rows
     )
+
+
+def metric_explanation(row: dict[str, str]) -> str:
+    action = row.get("action_type")
+    metric = row.get("metric_name")
+    copy = {
+        ("pitching", "Hip-Shoulder Sep"): "看下肢先启动、肩部延迟的蓄力。过低会让手臂更容易代偿。",
+        ("pitching", "Lead Knee Angle"): "看落脚后前腿能否制动。支点稳，动量才更容易传到躯干和手端。",
+        ("pitching", "Trunk Tilt"): "影响出手点、身体轴线和肩肘负荷。需要和前腿支撑一起看。",
+        ("pitching", "Head Stability"): "数据质量参考值，不是头部稳定评分。低值会降低曲线可信度。",
+        ("pitching", "Hand Speed"): "动力链末端输出。低值通常提示前序段落传递不足。",
+        ("pitching", "Trunk Speed"): "看躯干加速能力。应在髋部之后、手端之前完成主要加速。",
+        ("pitching", "Hip Speed"): "看下肢推动和身体进入前腿支点的趋势，不等同力板重心。",
+        ("batting", "Hip-Shoulder Sep"): "看下半身先开、上半身延迟的蓄力。过低容易只靠手推棒。",
+        ("batting", "Lead Knee Angle"): "看前脚落地后的支撑和制动。前腿稳，球棒路径更容易稳定。",
+        ("batting", "Trunk Tilt"): "影响挥棒平面和击球点高度。过度倾斜会让路径变陡或失衡。",
+        ("batting", "Head Stability"): "数据质量参考值，不是头部稳定评分。低值会影响判断可信度。",
+        ("batting", "Hand Speed"): "看能量传到握棒端的能力。需和球棒速度一起解释。",
+        ("batting", "Bat Speed"): "末端输出指标。速度高仍要配合攻击角和击球区停留时间看。",
+        ("batting", "Attack Angle"): "看球棒进入击球区的方向。偏离时容易砍球或从球下方穿过。",
+        ("batting", "Contact Time"): "这里是高速挥棒窗口，不是真实触球时间。用于看节奏和加速集中度。",
+    }
+    return copy.get((action, metric), row.get("reason", ""))
 
 
 def vicon_metrics_source_table(rows: list[dict[str, str]]) -> str:
@@ -1522,11 +1545,11 @@ def main() -> None:
     .badge.risk {{ background:#fef2f2; color:#b91c1c; }}
     .badge.na {{ background:#eef2f7; color:#697586; }}
     .metric-value {{ font-size:32px; line-height:1; font-weight:700; margin:18px 0 10px; overflow-wrap:anywhere; }}
-    .pitch-metrics .metric-card {{ padding:18px; border-radius:18px; }}
-    .pitch-metrics .metric-card h4 {{ font-size:17px; line-height:24px; }}
-    .pitch-metrics .metric-value {{ font-size:24px; line-height:28px; margin:12px 0 8px; }}
-    .pitch-metrics .metric-card p {{ font-size:14px; line-height:21px; }}
-    .pitch-metrics .badge {{ font-size:13px; padding:4px 9px; }}
+    .compact-metrics .metric-card {{ padding:18px; border-radius:18px; }}
+    .compact-metrics .metric-card h4 {{ font-size:17px; line-height:24px; }}
+    .compact-metrics .metric-value {{ font-size:24px; line-height:28px; margin:12px 0 8px; }}
+    .compact-metrics .metric-card p {{ font-size:14px; line-height:21px; }}
+    .compact-metrics .badge {{ font-size:13px; padding:4px 9px; }}
     .visual-card h4 {{ font-size:18px; line-height:26px; }}
     .visual-card p,.metric-card p,.card p {{ margin-top:8px; color:var(--mid); }}
     .visual-card p {{ font-size:16px; line-height:24px; }}
@@ -1627,7 +1650,7 @@ def main() -> None:
           <article class="visual-card"><h4>投球关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_pitch["trial_id"], "bryan投球C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 手部速度峰值。棒球投球通常在手端峰值附近暴露动力链结果：前腿是否撑住、骨盆和肩线是否形成分离、躯干是否把旋转传到手臂。</p></article>
           <article class="visual-card"><h4>投球姿态纠正图</h4>{pitch_posture_overlay}<p>方法：蓝色虚线是 bryan 出手附近三维姿态，绿色是临时 coach 参考姿态，红色标出偏差较大的骨段。这个图用于看身体段落排列，不用于单独判断好坏；真正的训练重点要结合速度峰值顺序和前腿支撑。</p></article>
         </div>
-        <div class="grid pitch-metrics" style="margin-top:18px">{pitch_metric_cards}</div>
+        <div class="grid compact-metrics" style="margin-top:18px">{pitch_metric_cards}</div>
         <div class="grid-3" style="margin-top:18px">
           {card("投球训练目标一", "跨步停顿投球影子练习：落脚后停住前膝和骨盆，再做躯干旋转。目标是让前腿成为稳定支点，复测前膝角和髋部速度。", "训练", "review")}
           {card("投球训练目标二", "髋肩分离慢动作：先让骨盆面向目标，再延迟肩线打开。目标是建立下肢到躯干的拉伸-旋转顺序，复测髋肩分离和躯干倾斜。", "训练", "review")}
@@ -1642,7 +1665,7 @@ def main() -> None:
           <article class="visual-card"><h4>打击六维评分图</h4>{radar_svg(["站姿稳定","跨步控制","髋肩分离","躯干旋转","挥棒平面","击球后平衡"], bat_scores, "#7c4dff")}<p>怎么看：打击评分按从地面到球棒的顺序解释。站姿和跨步提供稳定底座，髋肩分离和躯干旋转负责蓄力与释放，挥棒平面决定球棒是否长时间留在击球区。</p></article>
           <article class="visual-card"><h4>打击关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_bat["trial_id"], "bryan打击C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 球棒速度峰值。该时刻接近挥棒输出最高点，适合检查前腿是否制动、髋肩是否分离、躯干和手是否把速度传到球棒。</p></article>
         </div>
-        <div class="grid" style="margin-top:18px">{bat_metric_cards}</div>
+        <div class="grid compact-metrics" style="margin-top:18px">{bat_metric_cards}</div>
         <div class="grid-2" style="margin-top:18px">
           <article class="visual-card"><h4>挥棒轨迹证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_bat["trial_id"], "bryan打击C3D球棒轨迹")}<p>怎么看：Vicon 同时有身体 marker 和 Bat1-Bat5 球棒 marker。球棒速度高说明末端输出可用，但还要看攻击角和平面是否让球棒在击球区停留更久，而不是只从球下方或上方穿过。</p></article>
           <article class="visual-card"><h4>打击优先级列表</h4><div class="priority-list"><div class="priority-item"><span class="rank">1</span><div><h4>修正挥棒平面</h4><p>挥棒平面决定球棒与来球轨迹重合的时间。攻击角偏离时，即使球棒速度够快，也容易擦过球或打出弱接触。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">2</span><div><h4>提高髋肩分离</h4><p>髋肩分离是打击蓄力核心。下半身先启动、上半身延迟，可以让躯干像弹簧一样释放到手和球棒。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">3</span><div><h4>保持看球稳定</h4><p>头部和躯干稳定帮助击球点判断。这里的质量分只是数据可靠性 proxy，实际训练仍要看头部相对骨盆是否过度漂移。</p></div><span class="badge good">良好</span></div></div></article>
