@@ -1522,6 +1522,11 @@ def main() -> None:
     .badge.risk {{ background:#fef2f2; color:#b91c1c; }}
     .badge.na {{ background:#eef2f7; color:#697586; }}
     .metric-value {{ font-size:32px; line-height:1; font-weight:700; margin:18px 0 10px; overflow-wrap:anywhere; }}
+    .pitch-metrics .metric-card {{ padding:18px; border-radius:18px; }}
+    .pitch-metrics .metric-card h4 {{ font-size:17px; line-height:24px; }}
+    .pitch-metrics .metric-value {{ font-size:24px; line-height:28px; margin:12px 0 8px; }}
+    .pitch-metrics .metric-card p {{ font-size:14px; line-height:21px; }}
+    .pitch-metrics .badge {{ font-size:13px; padding:4px 9px; }}
     .visual-card h4 {{ font-size:18px; line-height:26px; }}
     .visual-card p,.metric-card p,.card p {{ margin-top:8px; color:var(--mid); }}
     .visual-card p {{ font-size:16px; line-height:24px; }}
@@ -1622,7 +1627,7 @@ def main() -> None:
           <article class="visual-card"><h4>投球关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_pitch["trial_id"], "bryan投球C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 手部速度峰值。棒球投球通常在手端峰值附近暴露动力链结果：前腿是否撑住、骨盆和肩线是否形成分离、躯干是否把旋转传到手臂。</p></article>
           <article class="visual-card"><h4>投球姿态纠正图</h4>{pitch_posture_overlay}<p>方法：蓝色虚线是 bryan 出手附近三维姿态，绿色是临时 coach 参考姿态，红色标出偏差较大的骨段。这个图用于看身体段落排列，不用于单独判断好坏；真正的训练重点要结合速度峰值顺序和前腿支撑。</p></article>
         </div>
-        <div class="grid" style="margin-top:18px">{pitch_metric_cards}</div>
+        <div class="grid pitch-metrics" style="margin-top:18px">{pitch_metric_cards}</div>
         <div class="grid-3" style="margin-top:18px">
           {card("投球训练目标一", "跨步停顿投球影子练习：落脚后停住前膝和骨盆，再做躯干旋转。目标是让前腿成为稳定支点，复测前膝角和髋部速度。", "训练", "review")}
           {card("投球训练目标二", "髋肩分离慢动作：先让骨盆面向目标，再延迟肩线打开。目标是建立下肢到躯干的拉伸-旋转顺序，复测髋肩分离和躯干倾斜。", "训练", "review")}
