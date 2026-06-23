@@ -32,7 +32,6 @@ PART_COLORS = {
     "骨盆": "#0891b2",
     "左腿": "#f59e0b",
     "右腿": "#0ea5e9",
-    "模型点": "#94a3b8",
     "质心点": "#22c55e",
     "球棒": "#f97316",
 }
@@ -53,43 +52,6 @@ BODY_SEGMENTS = [
     ("LKNE", "LANK", "左腿"),
     ("RASI", "RKNE", "右腿"),
     ("RKNE", "RANK", "右腿"),
-]
-MODEL_SEGMENTS = [
-    ("PELO", "PELA", "骨盆"),
-    ("PELO", "PELL", "骨盆"),
-    ("PELO", "PELP", "骨盆"),
-    ("TRXO", "TRXA", "躯干"),
-    ("TRXO", "TRXL", "躯干"),
-    ("TRXO", "TRXP", "躯干"),
-    ("HEDO", "HEDA", "头颈"),
-    ("HEDO", "HEDL", "头颈"),
-    ("HEDO", "HEDP", "头颈"),
-    ("LCLO", "LCLA", "左臂"),
-    ("LCLO", "LCLL", "左臂"),
-    ("RCLO", "RCLA", "右臂"),
-    ("RCLO", "RCLL", "右臂"),
-    ("LHUO", "LHUA", "左臂"),
-    ("LHUO", "LHUL", "左臂"),
-    ("LRAO", "LRAA", "左臂"),
-    ("LRAO", "LRAL", "左臂"),
-    ("LHNO", "LHNA", "左臂"),
-    ("RHUO", "RHUA", "右臂"),
-    ("RHUO", "RHUL", "右臂"),
-    ("RRAO", "RRAA", "右臂"),
-    ("RRAO", "RRAL", "右臂"),
-    ("RHNO", "RHNA", "右臂"),
-    ("LFEO", "LFEA", "左腿"),
-    ("LFEO", "LFEL", "左腿"),
-    ("LTIO", "LTIA", "左腿"),
-    ("LTIO", "LTIL", "左腿"),
-    ("LFOO", "LFOA", "左腿"),
-    ("LTOO", "LTOA", "左腿"),
-    ("RFEO", "RFEA", "右腿"),
-    ("RFEO", "RFEL", "右腿"),
-    ("RTIO", "RTIA", "右腿"),
-    ("RTIO", "RTIL", "右腿"),
-    ("RFOO", "RFOA", "右腿"),
-    ("RTOO", "RTOA", "右腿"),
 ]
 BAT_SEGMENTS = [("Bat1", "Bat2"), ("Bat2", "Bat3"), ("Bat3", "Bat4"), ("Bat4", "Bat5")]
 LABEL_POINTS = ["LFHD", "RFHD", "C7", "T10", "LSHO", "RSHO", "LASI", "RASI", "CentreOfMass", "Bat1", "Bat5"]
@@ -175,9 +137,13 @@ def set_equal_axes(ax, points: dict[str, tuple[float, float, float]], limits: Ax
     ax.set_zlim(*zlim)
 
 
+def is_render_point(name: str) -> bool:
+    return name in RAW_MARKERS or name == "CentreOfMass" or name.startswith("Bat")
+
+
 def trial_axis_limits(trial: C3DTrial) -> AxisLimits:
     clean = [clean_label(label) for label in trial.labels]
-    keep = [idx for idx, name in enumerate(clean) if is_reconstruction_point(name)]
+    keep = [idx for idx, name in enumerate(clean) if is_reconstruction_point(name) and is_render_point(name)]
     coords = trial.points[:, keep, :3].reshape(-1, 3)
     coords = coords[np.isfinite(coords).all(axis=1)]
     if coords.size == 0:
@@ -200,7 +166,7 @@ def marker_part(name: str) -> str:
     for part, labels in RAW_MARKER_PARTS.items():
         if name in labels:
             return part
-    return "模型点"
+    return "躯干"
 
 
 def scatter_points(ax, points: dict[str, tuple[float, float, float]], label: str, color: str, size: float, alpha: float = 1.0) -> None:
@@ -210,8 +176,10 @@ def scatter_points(ax, points: dict[str, tuple[float, float, float]], label: str
     ax.scatter(coords[:, 0], coords[:, 1], coords[:, 2], s=size, c=color, alpha=alpha, depthshade=False, label=label)
 
 
-def fixed_legend(ax, font: FontProperties | None) -> None:
-    labels = ["模型点", "头颈", "躯干", "骨盆", "左臂", "右臂", "左腿", "右腿", "质心点", "球棒点"]
+def fixed_legend(ax, font: FontProperties | None, include_bat: bool) -> None:
+    labels = ["头颈", "躯干", "骨盆", "左臂", "右臂", "左腿", "右腿", "质心点", "球棒点"]
+    if not include_bat:
+        labels = [label for label in labels if label != "球棒点"]
     handles = [
         Line2D([0], [0], marker="o", color="none", markerfacecolor=PART_COLORS.get(label, PART_COLORS["球棒"]), markersize=6, label=label)
         for label in labels
@@ -230,8 +198,8 @@ def split_points(points: dict[str, tuple[float, float, float]]) -> tuple[
 ]:
     body_points = {k: v for k, v in points.items() if not k.startswith("Bat")}
     raw_points = {k: v for k, v in body_points.items() if k in RAW_MARKERS}
-    model_points = {k: v for k, v in body_points.items() if k not in RAW_MARKERS and not k.startswith("CentreOfMass")}
-    com_points = {k: v for k, v in body_points.items() if k.startswith("CentreOfMass")}
+    model_points: dict[str, tuple[float, float, float]] = {}
+    com_points = {k: v for k, v in body_points.items() if k == "CentreOfMass"}
     bat_points = {k: v for k, v in points.items() if k.startswith("Bat")}
     return raw_points, model_points, com_points, bat_points
 
@@ -247,18 +215,15 @@ def draw_reconstruction(
     fixed_layout_legend: bool = False,
 ) -> None:
     raw_points, model_points, com_points, bat_points = split_points(points)
+    visible_points = {**raw_points, **com_points, **bat_points}
 
     ax.set_facecolor("#ffffff")
     ax.view_init(elev=17, azim=-66)
-    for a, b, part in MODEL_SEGMENTS:
-        draw_segment(ax, points, a, b, PART_COLORS[part], 1.2)
     for a, b, part in BODY_SEGMENTS:
         draw_segment(ax, points, a, b, PART_COLORS[part], 2.4)
     for a, b in BAT_SEGMENTS:
         draw_segment(ax, points, a, b, PART_COLORS["球棒"], 3.4)
 
-    if model_points:
-        scatter_points(ax, model_points, "模型点", PART_COLORS["模型点"], 9, alpha=0.45)
     for part in ("头颈", "躯干", "骨盆", "左臂", "右臂", "左腿", "右腿"):
         part_points = {name: value for name, value in raw_points.items() if marker_part(name) == part}
         scatter_points(ax, part_points, part, PART_COLORS[part], 18)
@@ -267,12 +232,12 @@ def draw_reconstruction(
 
     if show_labels:
         for name in LABEL_POINTS:
-            if name not in points:
+            if name not in visible_points:
                 continue
-            x, y, z = points[name]
+            x, y, z = visible_points[name]
             ax.text(x, y, z, name, fontsize=5.5, color="#475467")
 
-    set_equal_axes(ax, points, limits=axis_limits)
+    set_equal_axes(ax, visible_points, limits=axis_limits)
     ax.set_xlabel("X（毫米）", labelpad=8, fontsize=9, fontproperties=font)
     ax.set_ylabel("Y（毫米）", labelpad=8, fontsize=9, fontproperties=font)
     ax.set_zlabel("Z（毫米）", labelpad=8, fontsize=9, fontproperties=font)
@@ -281,7 +246,7 @@ def draw_reconstruction(
     if frame_label:
         ax.text2D(0.67, 0.92, frame_label, transform=ax.transAxes, fontsize=9, color="#344054", fontproperties=font)
     if fixed_layout_legend:
-        fixed_legend(ax, font)
+        fixed_legend(ax, font, include_bat=bool(bat_points))
     else:
         legend = ax.legend(loc="upper left", bbox_to_anchor=(0.02, 0.98), frameon=True, fontsize=8)
         if font is not None:
@@ -335,6 +300,8 @@ def trial_frame_points(trial: C3DTrial, frame_idx: int, smooth_radius: int = 0) 
     for idx, name in enumerate(clean):
         if not is_reconstruction_point(name):
             continue
+        if not is_render_point(name):
+            continue
         if smooth_radius:
             window = trial.points[start:end, idx, :3]
             valid = np.isfinite(window).all(axis=1)
@@ -364,7 +331,7 @@ def render_trial_gif(
     sample = trial.path.parent.name
     action = infer_action(trial.path)
     action_text = "投球" if action == "pitching" else "打击"
-    title = f"{sample} / {action_text} / C3D完整模型动图"
+    title = f"{sample} / {action_text} / C3D骨架动图"
     limits = trial_axis_limits(trial)
 
     fig = plt.figure(figsize=(6.8, 4.6), dpi=110)

@@ -948,7 +948,7 @@ def vicon_reconstruction_image(rows: list[dict[str, str]], trial_id_value: str, 
       <img class="reconstruction-img" src="{esc(rel_asset(image_path))}" alt="{esc(title)}" loading="lazy">
       <figcaption>
         <b>{esc(title)}</b>
-        <span>动图来自完整 C3D trial 抽帧；关键动作先定位{esc(event_text)}，第{esc(frame_text)}帧，时间 {esc(time_text)}。颜色按头颈、躯干、骨盆、左右臂、左右腿、模型点、质心点和球棒区分。</span>
+        <span>动图来自完整 C3D trial 抽帧；关键动作先定位{esc(event_text)}，第{esc(frame_text)}帧，时间 {esc(time_text)}。骨架只使用真实身体 marker 连接，颜色按头颈、躯干、骨盆、左右臂、左右腿、质心点和球棒区分。</span>
       </figcaption>
     </figure>
     """
@@ -961,13 +961,13 @@ def vicon_reconstruction_cards(
 ) -> str:
     action_text = "投球" if action == "pitching" else "打击"
     note = (
-        "该图不是全局点云截图，而是从完整 C3D trial 抽帧渲染模型动图，并标注关键动作帧用于追溯。"
+        "该图不是全局点云截图，而是从完整 C3D trial 抽帧渲染真实 marker 骨架动图，并标注关键动作帧用于追溯。"
         if action == "pitching"
-        else "该图从完整 C3D trial 抽帧渲染模型动图，并标注球棒峰值速度关键帧；橙色线用于解释 Bat1-Bat5。"
+        else "该图从完整 C3D trial 抽帧渲染真实 marker 骨架动图，并标注球棒峰值速度关键帧；橙色线用于解释 Bat1-Bat5。"
     )
     cards = []
     for trial in vicon_trials(vicon_rows, action):
-        title = f"{sample_name(trial)}{action_text}C3D完整模型动图"
+        title = f"{sample_name(trial)}{action_text}C3D骨架动图"
         cards.append(
             f'<article class="visual-card"><h4>{esc(title)}</h4>'
             f'{vicon_reconstruction_image(point_rows, trial["trial_id"], title)}'
