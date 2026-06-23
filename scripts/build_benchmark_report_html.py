@@ -6,9 +6,13 @@ import html
 import math
 from pathlib import Path
 
+from build_vicon_2026_metrics import marker, read_c3d
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "report.html"
+MAIN_ATHLETE = "bryan"
+COMPARE_ATHLETE = "green"
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -95,6 +99,10 @@ METRIC_CN = {
     "Swing Speed": "挥棒速度估算",
     "Attack Angle": "攻击角",
     "Estimated Bat Speed": "球棒速度估算",
+    "Bat Speed": "球棒速度",
+    "Hand Speed": "手部速度",
+    "Trunk Speed": "躯干速度",
+    "Hip Speed": "髋部速度",
     "Hip Rotation": "髋部旋转",
     "Contact Time": "接触时间",
     "Wrist/Hand Speed": "腕手速度",
@@ -997,67 +1005,232 @@ def vicon_calibration_items(rows: list[dict[str, str]]) -> list[tuple[str, float
     return items
 
 
+def vicon_trial(rows: list[dict[str, str]], athlete: str, action: str) -> dict[str, str]:
+    for row in rows:
+        if row.get("athlete") == athlete and row.get("action_type") == action:
+            return row
+    raise ValueError(f"Missing Vicon trial for athlete={athlete!r}, action={action!r}")
+
+
+def point_event(points: list[dict[str, str]], trial_id_value: str) -> dict[str, str]:
+    return next((row for row in points if row.get("trial_id") == trial_id_value), {})
+
+
+def event_details(points: list[dict[str, str]], trial: dict[str, str]) -> tuple[list[tuple[str, float | None]], str]:
+    row = point_event(points, trial["trial_id"])
+    event = row.get("key_event", "关键动作")
+    frame = row.get("key_frame_index", "暂无")
+    time_s = num(row.get("key_time_sec"))
+    label = "峰值动作" if trial.get("action_type") == "pitching" else "击球/挥棒峰值"
+    return [(event, time_s)], f"{fmt(time_s, 's')}|第{frame}帧"
+
+
+def vicon_report_metrics(
+    trial: dict[str, str],
+    points: list[dict[str, str]],
+    action: str,
+) -> list[dict[str, str]]:
+    event = point_event(points, trial["trial_id"])
+    key_frame = event.get("key_frame_index", "")
+    key_reason = event.get("key_event", "关键动作")
+    base = {
+        "sample": sample_name(trial),
+        "action_type": action,
+        "source": "vicon_c3d",
+        "source_file": trial.get("source_file", ""),
+        "event_frame": key_frame,
+    }
+    specs = [
+        ("Hip-Shoulder Sep", "hip_shoulder_sep_deg", "deg", "Vicon marker 髋部轴与肩部轴的 yaw 分离角。"),
+        ("Lead Knee Angle", "lead_knee_angle_deg", "deg", "Vicon marker 计算的前腿膝角。"),
+        ("Trunk Tilt", "trunk_tilt_deg", "deg", "Vicon marker 躯干相对竖直方向倾斜角。"),
+        ("Head Stability", "valid_point_pct", "%", "当前报告用 C3D 有效点比例作为数据质量 proxy，不等同真实头部位移稳定评分。"),
+        ("Hand Speed", "hand_speed_kmh", "km/h", "Vicon 手腕 marker 三维速度峰值。"),
+    ]
+    if action == "pitching":
+        specs.extend(
+            [
+                ("Trunk Speed", "trunk_speed_kmh", "km/h", "Vicon 躯干中心三维速度峰值。"),
+                ("Hip Speed", "hip_speed_kmh", "km/h", "Vicon 髋部中心三维速度峰值。"),
+            ]
+        )
+    else:
+        specs.extend(
+            [
+                ("Bat Speed", "bat_speed_kmh", "km/h", "Vicon Bat1/Bat5 球棒 marker 三维速度峰值。"),
+                ("Attack Angle", "bat_angle_deg", "deg", "Vicon 球棒轴相对水平面的角度；仍需真实接触帧定义。"),
+                ("Contact Time", "swing_time_sec", "s", "由球棒高速窗口估算的挥棒持续时间，不是球棒触球时长。"),
+            ]
+        )
+    rows = []
+    for metric, field, unit, reason in specs:
+        value = trial.get(field, "")
+        status = "available" if num(value) is not None else "unavailable"
+        if metric in {"Head Stability", "Attack Angle", "Contact Time"}:
+            status = "proxy" if num(value) is not None else "unavailable"
+        rows.append(
+            {
+                **base,
+                "metric_name": metric,
+                "label_cn": metric_cn(metric),
+                "value": value,
+                "unit": unit,
+                "availability": status,
+                "status": "ok" if status == "available" else status,
+                "reason": f"{reason} 关键动作：{key_reason}。",
+                "note": f"{reason} 数据源：{trial.get('source_file', '')}。",
+            }
+        )
+    return rows
+
+
+def metric_value(rows: list[dict[str, str]], metric: str) -> float | None:
+    row = next((item for item in rows if item.get("metric_name") == metric), None)
+    return num(row.get("value")) if row else None
+
+
+def vicon_metric_cards(rows: list[dict[str, str]]) -> str:
+    return "".join(
+        metric_card(row["label_cn"], fmt(row.get("value"), row.get("unit")), row["note"], row["status"])
+        for row in rows
+    )
+
+
+def vicon_metrics_source_table(rows: list[dict[str, str]]) -> str:
+    body = []
+    for row in rows:
+        status_label, _ = status_cn(row.get("availability"))
+        body.append(
+            "<tr>"
+            f"<td>{esc(row.get('sample', ''))}</td>"
+            f"<td>{esc('投球' if row.get('action_type') == 'pitching' else '打击')}</td>"
+            f"<td>{esc(metric_cn(row.get('metric_name')))}</td>"
+            f"<td>{esc(fmt(row.get('value'), row.get('unit')))}</td>"
+            f"<td>{esc(status_label)}</td>"
+            f"<td>{esc(row.get('source_file', ''))}</td>"
+            "</tr>"
+        )
+    return '<table><thead><tr><th>被试</th><th>动作</th><th>指标</th><th>数值</th><th>状态</th><th>C3D来源</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
+
+
+def c3d_path(row: dict[str, str]) -> Path:
+    return ROOT.parent / row["source_file"]
+
+
+def finite_xyz(value) -> tuple[float, float, float] | None:
+    vals = tuple(float(x) for x in value)
+    return vals if all(math.isfinite(x) for x in vals) else None
+
+
+def vicon_pose_sequence(path: Path) -> list[dict[str, object]]:
+    trial = read_c3d(path)
+    specs = {
+        "head": ("LFHD", "RFHD", "LBHD", "RBHD"),
+        "neck": ("C7", "CLAV"),
+        "spine2": ("T10", "STRN"),
+        "spine3": ("C7", "T10", "CLAV", "STRN"),
+        "hip": ("LASI", "RASI", "LPSI", "RPSI"),
+        "left_shoulder": ("LSHO",),
+        "right_shoulder": ("RSHO",),
+        "left_elbow": ("LELB",),
+        "right_elbow": ("RELB",),
+        "left_wrist": ("LWRA", "LWRB"),
+        "right_wrist": ("RWRA", "RWRB"),
+        "left_hand": ("LFIN",),
+        "right_hand": ("RFIN",),
+        "left_hip": ("LASI", "LPSI"),
+        "right_hip": ("RASI", "RPSI"),
+        "left_knee": ("LKNE",),
+        "right_knee": ("RKNE",),
+        "left_ankle": ("LANK",),
+        "right_ankle": ("RANK",),
+        "left_foot": ("LTOE",),
+        "right_foot": ("RTOE",),
+    }
+    series = {name: marker(trial, *labels) for name, labels in specs.items()}
+    frames = []
+    for idx in range(trial.points.shape[0]):
+        joints = {}
+        for name, arr in series.items():
+            xyz = finite_xyz(arr[idx])
+            if xyz is not None:
+                joints[name] = xyz
+        if joints:
+            frames.append(
+                {
+                    "frame": idx,
+                    "time": idx / trial.rate_hz,
+                    "quality": 1.0,
+                    "joints": joints,
+                }
+            )
+    return frames
+
+
+def sequence_summary(frames: list[dict[str, object]]) -> dict[str, float | int]:
+    if not frames:
+        return {"frames": 0, "joints": 0, "quality": 0.0, "duration": 0.0}
+    joint_names = {name for frame in frames for name in frame["joints"]}  # type: ignore[union-attr]
+    return {
+        "frames": len(frames),
+        "joints": len(joint_names),
+        "quality": 1.0,
+        "duration": float(frames[-1]["time"]) - float(frames[0]["time"]),
+    }
+
+
+def vicon_quality_svg(items: list[tuple[str, list[dict[str, object]], str]]) -> str:
+    return pose_quality_svg(items)
+
+
 def main() -> None:
-    sly = read_csv(ROOT / "reports" / "slymask_benchmark_metrics.csv")
     pitch_full = read_csv(ROOT / "output" / "data" / "benchmark_pitch_vertical_09_motion_metrics_full.csv")
     pitch_vs = read_csv(ROOT / "output" / "data" / "benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv")
     vicon = read_csv(ROOT / "reports" / "vicon_2026_metrics.csv")
     vicon_points = read_csv(ROOT / "reports" / "vicon_2026_point_summary.csv")
-    asset_dir = ROOT / "outputs" / "manual-20260611-slymask" / "presentations" / "slymask-benchmark-deck" / "assets"
-    pitch09_2d = asset_dir / "benchmark_pitch_vertical_09_2d_thumb.png"
-    pitch09_3d = asset_dir / "benchmark_pitch_vertical_09_3d_thumb.png"
-    pitch10_3d = asset_dir / "benchmark_pitch_vertical_10_3d_thumb.png"
-    bat02_2d = asset_dir / "benchmark_hit_vertical_02_2d_thumb.png"
-    bat02_3d = asset_dir / "benchmark_hit_vertical_02_3d_thumb.png"
-    bat06_3d = asset_dir / "benchmark_hit_horizontal_06_3d_thumb.png"
-    pose3d_pitch09 = ROOT / "data_full" / "benchmark_rtmpose_test" / "processed" / "poses3d" / "benchmark_pitch_vertical_09" / "image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv"
-    pose3d_pitch10 = ROOT / "data_full" / "benchmark_rtmpose_test" / "processed" / "poses3d" / "benchmark_pitch_vertical_10" / "image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv"
-    pose3d_bat02 = ROOT / "data_full" / "benchmark_rtmpose_test" / "processed" / "poses3d" / "benchmark_hit_vertical_02" / "image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv"
-    pose3d_bat06 = ROOT / "data_full" / "benchmark_rtmpose_test" / "processed" / "poses3d" / "benchmark_hit_horizontal_06" / "image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv"
     pose3d_pitch_coach = ROOT / "data_full" / "coach_pose3d" / "gvhmr" / "pitch_horizontal_coach.csv"
-    pitch09_frames = read_pose_sequence(pose3d_pitch09)
-    pitch10_frames = read_pose_sequence(pose3d_pitch10)
-    bat02_frames = read_pose_sequence(pose3d_bat02)
-    bat06_frames = read_pose_sequence(pose3d_bat06)
-    pitch_coach_frames = read_pose_sequence(pose3d_pitch_coach)
-    pitch09_pose_summary = pose3d_summary(pose3d_pitch09)
-    bat02_pose_summary = pose3d_summary(pose3d_bat02)
-    vicon_pitch_cards = vicon_reconstruction_cards(vicon, vicon_points, "pitching")
-    vicon_bat_cards = vicon_reconstruction_cards(vicon, vicon_points, "batting")
 
-    pitch_names = ["Hip-Shoulder Sep", "Lead Knee Angle", "Trunk Tilt", "Head Stability", "Stride Length", "Ball Speed"]
-    bat_names = ["Hip-Shoulder Sep", "Lead Knee Angle", "Trunk Tilt", "Head Stability", "Estimated Bat Speed", "Attack Angle"]
-    pitch09 = clip_metrics(sly, "benchmark_pitch_vertical_09", pitch_names)
-    pitch10 = clip_metrics(sly, "benchmark_pitch_vertical_10", pitch_names)
-    bat02 = clip_metrics(sly, "benchmark_hit_vertical_02", bat_names)
-    bat06 = clip_metrics(sly, "benchmark_hit_horizontal_06", bat_names)
+    bryan_pitch = vicon_trial(vicon, MAIN_ATHLETE, "pitching")
+    bryan_bat = vicon_trial(vicon, MAIN_ATHLETE, "batting")
+    green_pitch = vicon_trial(vicon, COMPARE_ATHLETE, "pitching")
+    green_bat = vicon_trial(vicon, COMPARE_ATHLETE, "batting")
+    report_vicon = [bryan_pitch, bryan_bat, green_pitch, green_bat]
+
+    bryan_pitch_frames = vicon_pose_sequence(c3d_path(bryan_pitch))
+    bryan_bat_frames = vicon_pose_sequence(c3d_path(bryan_bat))
+    green_pitch_frames = vicon_pose_sequence(c3d_path(green_pitch))
+    green_bat_frames = vicon_pose_sequence(c3d_path(green_bat))
+    pitch_coach_frames = read_pose_sequence(pose3d_pitch_coach)
+    pitch_pose_summary = sequence_summary(bryan_pitch_frames)
+    bat_pose_summary = sequence_summary(bryan_bat_frames)
+    vicon_pitch_cards = vicon_reconstruction_cards(report_vicon, vicon_points, "pitching")
+    vicon_bat_cards = vicon_reconstruction_cards(report_vicon, vicon_points, "batting")
+    bryan_pitch_metrics = vicon_report_metrics(bryan_pitch, vicon_points, "pitching")
+    bryan_bat_metrics = vicon_report_metrics(bryan_bat, vicon_points, "batting")
+    green_pitch_metrics = vicon_report_metrics(green_pitch, vicon_points, "pitching")
+    green_bat_metrics = vicon_report_metrics(green_bat, vicon_points, "batting")
+    all_report_metrics = bryan_pitch_metrics + bryan_bat_metrics + green_pitch_metrics + green_bat_metrics
 
     vs = {row["metric_key"]: row for row in pitch_vs}
     pitch_scores = [
-        score_close(num(next((r["child_value"] for r in pitch_full if r["metric_key"] == "lead_knee"), None)), num(next((r["coach_value"] for r in pitch_full if r["metric_key"] == "lead_knee"), None)), 45),
-        score_ratio(num(vs["com_travel_cm"]["child_value"]), num(vs["com_travel_cm"]["coach_value"])),
-        score_close(num(vs["hip_shoulder_sep_deg"]["child_value"]), num(vs["hip_shoulder_sep_deg"]["coach_value"]), 35),
-        score_close(num(vs["trunk_vel_deg_s"]["child_value"]), num(vs["trunk_vel_deg_s"]["coach_value"]), 260),
-        score_ratio(num(vs["hand_speed_m_s"]["child_value"]), num(vs["hand_speed_m_s"]["coach_value"])),
-        round(num(find_metric(sly, "benchmark_pitch_vertical_09", "Head Stability")["value"]) or 45),
+        score_close(num(bryan_pitch.get("lead_knee_angle_deg")), num(next((r["coach_value"] for r in pitch_full if r["metric_key"] == "lead_knee"), None)), 45),
+        score_ratio(num(bryan_pitch.get("hip_speed_kmh")), num(green_pitch.get("hip_speed_kmh"))),
+        score_close(num(bryan_pitch.get("hip_shoulder_sep_deg")), num(vs["hip_shoulder_sep_deg"]["coach_value"]), 35),
+        score_ratio(num(bryan_pitch.get("trunk_speed_kmh")), num(green_pitch.get("trunk_speed_kmh"))),
+        score_ratio(num(bryan_pitch.get("hand_speed_kmh")), num(green_pitch.get("hand_speed_kmh"))),
+        round(num(bryan_pitch.get("valid_point_pct")) or 45),
     ]
     bat_scores = [
-        84,
-        score_close(num(find_metric(sly, "benchmark_hit_vertical_02", "Lead Knee Angle")["value"]), 135, 55),
-        max(10, round((num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]) or 0) / 35 * 100)),
-        62,
-        max(8, min(100, round(100 - abs(num(find_metric(sly, "benchmark_hit_vertical_02", "Attack Angle")["value"]) or 0) / 55 * 100))),
-        round(num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]) or 45),
+        round(num(bryan_bat.get("valid_point_pct")) or 45),
+        score_close(num(bryan_bat.get("lead_knee_angle_deg")), num(green_bat.get("lead_knee_angle_deg")), 55),
+        max(10, round((num(bryan_bat.get("hip_shoulder_sep_deg")) or 0) / 35 * 100)),
+        score_ratio(num(bryan_bat.get("trunk_speed_kmh")), num(green_bat.get("trunk_speed_kmh"))),
+        max(8, min(100, round(100 - abs(num(bryan_bat.get("bat_angle_deg")) or 0) / 55 * 100))),
+        score_ratio(num(bryan_bat.get("bat_speed_kmh")), num(green_bat.get("bat_speed_kmh"))),
     ]
 
-    pitch_metric_cards = "".join(
-        metric_card(row["label_cn"], fmt(row["child_value"], row["unit"]), row["note"], row["status"])
-        for row in pitch_full[:8]
-    )
-    bat_metric_cards = "".join(
-        metric_card(metric_cn(row["metric_name"]), fmt_metric_value(row, sly), "当前为视频估算，适合看同流程复测趋势；速度已按画面人体尺度换算为常用单位。", row["availability"])
-        for row in bat02
-    )
+    pitch_metric_cards = vicon_metric_cards(bryan_pitch_metrics)
+    bat_metric_cards = vicon_metric_cards(bryan_bat_metrics)
 
     pitch_compare_bars = bars(
         [(row["label_cn"] + " 球员", num(row["child_value"]), row["unit"], "#f97316") for row in pitch_vs[:6]]
@@ -1065,63 +1238,49 @@ def main() -> None:
     )
     bat_reference_bars = bars(
         [
-            ("打击02 髋肩分离", num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "deg", "#f97316"),
-            ("打击06 髋肩分离", num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "deg", "#60a5fa"),
-            *[
-                (f"{sample_name(row)}光学参考", num(row.get("hip_shoulder_sep_deg")), "deg", "#16a34a")
-                for row in vicon_trials(vicon, "batting")
-            ],
-            ("打击02 头部稳定", num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "%", "#f97316"),
-            ("打击06 头部稳定", num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "%", "#60a5fa"),
+            ("bryan 髋肩分离", num(bryan_bat.get("hip_shoulder_sep_deg")), "deg", "#f97316"),
+            ("green 髋肩分离", num(green_bat.get("hip_shoulder_sep_deg")), "deg", "#60a5fa"),
+            ("bryan 球棒峰值速度", num(bryan_bat.get("bat_speed_kmh")), "km/h", "#f97316"),
+            ("green 球棒峰值速度", num(green_bat.get("bat_speed_kmh")), "km/h", "#60a5fa"),
         ],
-        max_value=100,
     )
-    pitch_full_by_key = {row["metric_key"]: row for row in pitch_full}
-
-    def event_detail(clip: str, metric: str) -> str:
-        row = find_metric(sly, clip, metric)
-        if not row:
-            return "暂无数据|"
-        return f"{fmt(row.get('value'), row.get('unit'))}|第{row.get('event_frame', '暂无')}帧"
+    pitch_events, pitch_event_detail = event_details(vicon_points, bryan_pitch)
+    bat_events, bat_event_detail = event_details(vicon_points, bryan_bat)
 
     pitch_timeline_details = [
         "暂无抬腿事件|需逐帧检测",
-        event_detail("benchmark_pitch_vertical_09", "Motion Phase Start"),
+        "暂无落脚事件|需逐帧检测",
         "暂无最大外旋|需逐帧检测",
-        event_detail("benchmark_pitch_vertical_09", "Motion Phase Event"),
-        event_detail("benchmark_pitch_vertical_09", "Motion Phase End"),
+        pitch_event_detail,
+        "暂无随挥结束|需事件检测",
     ]
     bat_timeline_details = [
         "暂无准备事件|需逐帧检测",
-        event_detail("benchmark_hit_vertical_02", "Motion Phase Start"),
+        "暂无启动事件|需逐帧检测",
         "暂无落脚事件|需逐帧检测",
         "暂无入区事件|需球棒轨迹",
-        event_detail("benchmark_hit_vertical_02", "Motion Phase Event"),
-        event_detail("benchmark_hit_vertical_02", "Motion Phase End"),
+        bat_event_detail,
+        "暂无随挥结束|需事件检测",
     ]
-    pitch_event_rows = [row for row in sly if row.get("clip_id") == "benchmark_pitch_vertical_09" and "Motion Phase" in row.get("metric_name", "")]
-    bat_event_rows = [row for row in sly if row.get("clip_id") == "benchmark_hit_vertical_02" and "Motion Phase" in row.get("metric_name", "")]
-    pitch_events = [(metric_cn(row["metric_name"]), num(row.get("value"))) for row in pitch_event_rows]
-    bat_events = [(metric_cn(row["metric_name"]), num(row.get("value"))) for row in bat_event_rows]
-    pitch_event_frame = int(num(find_metric(sly, "benchmark_pitch_vertical_09", "Motion Phase Event")["event_frame"]) or 10)
+    pitch_event_frame = int(num(point_event(vicon_points, bryan_pitch["trial_id"]).get("key_frame_index")) or len(bryan_pitch_frames) // 2)
     coach_release_frame = peak_speed_frame(pitch_coach_frames, ["right_wrist", "right_hand"])
-    pitch_posture_overlay = posture_overlay_svg(pitch09_frames, pitch_coach_frames, pitch_event_frame, coach_release_frame)
-    pitch_angle_chart = line_chart_svg("投球角度时间曲线", pose_angle_series(pitch09_frames, "pitch"), pitch_events, "角度")
-    pitch_speed_chart = line_chart_svg("投球速度时间曲线", pose_speed_series(pitch09_frames, "pitch"), pitch_events, "公里/小时")
-    bat_angle_chart = line_chart_svg("打击角度时间曲线", pose_angle_series(bat02_frames, "bat"), bat_events, "角度")
-    bat_speed_chart = line_chart_svg("打击速度时间曲线", pose_speed_series(bat02_frames, "bat"), bat_events, "公里/小时")
-    pose_quality_chart = pose_quality_svg([
-        ("投球09", pitch09_frames, "#2563eb"),
-        ("投球10", pitch10_frames, "#60a5fa"),
-        ("打击02", bat02_frames, "#f97316"),
-        ("打击06", bat06_frames, "#7c4dff"),
+    pitch_posture_overlay = posture_overlay_svg(bryan_pitch_frames, pitch_coach_frames, pitch_event_frame, coach_release_frame)
+    pitch_angle_chart = line_chart_svg("bryan 投球角度时间曲线", pose_angle_series(bryan_pitch_frames, "pitch"), pitch_events, "角度")
+    pitch_speed_chart = line_chart_svg("bryan 投球速度时间曲线", pose_speed_series(bryan_pitch_frames, "pitch"), pitch_events, "公里/小时")
+    bat_angle_chart = line_chart_svg("bryan 打击角度时间曲线", pose_angle_series(bryan_bat_frames, "bat"), bat_events, "角度")
+    bat_speed_chart = line_chart_svg("bryan 打击速度时间曲线", pose_speed_series(bryan_bat_frames, "bat"), bat_events, "公里/小时")
+    pose_quality_chart = vicon_quality_svg([
+        ("bryan投球", bryan_pitch_frames, "#2563eb"),
+        ("green投球", green_pitch_frames, "#60a5fa"),
+        ("bryan打击", bryan_bat_frames, "#f97316"),
+        ("green打击", green_bat_frames, "#7c4dff"),
     ])
     pitch_chain_nodes = [
-        ("下肢", fmt(find_metric(sly, "benchmark_pitch_vertical_09", "Lead Knee Angle")["value"], "deg"), "前腿膝角"),
-        ("骨盆", fmt(vs["pelvis_vel_deg_s"]["child_value"], "deg/s"), "峰值速度"),
-        ("躯干", fmt(vs["trunk_vel_deg_s"]["child_value"], "deg/s"), "峰值速度"),
-        ("手臂", fmt(pitch_full_by_key["arm_speed"]["child_value"], "%"), "相对教练"),
-        ("出手", "约" + fmt(px_speed_to_kmh("benchmark_pitch_vertical_09", find_metric(sly, "benchmark_pitch_vertical_09", "Ball Speed")["value"]), "km/h"), "球速估算"),
+        ("下肢", fmt(bryan_pitch.get("lead_knee_angle_deg"), "deg"), "前腿膝角"),
+        ("骨盆", fmt(bryan_pitch.get("hip_speed_kmh"), "km/h"), "Vicon峰值"),
+        ("躯干", fmt(bryan_pitch.get("trunk_speed_kmh"), "km/h"), "Vicon峰值"),
+        ("手臂", fmt(bryan_pitch.get("hand_speed_kmh"), "km/h"), "Vicon峰值"),
+        ("出手", fmt(point_event(vicon_points, bryan_pitch["trial_id"]).get("key_time_sec"), "s"), "手速峰值"),
     ]
     pitch_dot_plot = dot_comparison_svg(
         [
@@ -1130,8 +1289,8 @@ def main() -> None:
                 "sub": "身体扭转",
                 "unit": "deg",
                 "points": [
-                    {"name": "投球09", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Hip-Shoulder Sep")["value"]), "color": "#2563eb"},
-                    {"name": "投球10", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Hip-Shoulder Sep")["value"]), "color": "#f97316"},
+                    {"name": "bryan", "value": num(bryan_pitch.get("hip_shoulder_sep_deg")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_pitch.get("hip_shoulder_sep_deg")), "color": "#f97316"},
                     {"name": "教练", "value": num(vs["hip_shoulder_sep_deg"]["coach_value"]), "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1140,9 +1299,9 @@ def main() -> None:
                 "sub": "落地支撑",
                 "unit": "deg",
                 "points": [
-                    {"name": "投球09", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Lead Knee Angle")["value"]), "color": "#2563eb"},
-                    {"name": "投球10", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Lead Knee Angle")["value"]), "color": "#f97316"},
-                    {"name": "教练", "value": num(pitch_full_by_key["lead_knee"]["coach_value"]), "color": "#101828", "kind": "line"},
+                    {"name": "bryan", "value": num(bryan_pitch.get("lead_knee_angle_deg")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_pitch.get("lead_knee_angle_deg")), "color": "#f97316"},
+                    {"name": "教练", "value": num(next((r["coach_value"] for r in pitch_full if r["metric_key"] == "lead_knee"), None)), "color": "#101828", "kind": "line"},
                 ],
             },
             {
@@ -1150,42 +1309,41 @@ def main() -> None:
                 "sub": "身体姿态",
                 "unit": "deg",
                 "points": [
-                    {"name": "投球09", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Trunk Tilt")["value"]), "color": "#2563eb"},
-                    {"name": "投球10", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Trunk Tilt")["value"]), "color": "#f97316"},
-                    {"name": "教练", "value": num(pitch_full_by_key["trunk_lean"]["coach_value"]), "color": "#101828", "kind": "line"},
+                    {"name": "bryan", "value": num(bryan_pitch.get("trunk_tilt_deg")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_pitch.get("trunk_tilt_deg")), "color": "#f97316"},
+                    {"name": "教练", "value": num(next((r["coach_value"] for r in pitch_full if r["metric_key"] == "trunk_lean"), None)), "color": "#101828", "kind": "line"},
                 ],
             },
             {
-                "label": "头部稳定",
-                "sub": "稳定性",
+                "label": "数据有效点",
+                "sub": "C3D质量",
                 "unit": "%",
                 "points": [
-                    {"name": "投球09", "value": num(find_metric(sly, "benchmark_pitch_vertical_09", "Head Stability")["value"]), "color": "#2563eb"},
-                    {"name": "投球10", "value": num(find_metric(sly, "benchmark_pitch_vertical_10", "Head Stability")["value"]), "color": "#f97316"},
-                    {"name": "参考", "value": 90.0, "color": "#101828", "kind": "line"},
+                    {"name": "bryan", "value": num(bryan_pitch.get("valid_point_pct")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_pitch.get("valid_point_pct")), "color": "#f97316"},
+                    {"name": "建议参考", "value": 90.0, "color": "#101828", "kind": "line"},
                 ],
             },
             {
-                "label": "跨步长度",
-                "sub": "动力转移",
-                "unit": "%",
-                "points": [
-                    {"name": "投球09", "value": (num(find_metric(sly, "benchmark_pitch_vertical_09", "Stride Length")["value"]) or 0) * 100, "color": "#2563eb"},
-                    {"name": "投球10", "value": (num(find_metric(sly, "benchmark_pitch_vertical_10", "Stride Length")["value"]) or 0) * 100, "color": "#f97316"},
-                    {"name": "教练", "value": num(pitch_full_by_key["stride_length"]["coach_value"]), "color": "#101828", "kind": "line"},
-                ],
-            },
-            {
-                "label": "球速估算",
-                "sub": "同机位趋势",
+                "label": "手部速度",
+                "sub": "Vicon三维峰值",
                 "unit": "km/h",
                 "points": [
-                    {"name": "投球09", "value": px_speed_to_kmh("benchmark_pitch_vertical_09", find_metric(sly, "benchmark_pitch_vertical_09", "Ball Speed")["value"]), "color": "#2563eb"},
-                    {"name": "投球10", "value": px_speed_to_kmh("benchmark_pitch_vertical_10", find_metric(sly, "benchmark_pitch_vertical_10", "Ball Speed")["value"]), "color": "#f97316"},
+                    {"name": "bryan", "value": num(bryan_pitch.get("hand_speed_kmh")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_pitch.get("hand_speed_kmh")), "color": "#f97316"},
+                ],
+            },
+            {
+                "label": "躯干速度",
+                "sub": "Vicon三维峰值",
+                "unit": "km/h",
+                "points": [
+                    {"name": "bryan", "value": num(bryan_pitch.get("trunk_speed_kmh")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_pitch.get("trunk_speed_kmh")), "color": "#f97316"},
                 ],
             },
         ],
-        [("投球09", "#2563eb"), ("投球10", "#f97316"), ("教练或建议参考", "#101828")],
+        [("bryan", "#2563eb"), ("green", "#f97316"), ("教练或建议参考", "#101828")],
     )
     bat_dot_plot = dot_comparison_svg(
         [
@@ -1194,9 +1352,8 @@ def main() -> None:
                 "sub": "身体蓄力",
                 "unit": "deg",
                 "points": [
-                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Hip-Shoulder Sep")["value"]), "color": "#2563eb"},
-                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Hip-Shoulder Sep")["value"]), "color": "#f97316"},
-                    {"name": "光学参考", "value": mean_metric(vicon, "batting", "hip_shoulder_sep_deg"), "color": "#101828", "kind": "line"},
+                    {"name": "bryan", "value": num(bryan_bat.get("hip_shoulder_sep_deg")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_bat.get("hip_shoulder_sep_deg")), "color": "#f97316"},
                 ],
             },
             {
@@ -1204,9 +1361,8 @@ def main() -> None:
                 "sub": "支撑稳定",
                 "unit": "deg",
                 "points": [
-                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Lead Knee Angle")["value"]), "color": "#2563eb"},
-                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Lead Knee Angle")["value"]), "color": "#f97316"},
-                    {"name": "光学参考", "value": mean_metric(vicon, "batting", "lead_knee_angle_deg"), "color": "#101828", "kind": "line"},
+                    {"name": "bryan", "value": num(bryan_bat.get("lead_knee_angle_deg")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_bat.get("lead_knee_angle_deg")), "color": "#f97316"},
                 ],
             },
             {
@@ -1214,18 +1370,17 @@ def main() -> None:
                 "sub": "身体轴线",
                 "unit": "deg",
                 "points": [
-                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Trunk Tilt")["value"]), "color": "#2563eb"},
-                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Trunk Tilt")["value"]), "color": "#f97316"},
-                    {"name": "光学参考", "value": mean_metric(vicon, "batting", "trunk_tilt_deg"), "color": "#101828", "kind": "line"},
+                    {"name": "bryan", "value": num(bryan_bat.get("trunk_tilt_deg")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_bat.get("trunk_tilt_deg")), "color": "#f97316"},
                 ],
             },
             {
-                "label": "头部稳定",
-                "sub": "看球稳定",
+                "label": "数据有效点",
+                "sub": "C3D质量",
                 "unit": "%",
                 "points": [
-                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"]), "color": "#2563eb"},
-                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Head Stability")["value"]), "color": "#f97316"},
+                    {"name": "bryan", "value": num(bryan_bat.get("valid_point_pct")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_bat.get("valid_point_pct")), "color": "#f97316"},
                     {"name": "建议参考", "value": 90.0, "color": "#101828", "kind": "line"},
                 ],
             },
@@ -1234,22 +1389,21 @@ def main() -> None:
                 "sub": "挥棒平面",
                 "unit": "deg",
                 "points": [
-                    {"name": "打击02", "value": num(find_metric(sly, "benchmark_hit_vertical_02", "Attack Angle")["value"]), "color": "#2563eb"},
-                    {"name": "打击06", "value": num(find_metric(sly, "benchmark_hit_horizontal_06", "Attack Angle")["value"]), "color": "#f97316"},
-                    {"name": "光学参考", "value": mean_metric(vicon, "batting", "bat_angle_deg"), "color": "#101828", "kind": "line"},
+                    {"name": "bryan", "value": num(bryan_bat.get("bat_angle_deg")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_bat.get("bat_angle_deg")), "color": "#f97316"},
                 ],
             },
             {
-                "label": "挥棒速度估算",
-                "sub": "末端速度",
+                "label": "球棒速度",
+                "sub": "Vicon三维峰值",
                 "unit": "km/h",
                 "points": [
-                    {"name": "打击02", "value": px_speed_to_kmh("benchmark_hit_vertical_02", find_metric(sly, "benchmark_hit_vertical_02", "Estimated Bat Speed")["value"]), "color": "#2563eb"},
-                    {"name": "打击06", "value": px_speed_to_kmh("benchmark_hit_horizontal_06", find_metric(sly, "benchmark_hit_horizontal_06", "Estimated Bat Speed")["value"]), "color": "#f97316"},
+                    {"name": "bryan", "value": num(bryan_bat.get("bat_speed_kmh")), "color": "#2563eb"},
+                    {"name": "green", "value": num(green_bat.get("bat_speed_kmh")), "color": "#f97316"},
                 ],
             },
         ],
-        [("打击02", "#2563eb"), ("打击06", "#f97316"), ("光学或建议参考", "#101828")],
+        [("bryan", "#2563eb"), ("green", "#f97316"), ("建议参考", "#101828")],
     )
 
     html_doc = f"""<!doctype html>
@@ -1369,22 +1523,22 @@ def main() -> None:
     <section class="hero">
       <div>
         <h1>青少年棒球三维动作体检报告</h1>
-        <p>本报告按球员、教练、研究者三类读者拆分，并把投球和打击分开分析。能由当前三维基准数据计算的指标直接呈现；缺少逐帧、雷达枪或真实接触事件的数据，以占位和限制说明呈现。</p>
+        <p>本报告按球员、教练、研究者三类读者拆分，并把投球和打击分开分析。主体被试固定为 bryan，原始身体数据统一来自 Vicon C3D；green 仅作为教练模块对照，教练参考暂时沿用既有 coach 3D 数据。</p>
         <div class="pill-row"><span class="pill">中文报告</span><span class="pill">三维骨架</span><span class="pill">可量化诊断</span><span class="pill">数据限制透明</span></div>
       </div>
       <aside class="hero-evidence">
-        {image_figure(pitch09_3d, "投球三维骨架证据", "来自当前基准投球样本的三维姿态输出。")}
+        {vicon_reconstruction_image(vicon_points, bryan_pitch["trial_id"], "bryan 投球 C3D 骨架证据")}
         <div class="hero-stat">
-          <div><b>{pitch09_pose_summary["frames"]}</b><span>投球三维可用帧</span></div>
-          <div><b>{bat02_pose_summary["frames"]}</b><span>打击三维可用帧</span></div>
-          <div><b>{fmt(find_metric(sly, "benchmark_hit_vertical_02", "Head Stability")["value"], "%")}</b><span>打击头部稳定</span></div>
+          <div><b>{pitch_pose_summary["frames"]}</b><span>bryan投球C3D帧</span></div>
+          <div><b>{bat_pose_summary["frames"]}</b><span>bryan打击C3D帧</span></div>
+          <div><b>{fmt(bryan_bat.get("valid_point_pct"), "%")}</b><span>打击有效点比例</span></div>
         </div>
       </aside>
     </section>
 
     <section class="section" id="player">
       <div class="section-title"><span class="mark"></span><h2>球员模块</h2></div>
-      <div class="module-note"><p>这一模块只回答孩子和家长最关心的三件事：哪里做得好、哪里要改、接下来练什么。</p></div>
+      <div class="module-note"><p>这一模块只回答孩子和家长最关心的三件事：哪里做得好、哪里要改、接下来练什么。所有主体指标均来自 bryan 的 Vicon C3D。</p></div>
 
       <section class="section" id="pitch">
         <div class="section-title"><span class="mark"></span><h3>投球分析</h3></div>
@@ -1404,7 +1558,7 @@ def main() -> None:
           </article>
         </div>
         <div class="grid-2" style="margin-top:18px">
-          <article class="visual-card"><h4>投球关键帧证据图</h4>{image_pair([(pitch09_2d, "投球二维关键帧", "来自当前基准投球视频的关键帧输出。"), (pitch09_3d, "投球三维骨架", "优先使用三维姿态结果解释动作角度。")])}<p>方法：关键帧用于定位动作阶段，三维骨架用于解释髋肩分离、前膝支撑和躯干姿态。</p></article>
+          <article class="visual-card"><h4>投球关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_pitch["trial_id"], "bryan投球C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 手部速度峰值，三维 marker 用于解释髋肩分离、前膝支撑和躯干姿态。</p></article>
           <article class="visual-card"><h4>投球姿态纠正图</h4>{pitch_posture_overlay}<p>方法：蓝色虚线是球员出手附近三维姿态，绿色是教练出手侧手部速度峰值附近姿态；红色标出当前偏差最大的骨段。</p></article>
         </div>
         <div class="grid" style="margin-top:18px">{pitch_metric_cards}</div>
@@ -1420,11 +1574,11 @@ def main() -> None:
         <div class="section-title"><span class="mark"></span><h3>打击分析</h3></div>
         <div class="grid-2">
           <article class="visual-card"><h4>打击六维评分图</h4>{radar_svg(["站姿稳定","跨步控制","髋肩分离","躯干旋转","挥棒平面","击球后平衡"], bat_scores, "#7c4dff")}<p>怎么看：髋肩分离和挥棒平面是本次打击优先改进项，头部稳定是保持项。</p></article>
-          <article class="visual-card"><h4>打击关键帧证据图</h4>{image_pair([(bat02_2d, "打击二维关键帧", "来自当前基准打击视频的关键帧输出。"), (bat02_3d, "打击三维骨架", "已使用现有三维流程输出，不需要重新跑视频。")])}<p>方法：重点看启动、击球点和随挥结束；真实球棒接触点仍需专门事件标注。</p></article>
+          <article class="visual-card"><h4>打击关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_bat["trial_id"], "bryan打击C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 球棒速度峰值；真实触球点仍需专门事件标注。</p></article>
         </div>
         <div class="grid" style="margin-top:18px">{bat_metric_cards}</div>
         <div class="grid-2" style="margin-top:18px">
-          <article class="visual-card"><h4>挥棒轨迹证据图</h4>{image_pair([(bat02_3d, "主体打击三维骨架", "用于观察挥棒过程中的身体轴线和下肢支撑。"), (bat06_3d, "对照打击三维骨架", "用于同批次样本对比，不作为绝对标准。")])}<p>怎么看：当前真实可用的是身体三维骨架和手部轨迹估算，尚不能直接等同真实球棒杆身轨迹。</p></article>
+          <article class="visual-card"><h4>挥棒轨迹证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_bat["trial_id"], "bryan打击C3D球棒轨迹")}<p>怎么看：当前真实可用的是 Vicon 身体 marker 和 Bat1-Bat5 球棒 marker；球棒峰值速度来自 C3D 三维坐标差分。</p></article>
           <article class="visual-card"><h4>打击优先级列表</h4><div class="priority-list"><div class="priority-item"><span class="rank">1</span><div><h4>修正挥棒平面</h4><p>攻击角偏大时，球棒容易从球下方穿过。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">2</span><div><h4>提高髋肩分离</h4><p>身体蓄力不足时，动作容易变成只靠手。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">3</span><div><h4>保持看球稳定</h4><p>头部稳定分高，是本次打击优势。</p></div><span class="badge good">良好</span></div></div></article>
         </div>
         <div class="grid-3" style="margin-top:18px">
@@ -1437,35 +1591,35 @@ def main() -> None:
 
     <section class="section" id="coach">
       <div class="section-title"><span class="mark"></span><h2>教练模块</h2></div>
-      <div class="module-note"><p>这一模块聚焦对比、差距、阶段和训练干预，不把队员对比写成医学评价或单一排名。</p></div>
+      <div class="module-note"><p>这一模块聚焦对比、差距、阶段和训练干预。主体是 bryan，green 仅作为同一 Vicon 采集环境下的对照；教练参考暂时沿用既有 coach 3D 数据。</p></div>
       <div class="grid-2">
         <article class="visual-card"><h4>投球差距仪表盘</h4><div class="table-scroll">{compare_table(pitch_vs)}</div><p>怎么看：按差距和训练可改性决定优先级，速度与位移估算必须复测确认。</p></article>
         <article class="visual-card"><h4>投球阶段时间轴</h4>{timeline_svg(["抬腿","落脚","最大外旋","出手","随挥"], pitch_timeline_details)}<p>当前汇总表提供动作开始、出手估算事件和动作结束；抬腿与最大外旋仍需逐帧事件检测。</p></article>
       </div>
-      <article class="visual-card" style="margin-top:18px"><h4>投球队员对比点位图</h4>{pitch_dot_plot}<p>读法：蓝点是主体投球样本，橙点是同批次对照样本，黑线是教练或建议参考。每一行只比较同一个指标。</p></article>
+      <article class="visual-card" style="margin-top:18px"><h4>投球队员对比点位图</h4>{pitch_dot_plot}<p>读法：蓝点是 bryan，橙点是 green，黑线是暂用教练参考。每一行只比较同一个指标。</p></article>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>投球动力链传递图</h4>{chain_svg(pitch_chain_nodes)}<p>怎么看：每个节点下方保留本次可用数值；速度为估算时只看顺序趋势，不直接下绝对速度结论。</p></article>
         <article class="visual-card"><h4>打击阶段时间轴</h4>{timeline_svg(["准备","启动","前脚落地","进入击球区","击球点","随挥"], bat_timeline_details)}<p>打击阶段独立于投球阶段；当前汇总表提供启动、击球点估算和随挥结束，落脚与入区需要球棒轨迹补充。</p></article>
       </div>
-      <article class="visual-card" style="margin-top:18px"><h4>打击队员对比点位图</h4>{bat_dot_plot}<p>读法：蓝点是主体打击样本，橙点是同批次对照样本，黑线是光学动作捕捉或建议参考。点越接近参考线，说明该指标越接近参考动作。</p></article>
+      <article class="visual-card" style="margin-top:18px"><h4>打击队员对比点位图</h4>{bat_dot_plot}<p>读法：蓝点是 bryan，橙点是 green。当前打击对照只比较同一 Vicon 数据源，不再混入视频 CV 指标。</p></article>
       <article class="visual-card" style="margin-top:18px"><h4>改进优先级矩阵</h4><div class="matrix"><span class="bubble" style="left:78%;top:24%;background:#ef4444">手部速度</span><span class="bubble" style="left:66%;top:34%;background:#f97316">身体前移</span><span class="bubble" style="left:58%;top:62%;background:#7c4dff">挥棒平面</span><span class="bubble" style="left:36%;top:72%;background:#16a34a">头部稳定</span></div><p>横轴代表表现影响，纵轴越靠上代表越应优先训练。</p></article>
     </section>
 
     <section class="section" id="research">
       <div class="section-title"><span class="mark"></span><h2>研究者模块</h2></div>
-      <div class="module-note"><p>这一模块使用当前三维姿态 CSV 与 vicon_2026 C3D 导出生成逐帧曲线、事件线、质量图和光学动作捕捉校准；不可直接观测的雷达球速和力板重心仍在限制说明中保留。</p></div>
+      <div class="module-note"><p>这一模块统一使用 vicon_2026 C3D 作为 raw data source。逐帧曲线、事件线、质量图、来源表和动图均从 C3D 或 C3D 派生 CSV 得到；教练参考作为临时对照单独标注。</p></div>
       <div class="grid-2">
-        <article class="visual-card"><h4>投球角度时间曲线</h4>{pitch_angle_chart}<p>怎么看：曲线来自投球09三维骨架逐帧计算，黑色虚线为动作开始、出手估算和动作结束事件。</p></article>
+        <article class="visual-card"><h4>投球角度时间曲线</h4>{pitch_angle_chart}<p>怎么看：曲线来自 bryan 投球 C3D marker 逐帧计算，黑色虚线为手部速度峰值事件。</p></article>
         <article class="visual-card"><h4>投球速度时间曲线</h4>{pitch_speed_chart}<p>怎么看：速度由三维模型空间坐标逐帧差分估算并换算为公里/小时，用于观察峰值顺序和事件附近变化。</p></article>
-        <article class="visual-card"><h4>打击角度时间曲线</h4>{bat_angle_chart}<p>怎么看：曲线来自打击02三维骨架逐帧计算，重点看启动到击球点之间前膝、躯干和髋肩分离的变化。</p></article>
+        <article class="visual-card"><h4>打击角度时间曲线</h4>{bat_angle_chart}<p>怎么看：曲线来自 bryan 打击 C3D marker 逐帧计算，重点看球棒峰值速度附近前膝、躯干和髋肩分离的变化。</p></article>
         <article class="visual-card"><h4>打击速度时间曲线</h4>{bat_speed_chart}<p>怎么看：速度由髋部、躯干和出手侧手部轨迹估算；真实球棒杆身速度仍需要球棒检测或光学标记。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>事件点表</h4><div class="table-scroll">{source_table([r for r in sly if "Motion Phase" in r["metric_name"]], 20, sly)}</div></article>
-        <article class="visual-card"><h4>三维骨架来源表</h4><div class="table-scroll">{pose3d_source_table([("投球09", pose3d_pitch09), ("投球10", pose3d_pitch10), ("打击02", pose3d_bat02), ("打击06", pose3d_bat06)])}</div><p>表内统计直接来自三维骨架序列，用于确认本报告已接入真实姿态数据。</p></article>
+        <article class="visual-card"><h4>事件点表</h4><div class="table-scroll">{vicon_metrics_source_table([row for row in all_report_metrics if row["metric_name"] in {"Hand Speed", "Bat Speed"}])}</div><p>事件点来自 C3D 派生表：投球使用手部速度峰值，打击使用球棒速度峰值。</p></article>
+        <article class="visual-card"><h4>C3D逐帧来源表</h4><div class="table-scroll">{vicon_source_table(report_vicon)}</div><p>表内统计直接来自 Vicon C3D，用于确认本报告没有混入 CV 身体数据作为 raw source。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>Vicon 2026 C3D来源表</h4><div class="table-scroll">{vicon_source_table(vicon)}</div><p>表内统计由 vicon_2026 文件夹中的 C3D 导出直接解析得到，忽略 macOS 资源分叉文件。</p></article>
+        <article class="visual-card"><h4>Vicon 2026 C3D来源表</h4><div class="table-scroll">{vicon_source_table(report_vicon)}</div><p>报告当前只纳入 bryan 和 green；子文件夹名即被试名。</p></article>
         {vicon_pitch_cards or '<article class="visual-card"><h4>投球C3D重建截图</h4>' + line_placeholder_svg("投球C3D重建截图") + '<p>暂无投球 C3D 点位数据。</p></article>'}
       </div>
       <div class="grid-2" style="margin-top:18px">
@@ -1473,10 +1627,10 @@ def main() -> None:
         {vicon_bat_cards or '<article class="visual-card"><h4>打击C3D重建截图</h4>' + line_placeholder_svg("打击C3D重建截图") + '<p>暂无打击 C3D 点位数据。</p></article>'}
       </div>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>光学动作捕捉校准说明</h4><div class="bars">{bars(vicon_calibration_items(vicon))}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出；条目名称直接使用 C3D 所在子文件夹名，用于校准和解释视频估算，不直接替代当前视频指标。</p></article>
+        <article class="visual-card"><h4>光学动作捕捉对照说明</h4><div class="bars">{bat_reference_bars}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出；bryan 是主分析人，green 只作为教练模块对照。</p></article>
         <article class="visual-card"><h4>限制卡片组</h4><div class="grid-2">{card("真实球速", "当前速度是视频追踪换算值，不等同雷达枪正式球速。", "需复核", "review")}{card("换算假设", "使用源视频分辨率、帧率、画面人体高度，并假设青少年身高一米五五。", "需复核", "review")}{card("身体重心", "当前使用髋部和脊柱中心近似，不是力板重心。", "需复核", "review")}{card("光学与视频对齐", "不同来源尚未逐帧同步，只能做解释性参考。", "需复核", "review")}</div></article>
       </div>
-      <article class="visual-card" style="margin-top:18px"><h4>指标来源表</h4><div class="table-scroll">{source_table(sly, all_rows=sly)}</div></article>
+      <article class="visual-card" style="margin-top:18px"><h4>指标来源表</h4><div class="table-scroll">{vicon_metrics_source_table(all_report_metrics)}</div></article>
     </section>
   </main>
   <footer>三维视频动作分析报告，仅用于训练参考。缺少数据的指标已保留占位和限制说明。</footer>

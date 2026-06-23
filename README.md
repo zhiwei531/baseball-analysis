@@ -82,27 +82,35 @@ playbook, but they are no longer the active center of the project.
 
 ## Benchmark HTML Report
 
-The current Chinese benchmark report is generated from local benchmark CSVs,
-GVHMR/RTMPose 3D pose CSVs, SlyMask-style metrics, and the 2026 Vicon C3D
-exports in `../vicon_2026`.
+The current Chinese benchmark report is Vicon-first. Raw body metrics, curves,
+source tables, and reconstruction GIFs are generated from `../vicon_2026`
+C3D files. The current main athlete is `bryan`; `green` is used only as the
+coach-section comparison. The older benchmark CV/GVHMR video metrics are no
+longer mixed into the report body. Existing coach data is still used temporarily
+as a pitch reference line.
+
+For the complete report build guide, including data selection, C3D metric
+calculation, reconstruction GIF generation, and known limitations, see
+[REPORT_README.md](REPORT_README.md).
 
 Entry points:
 
 ```bash
 .venv312/bin/python scripts/build_vicon_2026_metrics.py
 MPLCONFIGDIR=/private/tmp/baseball_mpl_cache .venv312/bin/python scripts/render_vicon_reconstruction_images.py
-python3 scripts/build_benchmark_report_html.py
+.venv312/bin/python scripts/build_benchmark_report_html.py
 ```
 
 Inputs:
 
 ```text
-reports/slymask_benchmark_metrics.csv
-output/data/benchmark_pitch_vertical_09_motion_metrics_full.csv
-output/data/benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv
-data_full/benchmark_rtmpose_test/processed/poses3d/*/image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv
-data_full/coach_pose3d/gvhmr/pitch_horizontal_coach.csv
 ../vicon_2026/*/*.c3d
+reports/vicon_2026_metrics.csv
+reports/vicon_2026_point_summary.csv
+reports/assets/vicon_reconstruction/*.png
+reports/assets/vicon_reconstruction/*.gif
+data_full/coach_pose3d/gvhmr/pitch_horizontal_coach.csv
+output/data/benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv
 ```
 
 Generated report artifacts:
