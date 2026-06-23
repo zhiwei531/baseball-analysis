@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
+from matplotlib.lines import Line2D
 import numpy as np
 from PIL import Image
 
@@ -149,15 +150,42 @@ def points_for_trial(rows: list[dict[str, str]]) -> dict[str, tuple[float, float
     return points
 
 
-def set_equal_axes(ax, points: dict[str, tuple[float, float, float]]) -> None:
-    coords = np.array(list(points.values()), dtype=float)
+AxisLimits = tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
+
+
+def axis_limits_from_coords(coords: np.ndarray, margin: float = 1.55) -> AxisLimits:
     mins = coords.min(axis=0)
     maxs = coords.max(axis=0)
     center = (mins + maxs) / 2
-    radius = max(float((maxs - mins).max()) / 2, 250.0) * 1.55
-    ax.set_xlim(center[0] - radius, center[0] + radius)
-    ax.set_ylim(center[1] - radius, center[1] + radius)
-    ax.set_zlim(center[2] - radius, center[2] + radius)
+    radius = max(float((maxs - mins).max()) / 2, 250.0) * margin
+    return (
+        (float(center[0] - radius), float(center[0] + radius)),
+        (float(center[1] - radius), float(center[1] + radius)),
+        (float(center[2] - radius), float(center[2] + radius)),
+    )
+
+
+def set_equal_axes(ax, points: dict[str, tuple[float, float, float]], limits: AxisLimits | None = None) -> None:
+    if limits is None:
+        coords = np.array(list(points.values()), dtype=float)
+        limits = axis_limits_from_coords(coords)
+    (xlim, ylim, zlim) = limits
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.set_zlim(*zlim)
+
+
+def trial_axis_limits(trial: C3DTrial) -> AxisLimits:
+    clean = [clean_label(label) for label in trial.labels]
+    keep = [idx for idx, name in enumerate(clean) if is_reconstruction_point(name)]
+    coords = trial.points[:, keep, :3].reshape(-1, 3)
+    coords = coords[np.isfinite(coords).all(axis=1)]
+    if coords.size == 0:
+        return ((-500.0, 500.0), (-500.0, 500.0), (-100.0, 1200.0))
+    # Percentile bounds avoid one bad marker forcing the athlete to become tiny.
+    lo = np.nanpercentile(coords, 1, axis=0)
+    hi = np.nanpercentile(coords, 99, axis=0)
+    return axis_limits_from_coords(np.vstack([lo, hi]), margin=1.35)
 
 
 def draw_segment(ax, points: dict[str, tuple[float, float, float]], a: str, b: str, color: str, width: float) -> None:
@@ -182,6 +210,18 @@ def scatter_points(ax, points: dict[str, tuple[float, float, float]], label: str
     ax.scatter(coords[:, 0], coords[:, 1], coords[:, 2], s=size, c=color, alpha=alpha, depthshade=False, label=label)
 
 
+def fixed_legend(ax, font: FontProperties | None) -> None:
+    labels = ["模型点", "头颈", "躯干", "骨盆", "左臂", "右臂", "左腿", "右腿", "质心点", "球棒点"]
+    handles = [
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=PART_COLORS.get(label, PART_COLORS["球棒"]), markersize=6, label=label)
+        for label in labels
+    ]
+    legend = ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.02, 0.98), frameon=True, fontsize=8)
+    if font is not None:
+        for text in legend.get_texts():
+            text.set_fontproperties(font)
+
+
 def split_points(points: dict[str, tuple[float, float, float]]) -> tuple[
     dict[str, tuple[float, float, float]],
     dict[str, tuple[float, float, float]],
@@ -203,6 +243,8 @@ def draw_reconstruction(
     title: str,
     frame_label: str | None = None,
     show_labels: bool = True,
+    axis_limits: AxisLimits | None = None,
+    fixed_layout_legend: bool = False,
 ) -> None:
     raw_points, model_points, com_points, bat_points = split_points(points)
 
@@ -230,7 +272,7 @@ def draw_reconstruction(
             x, y, z = points[name]
             ax.text(x, y, z, name, fontsize=5.5, color="#475467")
 
-    set_equal_axes(ax, points)
+    set_equal_axes(ax, points, limits=axis_limits)
     ax.set_xlabel("X（毫米）", labelpad=8, fontsize=9, fontproperties=font)
     ax.set_ylabel("Y（毫米）", labelpad=8, fontsize=9, fontproperties=font)
     ax.set_zlabel("Z（毫米）", labelpad=8, fontsize=9, fontproperties=font)
@@ -238,10 +280,13 @@ def draw_reconstruction(
     ax.grid(True, color="#e4e7ec", linewidth=0.7)
     if frame_label:
         ax.text2D(0.67, 0.92, frame_label, transform=ax.transAxes, fontsize=9, color="#344054", fontproperties=font)
-    legend = ax.legend(loc="upper left", bbox_to_anchor=(0.02, 0.98), frameon=True, fontsize=8)
-    if font is not None:
-        for text in legend.get_texts():
-            text.set_fontproperties(font)
+    if fixed_layout_legend:
+        fixed_legend(ax, font)
+    else:
+        legend = ax.legend(loc="upper left", bbox_to_anchor=(0.02, 0.98), frameon=True, fontsize=8)
+        if font is not None:
+            for text in legend.get_texts():
+                text.set_fontproperties(font)
     ax.set_title(title, fontsize=10, color="#101828", fontproperties=font)
     ax.set_box_aspect((1, 1, 1))
 
@@ -282,19 +327,34 @@ def render_trial(rows: list[dict[str, str]], out_dir: Path) -> Path | None:
     return out_path
 
 
-def trial_frame_points(trial: C3DTrial, frame_idx: int) -> dict[str, tuple[float, float, float]]:
+def trial_frame_points(trial: C3DTrial, frame_idx: int, smooth_radius: int = 0) -> dict[str, tuple[float, float, float]]:
     clean = [clean_label(label) for label in trial.labels]
     points = {}
+    start = max(0, frame_idx - smooth_radius)
+    end = min(trial.points.shape[0], frame_idx + smooth_radius + 1)
     for idx, name in enumerate(clean):
         if not is_reconstruction_point(name):
             continue
-        xyz = trial.points[frame_idx, idx, :3]
+        if smooth_radius:
+            window = trial.points[start:end, idx, :3]
+            valid = np.isfinite(window).all(axis=1)
+            if not valid.any():
+                continue
+            xyz = np.nanmedian(window[valid], axis=0)
+        else:
+            xyz = trial.points[frame_idx, idx, :3]
         if np.isfinite(xyz).all():
             points[name] = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
     return points
 
 
-def render_trial_gif(trial: C3DTrial, out_dir: Path, max_frames: int = 72, frame_duration_ms: int = 85) -> Path | None:
+def render_trial_gif(
+    trial: C3DTrial,
+    out_dir: Path,
+    max_frames: int = 72,
+    frame_duration_ms: int = 85,
+    smooth_radius: int = 2,
+) -> Path | None:
     frame_count = trial.points.shape[0]
     if frame_count == 0:
         return None
@@ -305,13 +365,15 @@ def render_trial_gif(trial: C3DTrial, out_dir: Path, max_frames: int = 72, frame
     action = infer_action(trial.path)
     action_text = "投球" if action == "pitching" else "打击"
     title = f"{sample} / {action_text} / C3D完整模型动图"
+    limits = trial_axis_limits(trial)
 
     fig = plt.figure(figsize=(6.8, 4.6), dpi=110)
     fig.patch.set_facecolor("#ffffff")
     ax = fig.add_subplot(111, projection="3d")
+    fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=0.94)
     for frame_idx in frame_indices:
         ax.clear()
-        points = trial_frame_points(trial, int(frame_idx))
+        points = trial_frame_points(trial, int(frame_idx), smooth_radius=smooth_radius)
         if not points:
             continue
         draw_reconstruction(
@@ -321,8 +383,9 @@ def render_trial_gif(trial: C3DTrial, out_dir: Path, max_frames: int = 72, frame
             title,
             frame_label=f"第{int(frame_idx)}帧 / {frame_idx / trial.rate_hz:.2f}秒",
             show_labels=False,
+            axis_limits=limits,
+            fixed_layout_legend=True,
         )
-        fig.tight_layout(rect=[0.0, 0.0, 1.0, 0.96])
         fig.canvas.draw()
         width, height = fig.canvas.get_width_height()
         frame = Image.frombytes("RGBA", (width, height), fig.canvas.buffer_rgba())
