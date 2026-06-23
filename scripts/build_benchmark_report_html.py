@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import html
 import math
 from pathlib import Path
@@ -31,6 +32,10 @@ def zh_text(value: object) -> str:
     for old, new in replacements.items():
         text = text.replace(old, new)
     return text
+
+
+def stable_id(value: str) -> str:
+    return hashlib.sha1(value.encode("utf-8")).hexdigest()[:12]
 
 
 def num(value: str | float | None) -> float | None:
@@ -510,9 +515,10 @@ def line_chart_svg(
         legend_tags.append(f'<text x="{legend_x + 12}" y="331" fill="#344054" font-size="12">{esc(row["name"])}</text>')
         legend_x += 150
 
+    clip_id = f"clip-{stable_id(title)}"
     return f"""
     <div class="line-chart-scroll"><svg class="line-chart-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(title)}">
-      <defs><clipPath id="clip-{abs(hash(title))}"><rect x="{left}" y="{top}" width="{right - left}" height="{bottom - top}"/></clipPath></defs>
+      <defs><clipPath id="{clip_id}"><rect x="{left}" y="{top}" width="{right - left}" height="{bottom - top}"/></clipPath></defs>
       <rect width="{width}" height="{height}" rx="18" fill="#ffffff"/>
       <text x="24" y="24" fill="#101828" font-size="14" font-weight="700">{esc(title)}</text>
       <line x1="{left}" y1="{bottom}" x2="{right}" y2="{bottom}" stroke="#667085"/>
@@ -528,7 +534,7 @@ def line_chart_svg(
       <text x="{left - 14}" y="{bottom + 4}" text-anchor="end" fill="#98a2b3" font-size="11">{esc(fmt(lo, str(series[0].get("unit", ""))))}</text>
       <text x="{left - 14}" y="{top + 4}" text-anchor="end" fill="#98a2b3" font-size="11">{esc(fmt(hi, str(series[0].get("unit", ""))))}</text>
       {''.join(event_tags)}
-      <g clip-path="url(#clip-{abs(hash(title))})">{''.join(paths)}</g>
+      <g clip-path="url(#{clip_id})">{''.join(paths)}</g>
       {''.join(legend_tags)}
     </svg></div>
     """
@@ -1320,7 +1326,7 @@ def main() -> None:
     .reconstruction-figure figcaption b {{ color:var(--ink); font-size:15px; line-height:20px; }}
     .reconstruction-figure figcaption span {{ color:var(--mid); font-size:13px; line-height:19px; }}
     .dot-plot-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
-    .dot-compare-svg {{ width:100%; min-width:0; display:block; border-radius:18px; }}
+    .dot-compare-svg {{ width:80%; min-width:0; display:block; border-radius:18px; }}
     .line-chart-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
     .line-chart-svg {{ width:100%; min-width:0; display:block; border-radius:18px; }}
     .mini-chart-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
