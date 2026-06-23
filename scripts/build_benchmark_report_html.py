@@ -1040,28 +1040,27 @@ def vicon_report_metrics(
         "source_file": trial.get("source_file", ""),
         "event_frame": key_frame,
     }
-    specs = [
-        ("Hip-Shoulder Sep", "hip_shoulder_sep_deg", "deg", "Vicon marker 髋部轴与肩部轴的 yaw 分离角。"),
-        ("Lead Knee Angle", "lead_knee_angle_deg", "deg", "Vicon marker 计算的前腿膝角。"),
-        ("Trunk Tilt", "trunk_tilt_deg", "deg", "Vicon marker 躯干相对竖直方向倾斜角。"),
-        ("Head Stability", "valid_point_pct", "%", "当前报告用 C3D 有效点比例作为数据质量 proxy，不等同真实头部位移稳定评分。"),
-        ("Hand Speed", "hand_speed_kmh", "km/h", "Vicon 手腕 marker 三维速度峰值。"),
-    ]
     if action == "pitching":
-        specs.extend(
-            [
-                ("Trunk Speed", "trunk_speed_kmh", "km/h", "Vicon 躯干中心三维速度峰值。"),
-                ("Hip Speed", "hip_speed_kmh", "km/h", "Vicon 髋部中心三维速度峰值。"),
-            ]
-        )
+        specs = [
+            ("Hip-Shoulder Sep", "hip_shoulder_sep_deg", "deg", "髋肩分离反映下肢和骨盆先启动、躯干稍后跟上的蓄力顺序。投球中分离不足通常会让出手更多依赖手臂；过大或时机太晚则可能影响控球和肩肘负荷。Vicon marker 计算髋部轴与肩部轴的 yaw 分离角。"),
+            ("Lead Knee Angle", "lead_knee_angle_deg", "deg", "前腿膝角代表落脚后前腿能否形成稳定支点。较稳定的前腿有助于把水平动量制动并传到骨盆和躯干；膝盖持续塌陷会削弱能量传递。Vicon marker 计算髋-膝-踝三点夹角。"),
+            ("Trunk Tilt", "trunk_tilt_deg", "deg", "躯干倾斜影响出手点高度、身体轴线和肩肘受力。投球中过早侧倒或前倒会改变手臂槽位；适度前倾通常来自下肢制动后的躯干前移。Vicon marker 计算躯干相对竖直方向的倾角。"),
+            ("Head Stability", "valid_point_pct", "%", "这里显示的是 C3D 有效点比例，用来判断本次光学数据是否足够可靠；它不是严格的头部稳定评分。真正的头部稳定会影响视线、平衡和出手重复性，需要用头部相对骨盆的位移另算。"),
+            ("Hand Speed", "hand_speed_kmh", "km/h", "手部速度是动力链末端输出，受前腿制动、骨盆旋转、躯干旋转和肩肘腕顺序共同影响。它不能单独代表好动作，但峰值过低常提示前序能量没有顺畅传到手端。Vicon 手腕 marker 三维速度峰值。"),
+            ("Trunk Speed", "trunk_speed_kmh", "km/h", "躯干速度反映骨盆之后的躯干加速能力。理想顺序通常是骨盆先加速、躯干随后加速、手端最后达到峰值；若躯干速度低或峰值太早，手臂容易补偿。Vicon 躯干中心三维速度峰值。"),
+            ("Hip Speed", "hip_speed_kmh", "km/h", "髋部速度反映下肢推动和身体质心移动。它不是力板重心转移，但能帮助判断投手是否有足够的下肢驱动进入落脚和出手阶段。Vicon 髋部中心三维速度峰值。"),
+        ]
     else:
-        specs.extend(
-            [
-                ("Bat Speed", "bat_speed_kmh", "km/h", "Vicon Bat1/Bat5 球棒 marker 三维速度峰值。"),
-                ("Attack Angle", "bat_angle_deg", "deg", "Vicon 球棒轴相对水平面的角度；仍需真实接触帧定义。"),
-                ("Contact Time", "swing_time_sec", "s", "由球棒高速窗口估算的挥棒持续时间，不是球棒触球时长。"),
-            ]
-        )
+        specs = [
+            ("Hip-Shoulder Sep", "hip_shoulder_sep_deg", "deg", "打击中的髋肩分离代表下半身先开、上半身延迟的旋转蓄力。适度分离有助于把地面反作用力和髋部旋转传到躯干、手和球棒；不足时容易变成只用手推棒。Vicon marker 计算髋部轴与肩部轴的 yaw 分离角。"),
+            ("Lead Knee Angle", "lead_knee_angle_deg", "deg", "前腿膝角反映前脚落地后的支撑和制动。稳定的前腿能帮助骨盆减速、躯干和球棒继续加速；膝盖过度弯曲或漂移会让挥棒轴线不稳定。Vicon marker 计算髋-膝-踝三点夹角。"),
+            ("Trunk Tilt", "trunk_tilt_deg", "deg", "躯干倾斜影响挥棒平面、击球点高度和身体平衡。过度前倾会让挥棒路径变陡，过度后仰会增加上捞和失衡风险；理想值要结合球路高度和站姿看。Vicon marker 计算躯干相对竖直方向的倾角。"),
+            ("Head Stability", "valid_point_pct", "%", "这里显示的是 C3D 有效点比例，用来判断本次光学数据是否足够可靠；它不是严格的头部稳定评分。真正的头部稳定会影响看球、击球点识别和挥棒重复性，需要用头部相对骨盆位移另算。"),
+            ("Hand Speed", "hand_speed_kmh", "km/h", "手部速度反映上肢和躯干把能量传到握棒端的能力。手快但球棒不快可能提示腕手提前、杆身释放效率不足；手慢则可能来自下肢和躯干启动不足。Vicon 手腕 marker 三维速度峰值。"),
+            ("Bat Speed", "bat_speed_kmh", "km/h", "球棒速度是打击表现最直接的输出之一，来自下肢支撑、髋肩分离、躯干旋转和腕手释放的综合结果。速度高但平面差仍可能影响击球质量，因此必须和攻击角、支撑和时机一起看。Vicon Bat1/Bat5 球棒 marker 三维速度峰值。"),
+            ("Attack Angle", "bat_angle_deg", "deg", "攻击角描述球棒进入击球区时相对水平面的方向。过陡容易砍球，过上仰容易从球下方穿过；理想角度要结合来球轨迹和接触点判断。当前值是球棒轴角度，严格 attack angle 仍需真实接触帧。"),
+            ("Contact Time", "swing_time_sec", "s", "这里是高速度挥棒窗口，不是球棒触球时长。较短窗口可能表示挥棒爆发集中，较长窗口可能表示加速拖长或节奏慢；需要结合球棒速度峰值和击球点时机解释。"),
+        ]
     rows = []
     for metric, field, unit, reason in specs:
         value = trial.get(field, "")
@@ -1111,6 +1110,30 @@ def vicon_metrics_source_table(rows: list[dict[str, str]]) -> str:
             "</tr>"
         )
     return '<table><thead><tr><th>被试</th><th>动作</th><th>指标</th><th>数值</th><th>状态</th><th>C3D来源</th></tr></thead><tbody>' + "".join(body) + "</tbody></table>"
+
+
+def comparison_row(
+    key: str,
+    label: str,
+    child: float | None,
+    coach: float | None,
+    unit: str,
+    child_source: str,
+    coach_source: str,
+) -> dict[str, str]:
+    diff = None if child is None or coach is None else child - coach
+    diff_pct = None if diff is None or coach in (None, 0) else diff / coach * 100
+    return {
+        "metric_key": key,
+        "label_cn": label,
+        "unit": unit,
+        "child_value": "" if child is None else str(child),
+        "coach_value": "" if coach is None else str(coach),
+        "diff_child_minus_coach": "" if diff is None else str(diff),
+        "diff_pct": "" if diff_pct is None else str(diff_pct),
+        "child_source": child_source,
+        "coach_source": coach_source,
+    }
 
 
 def c3d_path(row: dict[str, str]) -> Path:
@@ -1212,6 +1235,44 @@ def main() -> None:
     all_report_metrics = bryan_pitch_metrics + bryan_bat_metrics + green_pitch_metrics + green_bat_metrics
 
     vs = {row["metric_key"]: row for row in pitch_vs}
+    vicon_pitch_vs = [
+        comparison_row(
+            "hip_shoulder_sep_deg",
+            "髋肩分离",
+            num(bryan_pitch.get("hip_shoulder_sep_deg")),
+            num(vs["hip_shoulder_sep_deg"]["coach_value"]),
+            "deg",
+            bryan_pitch["source_file"],
+            vs["hip_shoulder_sep_deg"]["coach_source"],
+        ),
+        comparison_row(
+            "lead_knee",
+            "前腿膝角",
+            num(bryan_pitch.get("lead_knee_angle_deg")),
+            num(next((r["coach_value"] for r in pitch_full if r["metric_key"] == "lead_knee"), None)),
+            "deg",
+            bryan_pitch["source_file"],
+            "temporary coach reference",
+        ),
+        comparison_row(
+            "trunk_lean",
+            "躯干倾斜",
+            num(bryan_pitch.get("trunk_tilt_deg")),
+            num(next((r["coach_value"] for r in pitch_full if r["metric_key"] == "trunk_lean"), None)),
+            "deg",
+            bryan_pitch["source_file"],
+            "temporary coach reference",
+        ),
+        comparison_row(
+            "hand_speed",
+            "手部速度",
+            num(bryan_pitch.get("hand_speed_kmh")),
+            (num(vs["hand_speed_m_s"]["coach_value"]) or 0) * 3.6 if num(vs["hand_speed_m_s"]["coach_value"]) is not None else None,
+            "km/h",
+            bryan_pitch["source_file"],
+            vs["hand_speed_m_s"]["coach_source"],
+        ),
+    ]
     pitch_scores = [
         score_close(num(bryan_pitch.get("lead_knee_angle_deg")), num(next((r["coach_value"] for r in pitch_full if r["metric_key"] == "lead_knee"), None)), 45),
         score_ratio(num(bryan_pitch.get("hip_speed_kmh")), num(green_pitch.get("hip_speed_kmh"))),
@@ -1523,7 +1584,7 @@ def main() -> None:
     <section class="hero">
       <div>
         <h1>青少年棒球三维动作体检报告</h1>
-        <p>本报告按球员、教练、研究者三类读者拆分，并把投球和打击分开分析。主体被试固定为 bryan，原始身体数据统一来自 Vicon C3D；green 仅作为教练模块对照，教练参考暂时沿用既有 coach 3D 数据。</p>
+        <p>本报告按球员、教练、研究者三类读者拆分，并把投球和打击分开分析。主体被试固定为 bryan，原始身体数据统一来自 Vicon C3D；green 仅作为教练模块对照，教练参考暂时沿用既有 coach 3D 数据。解读重点放在棒球动力链：下肢支撑、骨盆与躯干旋转、手端或球棒速度是否顺序传递。</p>
         <div class="pill-row"><span class="pill">中文报告</span><span class="pill">三维骨架</span><span class="pill">可量化诊断</span><span class="pill">数据限制透明</span></div>
       </div>
       <aside class="hero-evidence">
@@ -1546,26 +1607,26 @@ def main() -> None:
           <article class="visual-card">
             <h4>投球六维评分图</h4>
             {radar_svg(["下肢支撑","身体前移","髋肩分离","躯干控制","手臂加速","稳定性"], pitch_scores)}
-            <p>怎么看：分数越低越需要优先训练；本次末端加速和身体前移比姿态角度更需要复测关注。</p>
+            <p>怎么看：投球不是只看手快，六维评分把下肢支撑、骨盆/躯干旋转、髋肩分离和手端输出放在同一动力链里看。低分维度代表能量传递可能断在该环节，训练时应先修支撑和时序，再追求出手速度。</p>
           </article>
           <article class="visual-card">
             <h4>投球优先级列表</h4>
             <div class="priority-list">
-              <div class="priority-item"><span class="rank">1</span><div><h4>提高出手侧手部速度</h4><p>和教练参考差距较大，但速度属于估算，先用同机位复测看趋势。</p></div><span class="badge risk">关注</span></div>
-              <div class="priority-item"><span class="rank">2</span><div><h4>增加身体前移质量</h4><p>当前身体中心位移不是力板重心，只能作为动作方向参考。</p></div><span class="badge review">需复核</span></div>
-              <div class="priority-item"><span class="rank">3</span><div><h4>保持前腿支撑</h4><p>前腿角度和跨步角接近可训练范围，是本次可保持项。</p></div><span class="badge good">良好</span></div>
+              <div class="priority-item"><span class="rank">1</span><div><h4>提高出手侧手部速度</h4><p>手部速度是动力链末端结果。若下肢制动、骨盆旋转和躯干旋转没有先后传递，手会被迫补偿，速度和稳定性都会受影响。</p></div><span class="badge risk">关注</span></div>
+              <div class="priority-item"><span class="rank">2</span><div><h4>增加身体前移质量</h4><p>投球需要从后侧腿推动到前腿制动。身体前移不是单纯跨大步，而是让质心进入前腿支点后把动量转成骨盆和躯干旋转。</p></div><span class="badge review">需复核</span></div>
+              <div class="priority-item"><span class="rank">3</span><div><h4>保持前腿支撑</h4><p>前腿像刹车系统，支撑稳定才容易把水平动量传到躯干和手端。若前膝持续塌陷，出手点和控球会更难重复。</p></div><span class="badge good">良好</span></div>
             </div>
           </article>
         </div>
         <div class="grid-2" style="margin-top:18px">
-          <article class="visual-card"><h4>投球关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_pitch["trial_id"], "bryan投球C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 手部速度峰值，三维 marker 用于解释髋肩分离、前膝支撑和躯干姿态。</p></article>
-          <article class="visual-card"><h4>投球姿态纠正图</h4>{pitch_posture_overlay}<p>方法：蓝色虚线是球员出手附近三维姿态，绿色是教练出手侧手部速度峰值附近姿态；红色标出当前偏差最大的骨段。</p></article>
+          <article class="visual-card"><h4>投球关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_pitch["trial_id"], "bryan投球C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 手部速度峰值。棒球投球通常在手端峰值附近暴露动力链结果：前腿是否撑住、骨盆和肩线是否形成分离、躯干是否把旋转传到手臂。</p></article>
+          <article class="visual-card"><h4>投球姿态纠正图</h4>{pitch_posture_overlay}<p>方法：蓝色虚线是 bryan 出手附近三维姿态，绿色是临时 coach 参考姿态，红色标出偏差较大的骨段。这个图用于看身体段落排列，不用于单独判断好坏；真正的训练重点要结合速度峰值顺序和前腿支撑。</p></article>
         </div>
         <div class="grid" style="margin-top:18px">{pitch_metric_cards}</div>
         <div class="grid-3" style="margin-top:18px">
-          {card("投球训练目标一", "每周三次做跨步停顿投球影子练习，每次三组，每组八次；复测跨步长度和前膝角。", "训练", "review")}
-          {card("投球训练目标二", "每周三次做髋肩分离慢动作练习，先转胯再带肩；复测髋肩分离和躯干倾斜。", "训练", "review")}
-          {card("投球训练目标三", "每周两次做毛巾出手练习，只看动作顺序，不追求速度；复测手部速度估算趋势。", "训练", "risk")}
+          {card("投球训练目标一", "跨步停顿投球影子练习：落脚后停住前膝和骨盆，再做躯干旋转。目标是让前腿成为稳定支点，复测前膝角和髋部速度。", "训练", "review")}
+          {card("投球训练目标二", "髋肩分离慢动作：先让骨盆面向目标，再延迟肩线打开。目标是建立下肢到躯干的拉伸-旋转顺序，复测髋肩分离和躯干倾斜。", "训练", "review")}
+          {card("投球训练目标三", "毛巾出手练习：用低强度重复下肢、躯干、手端的先后顺序。目标不是甩快，而是让手部速度来自前序段落传递。", "训练", "risk")}
         </div>
         <article class="visual-card" style="margin-top:18px"><h4>投球七天训练计划</h4><div class="training">{''.join(f'<div class="day"><h4>第{i}天</h4><span class="badge review">{"复测" if i == 7 else "训练"}</span><ul><li>{"同机位拍摄投球" if i == 7 else "髋肩分离慢动作"}</li><li>{"复测两个短板指标" if i == 7 else "跨步停顿影子投球"}</li><li>记录疼痛、疲劳和完成率</li></ul></div>' for i in range(1,8))}</div></article>
       </section>
@@ -1573,18 +1634,18 @@ def main() -> None:
       <section class="section" id="bat">
         <div class="section-title"><span class="mark"></span><h3>打击分析</h3></div>
         <div class="grid-2">
-          <article class="visual-card"><h4>打击六维评分图</h4>{radar_svg(["站姿稳定","跨步控制","髋肩分离","躯干旋转","挥棒平面","击球后平衡"], bat_scores, "#7c4dff")}<p>怎么看：髋肩分离和挥棒平面是本次打击优先改进项，头部稳定是保持项。</p></article>
-          <article class="visual-card"><h4>打击关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_bat["trial_id"], "bryan打击C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 球棒速度峰值；真实触球点仍需专门事件标注。</p></article>
+          <article class="visual-card"><h4>打击六维评分图</h4>{radar_svg(["站姿稳定","跨步控制","髋肩分离","躯干旋转","挥棒平面","击球后平衡"], bat_scores, "#7c4dff")}<p>怎么看：打击评分按从地面到球棒的顺序解释。站姿和跨步提供稳定底座，髋肩分离和躯干旋转负责蓄力与释放，挥棒平面决定球棒是否长时间留在击球区。</p></article>
+          <article class="visual-card"><h4>打击关键帧证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_bat["trial_id"], "bryan打击C3D关键动作窗口")}<p>方法：关键帧来自 Vicon C3D 球棒速度峰值。该时刻接近挥棒输出最高点，适合检查前腿是否制动、髋肩是否分离、躯干和手是否把速度传到球棒。</p></article>
         </div>
         <div class="grid" style="margin-top:18px">{bat_metric_cards}</div>
         <div class="grid-2" style="margin-top:18px">
-          <article class="visual-card"><h4>挥棒轨迹证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_bat["trial_id"], "bryan打击C3D球棒轨迹")}<p>怎么看：当前真实可用的是 Vicon 身体 marker 和 Bat1-Bat5 球棒 marker；球棒峰值速度来自 C3D 三维坐标差分。</p></article>
-          <article class="visual-card"><h4>打击优先级列表</h4><div class="priority-list"><div class="priority-item"><span class="rank">1</span><div><h4>修正挥棒平面</h4><p>攻击角偏大时，球棒容易从球下方穿过。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">2</span><div><h4>提高髋肩分离</h4><p>身体蓄力不足时，动作容易变成只靠手。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">3</span><div><h4>保持看球稳定</h4><p>头部稳定分高，是本次打击优势。</p></div><span class="badge good">良好</span></div></div></article>
+          <article class="visual-card"><h4>挥棒轨迹证据图</h4>{vicon_reconstruction_image(vicon_points, bryan_bat["trial_id"], "bryan打击C3D球棒轨迹")}<p>怎么看：Vicon 同时有身体 marker 和 Bat1-Bat5 球棒 marker。球棒速度高说明末端输出可用，但还要看攻击角和平面是否让球棒在击球区停留更久，而不是只从球下方或上方穿过。</p></article>
+          <article class="visual-card"><h4>打击优先级列表</h4><div class="priority-list"><div class="priority-item"><span class="rank">1</span><div><h4>修正挥棒平面</h4><p>挥棒平面决定球棒与来球轨迹重合的时间。攻击角偏离时，即使球棒速度够快，也容易擦过球或打出弱接触。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">2</span><div><h4>提高髋肩分离</h4><p>髋肩分离是打击蓄力核心。下半身先启动、上半身延迟，可以让躯干像弹簧一样释放到手和球棒。</p></div><span class="badge risk">关注</span></div><div class="priority-item"><span class="rank">3</span><div><h4>保持看球稳定</h4><p>头部和躯干稳定帮助击球点判断。这里的质量分只是数据可靠性 proxy，实际训练仍要看头部相对骨盆是否过度漂移。</p></div><span class="badge good">良好</span></div></div></article>
         </div>
         <div class="grid-3" style="margin-top:18px">
-          {card("墙边髋肩分离", "每天两组，左右各八次；家长只看肩膀不要抢先。", "训练", "risk")}
-          {card("固定球平扫路线", "每次三组，每组八球；让球棒沿水平线穿过击球区。", "训练", "risk")}
-          {card("看球冻结", "每次两组，每组十次；挥完保持击球点一秒再抬头。", "训练", "good")}
+          {card("墙边髋肩分离", "每天两组，左右各八次；家长只看肩膀不要抢先。目标是让髋先开、肩后开，建立下肢到躯干的弹性蓄力。", "训练", "risk")}
+          {card("固定球平扫路线", "每次三组，每组八球；让球棒沿水平线穿过击球区。目标是延长球棒与来球轨迹重合时间，而不是只追求球棒速度。", "训练", "risk")}
+          {card("看球冻结", "每次两组，每组十次；挥完保持击球点一秒再抬头。目标是减少头部和躯干早开，提高击球点识别和动作重复性。", "训练", "good")}
         </div>
       </section>
     </section>
@@ -1593,42 +1654,42 @@ def main() -> None:
       <div class="section-title"><span class="mark"></span><h2>教练模块</h2></div>
       <div class="module-note"><p>这一模块聚焦对比、差距、阶段和训练干预。主体是 bryan，green 仅作为同一 Vicon 采集环境下的对照；教练参考暂时沿用既有 coach 3D 数据。</p></div>
       <div class="grid-2">
-        <article class="visual-card"><h4>投球差距仪表盘</h4><div class="table-scroll">{compare_table(pitch_vs)}</div><p>怎么看：按差距和训练可改性决定优先级，速度与位移估算必须复测确认。</p></article>
-        <article class="visual-card"><h4>投球阶段时间轴</h4>{timeline_svg(["抬腿","落脚","最大外旋","出手","随挥"], pitch_timeline_details)}<p>当前汇总表提供动作开始、出手估算事件和动作结束；抬腿与最大外旋仍需逐帧事件检测。</p></article>
+        <article class="visual-card"><h4>投球差距仪表盘</h4><div class="table-scroll">{compare_table(vicon_pitch_vs)}</div><p>怎么看：差距表只比较同一生物力学含义的指标。角度差提示姿态和时序问题，手部速度差提示动力链末端输出问题；训练优先级要看差距大小、可改性和是否影响控球。</p></article>
+        <article class="visual-card"><h4>投球阶段时间轴</h4>{timeline_svg(["抬腿","落脚","最大外旋","出手","随挥"], pitch_timeline_details)}<p>投球阶段应按动力链顺序解释：抬腿建立节奏，落脚形成前腿支点，最大外旋储存肩部弹性能量，出手释放到球，随挥负责减速保护。</p></article>
       </div>
-      <article class="visual-card" style="margin-top:18px"><h4>投球队员对比点位图</h4>{pitch_dot_plot}<p>读法：蓝点是 bryan，橙点是 green，黑线是暂用教练参考。每一行只比较同一个指标。</p></article>
+      <article class="visual-card" style="margin-top:18px"><h4>投球队员对比点位图</h4>{pitch_dot_plot}<p>读法：蓝点是 bryan，橙点是 green，黑线是暂用教练参考。每一行只比较同一个指标；髋肩分离看蓄力，前膝角看制动，手部速度看最终输出。</p></article>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>投球动力链传递图</h4>{chain_svg(pitch_chain_nodes)}<p>怎么看：每个节点下方保留本次可用数值；速度为估算时只看顺序趋势，不直接下绝对速度结论。</p></article>
-        <article class="visual-card"><h4>打击阶段时间轴</h4>{timeline_svg(["准备","启动","前脚落地","进入击球区","击球点","随挥"], bat_timeline_details)}<p>打击阶段独立于投球阶段；当前汇总表提供启动、击球点估算和随挥结束，落脚与入区需要球棒轨迹补充。</p></article>
+        <article class="visual-card"><h4>投球动力链传递图</h4>{chain_svg(pitch_chain_nodes)}<p>怎么看：理想投球输出不是所有部位同时快，而是下肢和髋部先建立动量，躯干随后加速，手端最后达到峰值。若某一段过慢或过早，后续段落会补偿。</p></article>
+        <article class="visual-card"><h4>打击阶段时间轴</h4>{timeline_svg(["准备","启动","前脚落地","进入击球区","击球点","随挥"], bat_timeline_details)}<p>打击阶段按加载、落脚、旋转释放和减速来解读。前脚落地后，骨盆和躯干应依次加速，球棒进入击球区后需要保持有效平面。</p></article>
       </div>
-      <article class="visual-card" style="margin-top:18px"><h4>打击队员对比点位图</h4>{bat_dot_plot}<p>读法：蓝点是 bryan，橙点是 green。当前打击对照只比较同一 Vicon 数据源，不再混入视频 CV 指标。</p></article>
-      <article class="visual-card" style="margin-top:18px"><h4>改进优先级矩阵</h4><div class="matrix"><span class="bubble" style="left:78%;top:24%;background:#ef4444">手部速度</span><span class="bubble" style="left:66%;top:34%;background:#f97316">身体前移</span><span class="bubble" style="left:58%;top:62%;background:#7c4dff">挥棒平面</span><span class="bubble" style="left:36%;top:72%;background:#16a34a">头部稳定</span></div><p>横轴代表表现影响，纵轴越靠上代表越应优先训练。</p></article>
+      <article class="visual-card" style="margin-top:18px"><h4>打击队员对比点位图</h4>{bat_dot_plot}<p>读法：蓝点是 bryan，橙点是 green。髋肩分离看蓄力，前腿膝角看制动，攻击角看球棒路径，球棒速度看末端输出；这些指标要一起解释。</p></article>
+      <article class="visual-card" style="margin-top:18px"><h4>改进优先级矩阵</h4><div class="matrix"><span class="bubble" style="left:78%;top:24%;background:#ef4444">手部速度</span><span class="bubble" style="left:66%;top:34%;background:#f97316">身体前移</span><span class="bubble" style="left:58%;top:62%;background:#7c4dff">挥棒平面</span><span class="bubble" style="left:36%;top:72%;background:#16a34a">头部稳定</span></div><p>横轴代表对表现的影响，纵轴代表训练优先级。高影响且高优先级的点通常位于动力链断点，例如前腿制动、髋肩分离或球棒平面，而不是孤立追求某个数值。</p></article>
     </section>
 
     <section class="section" id="research">
       <div class="section-title"><span class="mark"></span><h2>研究者模块</h2></div>
       <div class="module-note"><p>这一模块统一使用 vicon_2026 C3D 作为 raw data source。逐帧曲线、事件线、质量图、来源表和动图均从 C3D 或 C3D 派生 CSV 得到；教练参考作为临时对照单独标注。</p></div>
       <div class="grid-2">
-        <article class="visual-card"><h4>投球角度时间曲线</h4>{pitch_angle_chart}<p>怎么看：曲线来自 bryan 投球 C3D marker 逐帧计算，黑色虚线为手部速度峰值事件。</p></article>
-        <article class="visual-card"><h4>投球速度时间曲线</h4>{pitch_speed_chart}<p>怎么看：速度由三维模型空间坐标逐帧差分估算并换算为公里/小时，用于观察峰值顺序和事件附近变化。</p></article>
-        <article class="visual-card"><h4>打击角度时间曲线</h4>{bat_angle_chart}<p>怎么看：曲线来自 bryan 打击 C3D marker 逐帧计算，重点看球棒峰值速度附近前膝、躯干和髋肩分离的变化。</p></article>
-        <article class="visual-card"><h4>打击速度时间曲线</h4>{bat_speed_chart}<p>怎么看：速度由髋部、躯干和出手侧手部轨迹估算；真实球棒杆身速度仍需要球棒检测或光学标记。</p></article>
+        <article class="visual-card"><h4>投球角度时间曲线</h4>{pitch_angle_chart}<p>怎么看：曲线来自 bryan 投球 C3D marker 逐帧计算。观察重点不是单帧最大值，而是前膝支撑、躯干倾斜、肘角和髋肩分离是否在出手前后按合理顺序变化。</p></article>
+        <article class="visual-card"><h4>投球速度时间曲线</h4>{pitch_speed_chart}<p>怎么看：速度曲线用于看峰值顺序。棒球投球通常希望髋部/骨盆先带动，躯干随后，手端最后输出；如果手端过早峰值，可能说明手臂抢先。</p></article>
+        <article class="visual-card"><h4>打击角度时间曲线</h4>{bat_angle_chart}<p>怎么看：曲线来自 bryan 打击 C3D marker 逐帧计算。重点看前腿落地后的支撑是否稳定、髋肩分离是否形成蓄力、躯干倾斜是否破坏挥棒平面。</p></article>
+        <article class="visual-card"><h4>打击速度时间曲线</h4>{bat_speed_chart}<p>怎么看：速度曲线用于检查能量是否从髋部和躯干传到手端。若躯干或手端峰值顺序混乱，即使球棒峰值速度可用，也可能导致击球点不稳定。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>事件点表</h4><div class="table-scroll">{vicon_metrics_source_table([row for row in all_report_metrics if row["metric_name"] in {"Hand Speed", "Bat Speed"}])}</div><p>事件点来自 C3D 派生表：投球使用手部速度峰值，打击使用球棒速度峰值。</p></article>
-        <article class="visual-card"><h4>C3D逐帧来源表</h4><div class="table-scroll">{vicon_source_table(report_vicon)}</div><p>表内统计直接来自 Vicon C3D，用于确认本报告没有混入 CV 身体数据作为 raw source。</p></article>
+        <article class="visual-card"><h4>事件点表</h4><div class="table-scroll">{vicon_metrics_source_table([row for row in all_report_metrics if row["metric_name"] in {"Hand Speed", "Bat Speed"}])}</div><p>事件点来自 C3D 派生表：投球暂用手部速度峰值代表出手附近输出，打击暂用球棒速度峰值代表挥棒输出高点。它们是自动事件 proxy，不等同人工标注的 release/contact。</p></article>
+        <article class="visual-card"><h4>C3D逐帧来源表</h4><div class="table-scroll">{vicon_source_table(report_vicon)}</div><p>表内统计直接来自 Vicon C3D。帧数和有效点比例决定曲线可信度；有效点低时，速度峰值和角度峰值更容易受 marker 缺失或插值影响。</p></article>
       </div>
       <div class="grid-2" style="margin-top:18px">
         <article class="visual-card"><h4>Vicon 2026 C3D来源表</h4><div class="table-scroll">{vicon_source_table(report_vicon)}</div><p>报告当前只纳入 bryan 和 green；子文件夹名即被试名。</p></article>
         {vicon_pitch_cards or '<article class="visual-card"><h4>投球C3D重建截图</h4>' + line_placeholder_svg("投球C3D重建截图") + '<p>暂无投球 C3D 点位数据。</p></article>'}
       </div>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>数据质量图</h4>{pose_quality_chart}<p>怎么看：条形长度综合输入质量分和关节完整率；研究者应优先检查低质量样本的峰值速度和事件点。</p></article>
+        <article class="visual-card"><h4>数据质量图</h4>{pose_quality_chart}<p>怎么看：质量图不是动作评分，而是说明本次 biomechanics 指标是否可信。缺点多或帧段缺失时，髋肩分离、膝角和速度峰值都可能被低估或错位。</p></article>
         {vicon_bat_cards or '<article class="visual-card"><h4>打击C3D重建截图</h4>' + line_placeholder_svg("打击C3D重建截图") + '<p>暂无打击 C3D 点位数据。</p></article>'}
       </div>
       <div class="grid-2" style="margin-top:18px">
-        <article class="visual-card"><h4>光学动作捕捉对照说明</h4><div class="bars">{bat_reference_bars}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出；bryan 是主分析人，green 只作为教练模块对照。</p></article>
-        <article class="visual-card"><h4>限制卡片组</h4><div class="grid-2">{card("真实球速", "当前速度是视频追踪换算值，不等同雷达枪正式球速。", "需复核", "review")}{card("换算假设", "使用源视频分辨率、帧率、画面人体高度，并假设青少年身高一米五五。", "需复核", "review")}{card("身体重心", "当前使用髋部和脊柱中心近似，不是力板重心。", "需复核", "review")}{card("光学与视频对齐", "不同来源尚未逐帧同步，只能做解释性参考。", "需复核", "review")}</div></article>
+        <article class="visual-card"><h4>光学动作捕捉对照说明</h4><div class="bars">{bat_reference_bars}</div><p>光学动作捕捉来自 vicon_2026 C3D 导出。bryan 是主分析人，green 只作为对照；对照的意义是帮助教练看相对动作模式，例如球棒速度相近但攻击角不同，训练重点就应偏向路径而不是力量。</p></article>
+        <article class="visual-card"><h4>限制卡片组</h4><div class="grid-2">{card("真实球速", "本报告没有雷达枪或球轨迹同步数据，因此不能从身体 marker 直接判断正式球速。投球手速只能解释动力链末端输出。", "需复核", "review")}{card("接触事件", "打击使用球棒速度峰值作为自动事件 proxy，不等同真实 bat-ball contact。接触帧会影响攻击角和挥棒窗口解释。", "需复核", "review")}{card("身体重心", "当前使用髋部和躯干 marker 解释身体移动，不是力板 COM 或压力转移。重心转移结论只能作为动作趋势。", "需复核", "review")}{card("coach参考", "coach 参考暂未统一到同一 Vicon C3D 采集链路，只能作为临时技术参考线，不能和 bryan/green 做严格实验对照。", "需复核", "review")}</div></article>
       </div>
       <article class="visual-card" style="margin-top:18px"><h4>指标来源表</h4><div class="table-scroll">{vicon_metrics_source_table(all_report_metrics)}</div></article>
     </section>
