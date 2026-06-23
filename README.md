@@ -111,6 +111,7 @@ Generated report artifacts:
 reports/vicon_2026_metrics.csv
 reports/vicon_2026_point_summary.csv
 reports/assets/vicon_reconstruction/*.png
+reports/assets/vicon_reconstruction/*.gif
 report.html
 ```
 
@@ -124,8 +125,9 @@ these reconstruction figures: pitching uses the hand-speed peak frame, and
 batting uses the bat-speed peak frame, with a short local window around that
 event. The report does not draw these C3D reconstructions inline; run
 `scripts/render_vicon_reconstruction_images.py` first so `report.html` embeds
-pre-rendered PNG reconstruction screenshots. Vicon sample names are taken
-directly from the `../vicon_2026/{sample}/` folder name.
+pre-rendered reconstruction assets. It writes key-frame PNGs and full-trial
+animated GIFs; the HTML report uses the GIFs when available. Vicon sample names
+are taken directly from the `../vicon_2026/{sample}/` folder name.
 
 Report design rules live in [DESIGN.md](DESIGN.md). Keep the final HTML Chinese,
 use compact graph x-axes, avoid text/curve overlap, and convert user-facing

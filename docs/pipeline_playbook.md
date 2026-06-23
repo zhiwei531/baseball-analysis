@@ -460,8 +460,9 @@ Notes:
 - `sample_name` is the direct folder name under `../vicon_2026/`; do not invent
   display names for Vicon samples.
 - Run `scripts/render_vicon_reconstruction_images.py` before building the HTML.
-  The report embeds the generated PNG files instead of drawing C3D
-  reconstruction figures inline with SVG.
+  It generates key-frame PNGs and full-trial animated GIFs. The report embeds
+  the GIF files when available instead of drawing C3D reconstruction figures
+  inline with SVG.
 - Pitching C3D files include full-body AI/model points; batting C3D files
   include body markers plus `Bat:Bat1` through `Bat:Bat5`.
 
@@ -482,6 +483,7 @@ output/data/benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv
 reports/vicon_2026_metrics.csv
 reports/vicon_2026_point_summary.csv
 reports/assets/vicon_reconstruction/*.png
+reports/assets/vicon_reconstruction/*.gif
 data_full/benchmark_rtmpose_test/processed/poses3d/*/image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv
 data_full/coach_pose3d/gvhmr/pitch_horizontal_coach.csv
 outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/*.png
