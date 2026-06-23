@@ -141,10 +141,14 @@ def is_render_point(name: str) -> bool:
     return name in RAW_MARKERS or name == "CentreOfMass" or name.startswith("Bat")
 
 
-def trial_axis_limits(trial: C3DTrial) -> AxisLimits:
+def trial_axis_limits(trial: C3DTrial, frame_indices: np.ndarray | None = None) -> AxisLimits:
     clean = [clean_label(label) for label in trial.labels]
     keep = [idx for idx, name in enumerate(clean) if is_reconstruction_point(name) and is_render_point(name)]
-    coords = trial.points[:, keep, :3].reshape(-1, 3)
+    if frame_indices is None:
+        points = trial.points[:, keep, :3]
+    else:
+        points = trial.points[frame_indices, :, :][:, keep, :3]
+    coords = points.reshape(-1, 3)
     coords = coords[np.isfinite(coords).all(axis=1)]
     if coords.size == 0:
         return ((-500.0, 500.0), (-500.0, 500.0), (-100.0, 1200.0))
@@ -315,24 +319,58 @@ def trial_frame_points(trial: C3DTrial, frame_idx: int, smooth_radius: int = 0) 
     return points
 
 
+def key_frame_from_rows(rows: list[dict[str, str]], frame_count: int) -> tuple[int, str]:
+    if not rows:
+        return frame_count // 2, "关键动作"
+    first = rows[0]
+    key_frame = num(first.get("key_frame_index"))
+    if key_frame is None:
+        return frame_count // 2, first.get("key_event", "关键动作")
+    idx = min(max(int(round(key_frame)), 0), frame_count - 1)
+    return idx, first.get("key_event", "关键动作")
+
+
+def key_action_frame_indices(
+    trial: C3DTrial,
+    rows: list[dict[str, str]],
+    before_sec: float,
+    after_sec: float,
+    max_frames: int,
+) -> tuple[np.ndarray, str]:
+    frame_count = trial.points.shape[0]
+    key_idx, event = key_frame_from_rows(rows, frame_count)
+    before = max(1, int(round(before_sec * trial.rate_hz)))
+    after = max(1, int(round(after_sec * trial.rate_hz)))
+    start = max(0, key_idx - before)
+    end = min(frame_count - 1, key_idx + after)
+    if end <= start:
+        start = max(0, key_idx - 1)
+        end = min(frame_count - 1, key_idx + 1)
+    count = min(max_frames, end - start + 1)
+    return np.linspace(start, end, count, dtype=int), event
+
+
 def render_trial_gif(
     trial: C3DTrial,
+    rows: list[dict[str, str]],
     out_dir: Path,
     max_frames: int = 72,
     frame_duration_ms: int = 85,
     smooth_radius: int = 2,
+    before_sec: float = 0.6,
+    after_sec: float = 0.4,
 ) -> Path | None:
     frame_count = trial.points.shape[0]
     if frame_count == 0:
         return None
-    frame_indices = np.linspace(0, frame_count - 1, min(max_frames, frame_count), dtype=int)
+    frame_indices, event = key_action_frame_indices(trial, rows, before_sec, after_sec, max_frames)
     frames: list[Image.Image] = []
     font = zh_font()
     sample = trial.path.parent.name
     action = infer_action(trial.path)
     action_text = "投球" if action == "pitching" else "打击"
     title = f"{sample} / {action_text} / C3D骨架动图"
-    limits = trial_axis_limits(trial)
+    limits = trial_axis_limits(trial, frame_indices=frame_indices)
 
     fig = plt.figure(figsize=(6.8, 4.6), dpi=110)
     fig.patch.set_facecolor("#ffffff")
@@ -348,7 +386,7 @@ def render_trial_gif(
             points,
             font,
             title,
-            frame_label=f"第{int(frame_idx)}帧 / {frame_idx / trial.rate_hz:.2f}秒",
+            frame_label=f"{event}窗口 / 第{int(frame_idx)}帧 / {frame_idx / trial.rate_hz:.2f}秒",
             show_labels=False,
             axis_limits=limits,
             fixed_layout_legend=True,
@@ -381,6 +419,8 @@ def main() -> None:
     parser.add_argument("--c3d-dir", type=Path, default=DEFAULT_C3D_DIR)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--max-gif-frames", type=int, default=72)
+    parser.add_argument("--gif-before-sec", type=float, default=0.6)
+    parser.add_argument("--gif-after-sec", type=float, default=0.4)
     args = parser.parse_args()
 
     by_trial: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -388,8 +428,8 @@ def main() -> None:
         by_trial[row["trial_id"]].append(row)
 
     outputs = []
-    for trial_id in sorted(by_trial):
-        out = render_trial(by_trial[trial_id], args.out_dir)
+    for trial_key in sorted(by_trial):
+        out = render_trial(by_trial[trial_key], args.out_dir)
         if out is not None:
             outputs.append(out)
 
@@ -397,7 +437,14 @@ def main() -> None:
         if path.name.startswith("._"):
             continue
         trial = read_c3d(path)
-        out = render_trial_gif(trial, args.out_dir, max_frames=args.max_gif_frames)
+        out = render_trial_gif(
+            trial,
+            by_trial.get(trial_id(path), []),
+            args.out_dir,
+            max_frames=args.max_gif_frames,
+            before_sec=args.gif_before_sec,
+            after_sec=args.gif_after_sec,
+        )
         if out is not None:
             outputs.append(out)
 

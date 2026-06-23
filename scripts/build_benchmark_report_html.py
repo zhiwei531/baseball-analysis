@@ -948,7 +948,7 @@ def vicon_reconstruction_image(rows: list[dict[str, str]], trial_id_value: str, 
       <img class="reconstruction-img" src="{esc(rel_asset(image_path))}" alt="{esc(title)}" loading="lazy">
       <figcaption>
         <b>{esc(title)}</b>
-        <span>动图来自完整 C3D trial 抽帧；关键动作先定位{esc(event_text)}，第{esc(frame_text)}帧，时间 {esc(time_text)}。骨架只使用真实身体 marker 连接，颜色按头颈、躯干、骨盆、左右臂、左右腿、质心点和球棒区分。</span>
+        <span>动图来自 C3D 关键动作窗口抽帧；关键动作先定位{esc(event_text)}，第{esc(frame_text)}帧，时间 {esc(time_text)}。骨架只使用真实身体 marker 连接，颜色按头颈、躯干、骨盆、左右臂、左右腿、质心点和球棒区分。</span>
       </figcaption>
     </figure>
     """
@@ -961,9 +961,9 @@ def vicon_reconstruction_cards(
 ) -> str:
     action_text = "投球" if action == "pitching" else "打击"
     note = (
-        "该图不是全局点云截图，而是从完整 C3D trial 抽帧渲染真实 marker 骨架动图，并标注关键动作帧用于追溯。"
+        "该图不是全局点云截图，而是从 C3D 关键动作窗口抽帧渲染真实 marker 骨架动图，并标注关键动作帧用于追溯。"
         if action == "pitching"
-        else "该图从完整 C3D trial 抽帧渲染真实 marker 骨架动图，并标注球棒峰值速度关键帧；橙色线用于解释 Bat1-Bat5。"
+        else "该图从 C3D 关键动作窗口抽帧渲染真实 marker 骨架动图，并标注球棒峰值速度关键帧；橙色线用于解释 Bat1-Bat5。"
     )
     cards = []
     for trial in vicon_trials(vicon_rows, action):
