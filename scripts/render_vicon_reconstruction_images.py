@@ -13,6 +13,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 from matplotlib.lines import Line2D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 from PIL import Image
 
@@ -36,7 +37,6 @@ PART_COLORS = {
     "球棒": "#f97316",
 }
 BODY_SEGMENTS = [
-    ("LFHD", "RFHD", "头颈"),
     ("LFHD", "C7", "头颈"),
     ("RFHD", "C7", "头颈"),
     ("C7", "T10", "躯干"),
@@ -166,6 +166,73 @@ def draw_segment(ax, points: dict[str, tuple[float, float, float]], a: str, b: s
     ax.plot([pa[0], pb[0]], [pa[1], pb[1]], [pa[2], pb[2]], color=color, linewidth=width, solid_capstyle="round")
 
 
+def draw_closed_shape(
+    ax,
+    points: dict[str, tuple[float, float, float]],
+    faces: list[list[str]],
+    edges: list[tuple[str, str]],
+    color: str,
+    width: float,
+    alpha: float,
+) -> None:
+    polygons = []
+    for face in faces:
+        if all(name in points for name in face):
+            polygons.append([points[name] for name in face])
+    if polygons:
+        collection = Poly3DCollection(
+            polygons,
+            facecolors=color,
+            edgecolors=color,
+            linewidths=width * 0.75,
+            alpha=alpha,
+        )
+        ax.add_collection3d(collection)
+    for a, b in edges:
+        draw_segment(ax, points, a, b, color, width)
+
+
+def draw_head_shape(ax, points: dict[str, tuple[float, float, float]]) -> None:
+    color = PART_COLORS["头颈"]
+    draw_closed_shape(
+        ax,
+        points,
+        faces=[["LFHD", "RFHD", "RBHD"], ["LFHD", "RBHD", "LBHD"]],
+        edges=[
+            ("LFHD", "RFHD"),
+            ("RFHD", "RBHD"),
+            ("RBHD", "LBHD"),
+            ("LBHD", "LFHD"),
+            ("LFHD", "RBHD"),
+            ("RFHD", "LBHD"),
+        ],
+        color=color,
+        width=2.0,
+        alpha=0.18,
+    )
+
+
+def draw_foot_shapes(ax, points: dict[str, tuple[float, float, float]]) -> None:
+    draw_closed_shape(
+        ax,
+        points,
+        faces=[["LANK", "LHEE", "LTOE"]],
+        edges=[("LANK", "LHEE"), ("LHEE", "LTOE"), ("LTOE", "LANK")],
+        color=PART_COLORS["左腿"],
+        width=2.2,
+        alpha=0.22,
+    )
+    draw_closed_shape(
+        ax,
+        points,
+        faces=[["RANK", "RHEE", "RTOE"]],
+        edges=[("RANK", "RHEE"), ("RHEE", "RTOE"), ("RTOE", "RANK")],
+        color=PART_COLORS["右腿"],
+        width=2.2,
+        alpha=0.22,
+    )
+
+
 def marker_part(name: str) -> str:
     for part, labels in RAW_MARKER_PARTS.items():
         if name in labels:
@@ -225,6 +292,8 @@ def draw_reconstruction(
     ax.view_init(elev=17, azim=-66)
     for a, b, part in BODY_SEGMENTS:
         draw_segment(ax, points, a, b, PART_COLORS[part], 2.4)
+    draw_head_shape(ax, points)
+    draw_foot_shapes(ax, points)
     for a, b in BAT_SEGMENTS:
         draw_segment(ax, points, a, b, PART_COLORS["球棒"], 3.4)
 
