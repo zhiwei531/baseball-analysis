@@ -51,7 +51,7 @@ BODY_SEGMENTS = [
     ("RASI", "RKNE", "右腿"),
     ("RKNE", "RANK", "右腿"),
 ]
-BAT_SEGMENTS = [("Bat1", "Bat2"), ("Bat2", "Bat3"), ("Bat3", "Bat4"), ("Bat4", "Bat5")]
+BAT_MARKERS = ["Bat1", "Bat2", "Bat3", "Bat4", "Bat5"]
 LABEL_POINTS = ["LFHD", "RFHD", "C7", "T10", "LSHO", "RSHO", "LASI", "RASI", "CentreOfMass", "Bat1", "Bat5"]
 RAW_MARKERS = {
     "LFHD", "RFHD", "LBHD", "RBHD", "C7", "T10", "CLAV", "STRN", "RBAK",
@@ -190,6 +190,10 @@ def draw_closed_shape(
         draw_segment(ax, points, a, b, color, width)
 
 
+def complete_edges(names: list[str]) -> list[tuple[str, str]]:
+    return [(a, b) for i, a in enumerate(names) for b in names[i + 1:]]
+
+
 def draw_head_shape(ax, points: dict[str, tuple[float, float, float]]) -> None:
     color = PART_COLORS["头颈"]
     draw_closed_shape(
@@ -214,6 +218,32 @@ def draw_head_shape(ax, points: dict[str, tuple[float, float, float]]) -> None:
     )
 
 
+def draw_middle_body_shapes(ax, points: dict[str, tuple[float, float, float]]) -> None:
+    draw_closed_shape(
+        ax,
+        points,
+        faces=[
+            ["C7", "CLAV", "STRN"],
+            ["C7", "STRN", "T10"],
+            ["C7", "T10", "RBAK"],
+            ["T10", "STRN", "RBAK"],
+        ],
+        edges=complete_edges(["C7", "CLAV", "STRN", "T10", "RBAK"]),
+        color=PART_COLORS["躯干"],
+        width=2.0,
+        alpha=0.14,
+    )
+    draw_closed_shape(
+        ax,
+        points,
+        faces=[["LASI", "RASI", "RPSI"], ["LASI", "RPSI", "LPSI"]],
+        edges=complete_edges(["LASI", "RASI", "LPSI", "RPSI"]),
+        color=PART_COLORS["骨盆"],
+        width=2.1,
+        alpha=0.16,
+    )
+
+
 def draw_foot_shapes(ax, points: dict[str, tuple[float, float, float]]) -> None:
     draw_closed_shape(
         ax,
@@ -232,6 +262,22 @@ def draw_foot_shapes(ax, points: dict[str, tuple[float, float, float]]) -> None:
         color=PART_COLORS["右腿"],
         width=2.2,
         alpha=0.22,
+    )
+
+
+def draw_bat_rigid_body(ax, points: dict[str, tuple[float, float, float]]) -> None:
+    draw_closed_shape(
+        ax,
+        points,
+        faces=[
+            ["Bat1", "Bat2", "Bat3"],
+            ["Bat1", "Bat3", "Bat4"],
+            ["Bat1", "Bat4", "Bat5"],
+        ],
+        edges=complete_edges(BAT_MARKERS),
+        color=PART_COLORS["球棒"],
+        width=3.0,
+        alpha=0.12,
     )
 
 
@@ -295,9 +341,9 @@ def draw_reconstruction(
     for a, b, part in BODY_SEGMENTS:
         draw_segment(ax, points, a, b, PART_COLORS[part], 2.4)
     draw_head_shape(ax, points)
+    draw_middle_body_shapes(ax, points)
     draw_foot_shapes(ax, points)
-    for a, b in BAT_SEGMENTS:
-        draw_segment(ax, points, a, b, PART_COLORS["球棒"], 3.4)
+    draw_bat_rigid_body(ax, points)
 
     for part in ("头颈", "躯干", "骨盆", "左臂", "右臂", "左腿", "右腿"):
         part_points = {name: value for name, value in raw_points.items() if marker_part(name) == part}
