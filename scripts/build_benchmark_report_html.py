@@ -962,7 +962,7 @@ def vicon_reconstruction_image(rows: list[dict[str, str]], trial_id_value: str, 
       <img class="reconstruction-img" src="{esc(rel_asset(image_path))}" alt="{esc(title)}" loading="lazy">
       <figcaption>
         <b>{esc(title)}</b>
-        <span>动图来自 C3D 关键动作窗口抽帧；关键动作先定位{esc(event_text)}，第{esc(frame_text)}帧，时间 {esc(time_text)}。骨架只使用真实 marker：头部四点连接为闭合立体面，左右脚踝/跟/趾连接为脚部三角面。</span>
+        <span>动图来自 C3D 关键动作窗口抽帧；关键动作先定位{esc(event_text)}，第{esc(frame_text)}帧，时间 {esc(time_text)}。骨架只使用真实 marker：头部四点连接为闭合立体面，并全部连接到 C7；左右脚踝/跟/趾连接为脚部三角面。</span>
       </figcaption>
     </figure>
     """
@@ -975,9 +975,9 @@ def vicon_reconstruction_cards(
 ) -> str:
     action_text = "投球" if action == "pitching" else "打击"
     note = (
-        "该图从 C3D 关键动作窗口抽帧渲染真实 marker 骨架；头部闭合面和脚部三角面用于更直观看方向与支撑。"
+        "该图从 C3D 关键动作窗口抽帧渲染真实 marker 骨架；头部闭合面连到 C7，脚部三角面用于更直观看方向与支撑。"
         if action == "pitching"
-        else "该图从 C3D 关键动作窗口抽帧渲染真实 marker 骨架；头部闭合面、脚部三角面和橙色 Bat1-Bat5 帮助检查挥棒输出。"
+        else "该图从 C3D 关键动作窗口抽帧渲染真实 marker 骨架；头部闭合面连到 C7，脚部三角面和橙色 Bat1-Bat5 帮助检查挥棒输出。"
     )
     cards = []
     for trial in vicon_trials(vicon_rows, action):

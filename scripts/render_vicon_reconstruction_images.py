@@ -37,8 +37,6 @@ PART_COLORS = {
     "球棒": "#f97316",
 }
 BODY_SEGMENTS = [
-    ("LFHD", "C7", "头颈"),
-    ("RFHD", "C7", "头颈"),
     ("C7", "T10", "躯干"),
     ("LSHO", "RSHO", "躯干"),
     ("LASI", "RASI", "骨盆"),
@@ -205,6 +203,10 @@ def draw_head_shape(ax, points: dict[str, tuple[float, float, float]]) -> None:
             ("LBHD", "LFHD"),
             ("LFHD", "RBHD"),
             ("RFHD", "LBHD"),
+            ("LFHD", "C7"),
+            ("RFHD", "C7"),
+            ("LBHD", "C7"),
+            ("RBHD", "C7"),
         ],
         color=color,
         width=2.0,
