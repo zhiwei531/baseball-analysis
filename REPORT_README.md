@@ -117,7 +117,7 @@ reports/assets/vicon_reconstruction/{trial_id}.gif
 - pitching：主导手/出手侧手部速度峰值帧，规则名 `right_hand_speed_peak` 或 `left_hand_speed_peak`。
 - 若速度不可用，退回 `mid_frame_fallback`。
 
-GIF 默认展示关键帧前约 `0.6 s`、后约 `0.4 s` 的窗口，最多 `72` 帧。渲染时使用固定相机视角和固定坐标范围，只画真实身体 marker、`CentreOfMass` 和打击时的 `Bat1-Bat5`。
+GIF 默认展示关键帧前约 `0.6 s`、后约 `0.4 s` 的窗口，最多 `72` 帧。渲染时使用固定相机视角和固定坐标范围，只画真实身体 marker、`CentreOfMass` 和打击时的 `Bat1-Bat5`。头部 `LFHD/RFHD/LBHD/RBHD` 四点连接为闭合立体面；左右脚的踝、跟、趾三点连接为脚部三角面。
 
 ## 报告模块
 
