@@ -1569,7 +1569,7 @@ def main() -> None:
     .reconstruction-figure figcaption b {{ color:var(--ink); font-size:15px; line-height:20px; }}
     .reconstruction-figure figcaption span {{ color:var(--mid); font-size:13px; line-height:19px; }}
     .dot-plot-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
-    .dot-compare-svg {{ width:80%; min-width:0; display:block; border-radius:18px; }}
+    .dot-compare-svg {{ width:80%; min-width:0; display:block; margin:0 auto; border-radius:18px; }}
     .line-chart-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
     .line-chart-svg {{ width:100%; min-width:0; display:block; border-radius:18px; }}
     .mini-chart-scroll {{ width:100%; overflow-x:auto; padding-bottom:4px; }}
