@@ -368,6 +368,7 @@ components:
 - **数值比形容词更重要。** 说“比教练低 28.5 cm”优先于“明显不足”。
 - **不要重复同一段解释。** 同类限制说明合并到“测量说明”或“哪些数据要谨慎看”。
 - **不要使用负字距。** 中文报告保持 `letterSpacing: 0px`，避免压缩导致可读性下降。
+- **指标卡字体要紧凑。** 投球和打击 key metrics 卡片用于快速扫描，不使用英雄级字号；数值、单位和说明要分层，说明文字保持 1-2 句，避免把数据来源、算法细节和训练建议都塞进卡片。
 
 ### Note on Font Substitutes
 如果在非 macOS 环境生成报告，可替换为：
@@ -419,7 +420,7 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 
 #### Graph Layout Rules
 - 图表默认按父卡片宽度自适应，禁止为普通卡片图表设置过大的 `min-width` 导致横向拖拽。只有原始数据表、极宽 raw table 或确实无法压缩的矩阵才允许内部横向滚动。
-- 研究者模块的角度/速度曲线建议使用紧凑坐标系：整体 SVG 约 720 px 宽，绘图区 x 轴不要超过约 560 px；数据质量条形图也建议约 720 px 宽。对比点位图建议约 720 px 宽，轴线长度约 320 px。
+- 研究者模块的角度/速度曲线建议使用紧凑坐标系：整体 SVG 约 720 px 宽，绘图区 x 轴不要超过约 560 px；数据质量条形图也建议约 720 px 宽。对比点位图建议约 720 px 宽，轴线长度约 320 px；在卡片中显示时必须水平居中。
 - 图表必须把标题、事件标签、坐标轴刻度、单位、图例和曲线分区放置。文字不能覆盖曲线、数据点、条带、骨架或彼此。
 - 事件标签不能直接压在曲线绘图区内。事件文字应放在图顶部独立标签带或绘图区外侧，用细指示线连接事件竖线；标签可加浅色背景以保证可读性。
 - y 轴单位与 y 轴刻度必须分离。长单位如“公里/小时”不能与刻度数值重叠；必要时增大左边距、把单位放到刻度上方，并给刻度文字加白底隔离。
@@ -540,7 +541,7 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 
 **`limitation-card-grid`** — 本次限制卡片组。
 - 用于研究者模块，也可在教练模块折叠展示。明确列出不可用或需复核项目。
-- 必须覆盖真实球速/转速、接触时间、2D 速度绝对值、Vicon 与 CV 对齐等限制；每项要说明为什么不能直接下结论。
+- 必须覆盖真实球速/转速、真实接触时间、coach 参考未统一到 Vicon、proxy 事件等限制；每项要说明为什么不能直接下结论。
 
 ### Required Graphs
 
@@ -587,7 +588,7 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 |---|---|---|---|---|
 | `coach-bat-player-comparison` | 打击队员对比图 | 主体球员的挥棒速度、稳定性和节奏在队内如何？ | 主体球员、其他球员、教练参考同一 3D/球棒 proxy 口径。 | 优先使用同一指标一条横轴、不同颜色点展示样本位置；光学或建议参考用黑色竖线。x 轴不要过长，标签放在轴线右侧独立列，避免压到点。 |
 | `coach-bat-gap-dashboard` | 打击差距仪表盘 | 主体球员和参考动作差多少？ | 髋肩分离、躯干旋转速度、手部速度、球棒平面、前脚方向、头部稳定。 | 按表现影响排序；每项显示数值、参考、差距和训练方向。 |
-| `coach-bat-reference-bars` | 打击参考对比条 | 主体球员和同龄/Vicon/教练参考差多少？ | 髋肩分离、前腿膝角、头部稳定、棒角/攻击角、棒速、挥棒时间。 | 采用横向进度条；特别适合把 Vicon 参考值和 CV 估算放在同一解释框中。 |
+| `coach-bat-reference-bars` | 打击参考对比条 | 主体球员和对照/参考差多少？ | 髋肩分离、前腿膝角、头部稳定、棒角/攻击角、棒速、挥棒时间。 | 采用横向进度条；当前 report 使用 bryan 与 green 的同源 Vicon 指标，coach 参考若使用必须标注临时性。 |
 | `coach-bat-swing-sequence` | 打击阶段时间轴 | 准备、启动、落脚、击球、随挥的节奏是否合理？ | 打击事件点和阶段持续时间。 | 时间轴必须独立于投球事件；不要使用 FC/MER/BR 投球标签。 |
 | `coach-bat-swing-plane` | 挥棒平面与击球区图 | 球棒进入击球区是否稳定？ | 球棒轨迹、手部轨迹 proxy、击球点 proxy。 | 展示主体球员 vs 参考轨迹；如果缺球棒 marker，明确写“手部 proxy”。 |
 | `coach-bat-intervention-map` | 打击改进优先级图 | 教练应该先改稳定性、节奏还是旋转速度？ | 差距大小、动作阶段、训练可改性综合排序。 | 输出 3 个训练优先级，每个优先级连接到 drills 和复测指标。 |
@@ -600,20 +601,20 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 | `research-pitch-speed-time` | 投球速度-时间曲线 | 骨盆、躯干、手部峰值速度何时出现？ | 3D segment velocity 或 proxy velocity。 | 必须由逐帧 3D 坐标差分生成，并转成常用速度单位展示；标出峰值和事件点。曲线、图例、事件标签不得互相覆盖。 |
 | `research-pitch-event-table` | 投球事件点表 | FC、MER、BR、FT 是否检测可靠？ | 帧号、时间戳、事件规则、关键指标。 | 表格可专业，但必须可下载 CSV；缺失事件要明示。 |
 | `research-pitch-data-quality` | 投球数据质量图 | 这条数据能不能用于分析？ | pose 缺失率、插值 gap、平滑参数、置信度、可用帧比例。 | 用折线/条形/热力图展示；条带和右侧百分比数值必须留在图框内，不得越界；不要隐藏异常帧。 |
-| `research-pitch-source-table` | 投球 CV/Vicon 原始数据表 | 每个投球指标来自哪个字段？ | `sample / field / value`，可扩展 source、unit、method。 | 保留 raw fields，例如 event_s、hip_shoulder_separation_deg、ball_speed_px_s；必须可下载 CSV。 |
-| `research-pitch-limitations` | 投球限制卡片组 | 哪些指标不能直接下结论？ | 雷达/球追踪缺失、px/s 速度、Vicon/CV 对齐、proxy 指标。 | 用状态卡展示 `需复核` 和 `不可用`，不隐藏限制。 |
+| `research-pitch-source-table` | 投球 Vicon 原始数据表 | 每个投球指标来自哪个 C3D 字段或派生字段？ | `sample / field / value`，可扩展 source、unit、method。 | 当前 report 主体只追溯 Vicon C3D 和派生指标；旧 CV/GVHMR benchmark 字段不得混入主体来源表。 |
+| `research-pitch-limitations` | 投球限制卡片组 | 哪些指标不能直接下结论？ | 雷达/球追踪缺失、coach 参考未统一到 Vicon、proxy 指标。 | 用状态卡展示 `需复核` 和 `不可用`，不隐藏限制。 |
 
 **研究者模块：Batting**
 
 | Graph | 中文名称 | 必须回答的问题 | 数据口径 | 展示规则 |
 |---|---|---|---|---|
 | `research-bat-angle-time` | 打击角度-时间曲线 | 打击关键关节角如何随时间变化？ | 前膝、髋肩分离、躯干倾斜、肘角、球棒平面 proxy。 | 必须由逐帧 3D 姿态 CSV 计算；事件竖线标准备、启动、落脚、击球、随挥。事件文字放在绘图区外，不能压到曲线。 |
-| `research-bat-speed-time` | 打击速度-时间曲线 | 躯干、手部、球棒 proxy 的速度峰值何时出现？ | 3D segment velocity、手部速度、球棒/手部 proxy。 | 标出峰值顺序；如果球棒不是直接检测，必须标注 proxy。速度必须使用公里/小时等常用单位，不展示无意义原始单位。 |
+| `research-bat-speed-time` | 打击速度-时间曲线 | 躯干、手部、球棒速度峰值何时出现？ | Vicon 3D segment velocity、手部速度、`Bat1-Bat5` 球棒 marker 速度。 | 标出峰值顺序；如果未来数据缺少球棒 marker 才标注 proxy。速度必须使用公里/小时等常用单位，不展示无意义原始单位。 |
 | `research-bat-swing-trajectory-raw` | 打击原始轨迹图 | 手部/球棒/身体中心轨迹是否稳定？ | 2D/3D 坐标轨迹、滤波前后轨迹。 | 允许显示 X/Y/Z 或平面投影；这是研究者模块，不能放到球员首屏。 |
 | `research-bat-data-quality` | 打击数据质量图 | 这条打击数据能不能用于分析？ | pose 缺失率、球棒/手部 proxy 可用率、插值 gap、平滑参数。 | 明确哪些指标可算、哪些指标不可算；输出 raw data 下载入口。 |
-| `research-bat-source-table` | 打击 CV/Vicon 原始数据表 | 每个打击指标来自哪个字段？ | `sample / field / value`，包含 CV 和 Vicon。 | 保留 hip_shoulder_separation_deg、attack_angle_deg、estimated_bat_speed_px_s、wrist_speed_3d_units_s、contact_time_s、bat1_speed_kmh 等字段。 |
-| `research-bat-vicon-calibration` | 打击 Vicon 校准说明图 | Vicon 在报告里承担什么角色？ | Vicon 3D marker、bat speed、bat angle、swing time、wrist/finger marker speed。 | 说明 Vicon 用于校准和解释 CV 参数，不直接替代 CV 指标；可用横向条展示教练棒速、同龄棒速、教练挥棒时间。 |
-| `research-bat-limitations` | 打击限制卡片组 | 哪些指标不可用或需复核？ | 真实球速/转速、接触时间、2D 速度绝对值、Vicon 与 CV 对齐。 | 每项都要写“为什么不能判断”和“下次需要什么数据”。 |
+| `research-bat-source-table` | 打击 Vicon 原始数据表 | 每个打击指标来自哪个 C3D 字段或派生字段？ | `sample / field / value`，包含 Vicon marker、事件 proxy 和派生指标。 | 保留 hip_shoulder_separation_deg、attack_angle_deg、bat1/bat5 speed、swing_time_sec 等字段；旧 CV/GVHMR benchmark 字段不得混入主体来源表。 |
+| `research-bat-vicon-source` | 打击 Vicon 说明图 | Vicon 在报告里承担什么角色？ | Vicon 3D marker、bat speed、bat angle、swing time、wrist/finger marker speed。 | 当前 report 中 Vicon 是主体 raw data source，不是 CV 校准附属；可用横向条展示 bryan 与 green 的同源对照。 |
+| `research-bat-limitations` | 打击限制卡片组 | 哪些指标不可用或需复核？ | 真实球速/转速、真实接触事件、coach 参考未统一到 Vicon。 | 每项都要写“为什么不能判断”和“下次需要什么数据”。 |
 
 **Scoring System**
 - 球员模块可以使用五维或六维评分。五维适合当前 HTML 快速摘要：`蓄力`、`路径`、`稳定`、`节奏`、`速度可信`；六维适合完整体检：再拆分下肢支撑、身体前移、髋肩分离、躯干控制、末端加速、稳定性。
@@ -623,7 +624,7 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 **Graph Priority**
 - 球员模块第一优先级：照片/截图角度标注、六维评分图、关键指标卡、标准姿态纠正图、训练目标卡。
 - 教练模块第一优先级：主体球员 vs 教练参考、主体球员 vs 其他球员、差距仪表盘、阶段时间轴、改进优先级图。
-- 研究者模块第一优先级：速度-时间曲线、角度-时间曲线、事件点表、数据质量图、CV/Vicon 原始表、限制卡和 raw data 下载入口。
+- 研究者模块第一优先级：速度-时间曲线、角度-时间曲线、事件点表、数据质量图、Vicon C3D 来源表、限制卡和 raw data 下载入口。
 - 原始角度/速度曲线不进入球员模块首屏；它们属于研究者模块，或在教练模块中作为折叠详情。
 
 **Graph Copy Rules**
@@ -637,12 +638,12 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 - 图表 caption/title 要短，不要把方法说明塞进图内；方法说明放在图下“怎么看”或 module note。
 
 **Current HTML Implementation Requirements**
-- 当前 HTML 报告由 `scripts/build_benchmark_report_html.py` 生成，Vicon 2026 中间表由 `scripts/build_vicon_2026_metrics.py` 从 `../vicon_2026/*/*.c3d` 生成，C3D 重建截图和动图由 `scripts/render_vicon_reconstruction_images.py` 生成。报告必须优先读取当前可用 CSV、C3D 衍生表、预渲染 PNG/GIF 和 3D pose CSV 生成真实图表：`reports/slymask_benchmark_metrics.csv`、`output/data/*motion_metrics*.csv`、`reports/vicon_2026_metrics.csv`、`reports/vicon_2026_point_summary.csv`、`reports/assets/vicon_reconstruction/*.png`、`reports/assets/vicon_reconstruction/*.gif`、`data_full/benchmark_rtmpose_test/processed/poses3d/*` 和教练 3D 姿态。
+- 当前 HTML 报告由 `scripts/build_benchmark_report_html.py` 生成，Vicon 2026 中间表由 `scripts/build_vicon_2026_metrics.py` 从 `../vicon_2026/*/*.c3d` 生成，C3D 重建截图和动图由 `scripts/render_vicon_reconstruction_images.py` 生成。当前主体 raw data source 必须统一为 `../vicon_2026` 下的 Vicon C3D：`bryan` 是主分析人，`green` 只作为教练模块对照，子文件夹名就是被试名。报告必须优先读取当前 Vicon 派生表、原始 C3D 和预渲染 PNG/GIF 生成真实图表：`reports/vicon_2026_metrics.csv`、`reports/vicon_2026_point_summary.csv`、`reports/assets/vicon_reconstruction/*.png`、`reports/assets/vicon_reconstruction/*.gif`、`../vicon_2026/bryan/*.c3d` 和 `../vicon_2026/green/*.c3d`。临时 coach 参考可继续读取既有 coach 3D 数据和 coach 指标表，但只能作为投球参考线或评分参考，正文必须标注临时性；旧 benchmark 视频 CV/GVHMR 身体数据不得混入当前主体指标、曲线或 C3D 来源表。
 - 姿态纠正图不得再使用固定 SVG placeholder。当前实现口径：球员投球样本出手附近帧作为浅蓝虚线，教练三维序列出手侧手部速度峰值附近帧作为绿色参考，偏差最大的球员骨段用红色强调。
-- C3D 点重建图不得使用全局 trial points 或全局平均点。必须先提取关键动作位置，再从该关键帧附近小窗口重建点位：投球使用出手侧/主导手速度峰值，打击使用球棒速度峰值。重建资产必须先单独渲染为 PNG/GIF，再嵌入 report；不得在 HTML 中临时用内联 SVG 拼接 C3D 重建图。报告中 C3D 重建区块应展示关键动作窗口 GIF，而不是完整 trial GIF 或只放单张关键帧图片；默认窗口为关键帧前约 0.6 秒、后约 0.4 秒，PNG 仅作为关键帧截图或 GIF 缺失时的 fallback。GIF 必须使用关键动作窗口内的固定坐标范围和固定相机视角，不能每帧 autoscale 导致背景网格缩放；GIF 点位可做短窗口可视化平滑以降低 marker 抖动，但不能改变用于指标计算的原始数据。报告中必须能追溯 `sample_name`、`key_event`、`key_frame_index` 和 `key_time_sec`，其中 `sample_name` 必须直接来自 `vicon_2026` 下的子文件夹名。Vicon 报告区块不得硬编码某一个样本名或只展示某一个 trial；必须按 `sample_name` 和动作类型动态遍历当前 CSV 中的所有 C3D trial。C3D 动图骨架只使用真实身体 marker 的人体连接关系，不画 Plug-in Gait/model 局部轴段或其他辅助 segments；可显示真实 marker 散点、`CentreOfMass` 和打击时的 `Bat1-Bat5`，但不得显示 `CentreOfMassFloor` 这类地面/辅助点导致画面误读。三维人体不得塞满画布，渲染时必须放大坐标边界并给骨架四周留出明显空白。三维重建图必须按肢体分色，至少区分头颈、躯干、骨盆、左臂、右臂、左腿、右腿、质心点和球棒点，避免所有身体点或线条使用同一颜色导致重叠不可读。
+- C3D 点重建图不得使用全局 trial points 或全局平均点。必须先提取关键动作位置，再从该关键帧附近小窗口重建点位：投球使用出手侧/主导手速度峰值，打击使用球棒速度峰值。重建资产必须先单独渲染为 PNG/GIF，再嵌入 report；不得在 HTML 中临时用内联 SVG 拼接 C3D 重建图。报告中 C3D 重建区块应展示关键动作窗口 GIF，而不是完整 trial GIF 或只放单张关键帧图片；默认窗口为关键帧前约 0.6 秒、后约 0.4 秒，PNG 仅作为关键帧截图或 GIF 缺失时的 fallback。GIF 必须使用关键动作窗口内的固定坐标范围和固定相机视角，不能每帧 autoscale 导致背景网格缩放；GIF 点位可做短窗口可视化平滑以降低 marker 抖动，但不能改变用于指标计算的原始数据。报告中必须能追溯 `sample_name`、`key_event`、`key_frame_index` 和 `key_time_sec`，其中 `sample_name` 必须直接来自 `vicon_2026` 下的子文件夹名。Vicon 报告区块不得硬编码某一个样本名或只展示某一个 trial；必须按 `sample_name` 和动作类型动态遍历当前 CSV 中的所有 C3D trial。C3D 动图骨架只使用真实身体 marker 的人体连接关系，不画 Plug-in Gait/model 局部轴段或其他辅助 segments；可显示真实 marker 散点、`CentreOfMass` 和打击时的 `Bat1-Bat5`，但不得显示 `CentreOfMassFloor` 这类地面/辅助点导致画面误读。三维人体不得塞满画布，渲染时必须放大坐标边界并给骨架四周留出明显空白。三维重建图必须按肢体分色，至少区分头颈、躯干、骨盆、左臂、右臂、左腿、右腿、质心点和球棒点，避免所有身体点或线条使用同一颜色导致重叠不可读。头部 `LFHD/RFHD/LBHD/RBHD` 四点必须连接为闭合立体面，并全部连接到 `C7`；躯干 `C7/CLAV/STRN/T10/RBAK`、骨盆 `LASI/RASI/LPSI/RPSI`、左右脚踝/跟/趾和 `Bat1-Bat5` 必须分别连接为刚体结构。
 - 研究者模块不得在已有逐帧 3D 姿态 CSV 时保留“缺少逐帧数据”占位。至少要生成投球角度曲线、投球速度曲线、打击角度曲线、打击速度曲线和三维姿态数据质量图。
 - 角度时间曲线至少包含前腿膝角、肘角、躯干倾斜、髋肩分离。速度时间曲线至少包含髋部中心、躯干中心和手部末端速度；球棒未直接检测时必须写 proxy 或限制说明。
-- 点位对比图采用一行一个指标、一条横轴、多色点位的形式：主体样本蓝色，对照样本橙色，教练/Vicon/建议参考黑色竖线。它比多组条形更适合展示“球员处于同一指标什么位置”。
+- 点位对比图采用一行一个指标、一条横轴、多色点位的形式：主体样本蓝色，对照样本橙色，教练/Vicon/建议参考黑色竖线。它比多组条形更适合展示“球员处于同一指标什么位置”。点位图 SVG 在卡片内显示为约 80% 宽并居中，避免左贴边。
 - 图表宽度必须紧凑。当前实现目标：研究者曲线和数据质量图约 720 px 内部坐标宽度；队员对比点位图约 720 px 内部坐标宽度，x 轴约 320 px，但页面显示尺寸约为卡片宽度的 80%，避免字体、点和轴线显得过大；不使用 860 px 以上的强制宽图。
 - 普通图表的 CSS 不应设置大 `min-width`。桌面双栏中图表应缩放到约 500 px 卡片宽度；移动端图表应缩放到单卡宽度。表格可滚动，图表默认不靠横向滚动解决布局。
 - 速度单位必须转换为常用单位。`px/s` 要结合源视频分辨率、帧率和画面人体高度估算为公里/小时；无法物理标定的 `3d_unit/s` 不展示为用户单位，改为“需标定”、相对百分比或方法限制说明。
@@ -698,7 +699,7 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 - 研究者模块重点回答：原始数据是否可靠、事件点是否合理、速度/角度曲线如何变化。
 - 球员模块优先使用照片截图、骨架、关节角标注、六维评分图和关键指标卡。
 - 教练模块优先使用参数仪表盘、球员对比图、差距排序、阶段时间轴和改进优先级矩阵。
-- 研究者模块优先使用 raw data、CV/Vicon 原始表、速度-时间曲线、角度-时间曲线、事件点表、评分规则摘要和数据质量图。
+- 研究者模块优先使用 Vicon C3D raw data、Vicon 来源表、速度-时间曲线、角度-时间曲线、事件点表、评分规则摘要和数据质量图。
 - 当前数据足以生成的研究者曲线、姿态纠正图和数据质量图必须真实生成，不要用 placeholder 顶替。
 - 图表 x 轴要紧凑，优先按卡片宽度自适应；不要靠强制超宽 SVG 或横向滚动解决普通图表布局。
 - 图表文字要有独立空间：事件标签放在曲线区外，y 轴单位和刻度分离，图例不覆盖数据。
@@ -706,10 +707,10 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 - 使用五档状态体系：良好、偏离、关注、需复核、不可用；每个状态必须能追溯到规则或证据。
 - 球员模块首屏可以使用五维评分摘要：蓄力、路径、稳定、节奏、速度可信；完整报告可扩展为六维评分。
 - 训练建议要进一步落成 7 天家庭训练与复测计划，第 7 天必须安排同机位复测。
-- Vicon 在报告里作为 3D 校准和专业参考，不要把 Vicon 与 CV 估算混成同一个未解释的数值。
+- 当前 report 以 Vicon C3D 作为主体 raw data source；不要把 standard Vicon 动捕身体数据和 optical CV/GVHMR 身体数据混成同一个未解释的数值。
 - N/A、None、proxy 和不可用项必须展示清楚，研究者模块保留原始字段和限制说明。
 - 每张可视化都配一句明确解释，说明家长应该先看什么。
-- 对 Julian、Youyou 和教练使用同一套 3D 指标口径，图表中明确对象颜色。
+- 当前对象口径固定为 bryan 主分析、green 教练模块对照、coach 临时参考；图表中必须明确对象颜色和临时参考边界。
 - 标准姿态纠正图必须显示孩子原始姿态浅蓝虚线、缩放教练标准姿态绿色线、偏差较大骨段红线。
 - 对速度、身体中心位移、球速估算写清可靠性边界，并建议正式复测补充雷达枪、Vicon 或力板。
 - 训练建议必须包含动作名称、训练频率、组数或次数、对应改善的数据短板。
@@ -726,7 +727,7 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 - 不要隐藏 `N/A`、`None`、`proxy` 或缺失字段；可信报告必须暴露哪些不能判断。
 - 不要把 `px/s` 速度当成真实球速或真实棒速；它只适合同机位前后对比。
 - 不要在用户可见报告中显示“像素/秒”“三维单位/秒”“归一化单位/秒”等没有现实意义的单位；必须换算、标为相对值或写“需标定”。
-- 不要把 Vicon 参考值当成 CV 指标的直接替代；必须说明校准和解释关系。
+- 不要把 optical CV/GVHMR 身体数据混入当前 Vicon 主体报告；若临时引用 coach 数据，必须在正文说明它没有统一到同一 Vicon C3D 采集链路。
 - 不要把 3D 骨架截图当作核心证据；它只能辅助说明姿态和数据来源。
 - 不要裁切图表标题、图例、坐标轴或曲线；图表必须 contain 放入卡片。
 - 不要把研究者曲线、点位图、时间轴或动力链做成横向过长的图；普通图表应适配卡片宽度。
