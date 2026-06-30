@@ -555,7 +555,13 @@ def draw_bat1_trajectory(ax, trajectory: list[tuple[float, float, float]]) -> No
     )
 
 
-def fixed_legend(ax, font: FontProperties | None, include_bat: bool, include_bat1_trajectory: bool = False) -> None:
+def fixed_legend(
+    ax,
+    font: FontProperties | None,
+    include_bat: bool,
+    include_bat1_trajectory: bool = False,
+    bbox_to_anchor: tuple[float, float] = (0.98, 0.98),
+) -> None:
     handles = []
     if include_bat:
         handles.append(
@@ -577,7 +583,7 @@ def fixed_legend(ax, font: FontProperties | None, include_bat: bool, include_bat
     legend = ax.legend(
         handles=handles,
         loc="upper right",
-        bbox_to_anchor=(0.98, 0.98),
+        bbox_to_anchor=bbox_to_anchor,
         frameon=True,
         fontsize=7.0,
         borderpad=0.35,
@@ -655,8 +661,26 @@ def draw_reconstruction(
     ax.tick_params(axis="both", labelsize=7, pad=1)
     ax.grid(True)
     if frame_label:
-        ax.text2D(0.67, 0.92, frame_label, transform=ax.transAxes, fontsize=9, color="#344054", fontproperties=font)
-    fixed_legend(ax, font, include_bat=bool(bat_points), include_bat1_trajectory=len(trajectory) >= 2)
+        if fixed_layout_legend:
+            ax.text2D(
+                0.04,
+                0.93,
+                frame_label,
+                transform=ax.transAxes,
+                fontsize=8,
+                color="#344054",
+                fontproperties=font,
+                bbox={"facecolor": "#ffffff", "edgecolor": "#d0d5dd", "alpha": 0.86, "pad": 2.4},
+            )
+        else:
+            ax.text2D(0.67, 0.92, frame_label, transform=ax.transAxes, fontsize=9, color="#344054", fontproperties=font)
+    fixed_legend(
+        ax,
+        font,
+        include_bat=bool(bat_points),
+        include_bat1_trajectory=len(trajectory) >= 2,
+        bbox_to_anchor=(0.98, 0.88) if fixed_layout_legend else (0.98, 0.98),
+    )
     ax.set_title(title, fontsize=10, color="#101828", fontproperties=font)
     ax.set_box_aspect((1, 1, 1))
 
