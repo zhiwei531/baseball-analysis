@@ -60,6 +60,30 @@ already covered by `src/baseball_pose/cli.py` plus an experiment config. For
 future agent sessions, [AGENTS.md](AGENTS.md) records the same rule and the
 current high-frequency pipeline map.
 
+## Output Location Rule
+
+All generated project artifacts must stay inside the T7 project workspace:
+
+```text
+/Volumes/T7/DKU/Course/CS 207/final-project/baseball-analysis
+```
+
+This includes Vicon/C3D CSVs, report previews, PNG/GIF reconstructions, OBJ
+models, HTML/PDF/PPTX exports, and any user-facing inspection outputs. Do not
+write deliverables to `/private/tmp`, `/tmp`, the user home directory, or other
+local machine paths. Cache-only environment variables such as
+`MPLCONFIGDIR=/private/tmp/baseball_mpl_cache` and
+`XDG_CACHE_HOME=/private/tmp/baseball_xdg_cache` are allowed only for library
+cache files, not for result artifacts.
+
+For quick previews, use project-local paths such as:
+
+```text
+reports/previews/<task_name>/
+reports/assets/vicon_reconstruction/
+reports/assets/vicon_reconstruction_models/
+```
+
 The current project focus is RTMPose 2D plus GVHMR 3D:
 
 ```text
@@ -93,12 +117,18 @@ For the complete report build guide, including data selection, C3D metric
 calculation, reconstruction GIF generation, and known limitations, see
 [REPORT_README.md](REPORT_README.md).
 
+The HTML/PDF/PPTX export workflow is documented in the same guide. Current PDF
+export preserves the natural `report.html` layout by slicing the rendered HTML
+vertically into A4 pages; it should not repack individual cards into a new grid.
+Detailed layout rules for the report and exported artifacts live in
+[DESIGN.md](DESIGN.md).
+
 Entry points:
 
 ```bash
-.venv312/bin/python scripts/build_vicon_2026_metrics.py
-MPLCONFIGDIR=/private/tmp/baseball_mpl_cache .venv312/bin/python scripts/render_vicon_reconstruction_images.py
+.venv312/bin/python scripts/run_vicon_c3d_pipeline.py --input-dir ../vicon_2026
 .venv312/bin/python scripts/build_benchmark_report_html.py
+npm run export:report
 ```
 
 Inputs:
@@ -107,8 +137,14 @@ Inputs:
 ../vicon_2026/*/*.c3d
 reports/vicon_2026_metrics.csv
 reports/vicon_2026_point_summary.csv
+reports/vicon_2026_points_all.csv
+reports/vicon_2026_pose3d.csv
+reports/vicon_2026_key_pose_models.csv
 reports/assets/vicon_reconstruction/*.png
 reports/assets/vicon_reconstruction/*.gif
+reports/assets/vicon_reconstruction/*.mp4
+reports/assets/vicon_reconstruction/*.avi
+reports/assets/vicon_reconstruction_models/*.obj
 data_full/coach_pose3d/gvhmr/pitch_horizontal_coach.csv
 output/data/benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv
 ```
@@ -118,24 +154,30 @@ Generated report artifacts:
 ```text
 reports/vicon_2026_metrics.csv
 reports/vicon_2026_point_summary.csv
+reports/vicon_2026_points_all.csv
+reports/vicon_2026_pose3d.csv
+reports/vicon_2026_key_pose_models.csv
 reports/assets/vicon_reconstruction/*.png
 reports/assets/vicon_reconstruction/*.gif
+reports/assets/vicon_reconstruction/*.mp4
+reports/assets/vicon_reconstruction/*.avi
+reports/assets/vicon_reconstruction_models/*.obj
 report.html
 ```
 
-`build_vicon_2026_metrics.py` includes a lightweight C3D reader for the local
+`run_vicon_c3d_pipeline.py` includes a lightweight C3D reader for the local
 Vicon exports. It ignores macOS `._*.c3d` resource-fork files, extracts marker
 labels, frame rate, 3D marker points, bat markers, and full-body model points
-when present, then writes report-ready optical reference metrics. Some report
-figures reconstruct 3D body/bat structure from those C3D points after first
-selecting a key action position. Do not use global trial-wide point averages for
-these reconstruction figures: pitching uses the hand-speed peak frame, and
-batting uses the bat-speed peak frame, with a short local window around that
-event. The report does not draw these C3D reconstructions inline; run
-`scripts/render_vicon_reconstruction_images.py` first so `report.html` embeds
-pre-rendered reconstruction assets. It writes key-frame PNGs and full-trial
-animated GIFs; the HTML report uses the GIFs when available. Vicon sample names
-are taken directly from the `../vicon_2026/{sample}/` folder name.
+when present, then writes report-ready optical reference metrics, all-frame
+marker CSVs, a project-style pose3d CSV, key-pose summaries, key-frame PNGs,
+key-action-window GIF/MP4/AVI videos, and OBJ key-pose models. Do not use
+global trial-wide point averages for reconstruction figures: pitching uses the
+hand-speed peak frame, and batting uses the bat-speed peak frame, with a short
+local window around that event. Videos use fixed coordinate limits so the grid
+and axes do not scale per frame; only the athlete, bat, and trajectory move.
+Vicon sample names are taken directly from the `../vicon_2026/{sample}/`
+folder name. MP4 is retained for compatibility; MJPG AVI is the
+color-accurate video artifact when the white background must match the PNG.
 
 Report design rules live in [DESIGN.md](DESIGN.md). Keep the final HTML Chinese,
 use compact graph x-axes, avoid text/curve overlap, and convert user-facing

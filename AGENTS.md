@@ -70,6 +70,57 @@ Only add a new script when the task is not expressible as an existing CLI
 command plus config. If a new script is unavoidable, document it in
 `docs/pipeline_playbook.md` in the same change.
 
+## Workspace Output Rule
+
+All project deliverables, previews, reports, CSVs, PNG/GIF images, OBJ models,
+and regenerated Vicon/C3D artifacts must be written under the T7 project
+workspace:
+
+```text
+/Volumes/T7/DKU/Course/CS 207/final-project/baseball-analysis
+```
+
+Do not write preview outputs or handoff artifacts to `/private/tmp`, `/tmp`, the
+user home directory, or other local machine paths. Temporary system/cache paths
+such as `MPLCONFIGDIR=/private/tmp/baseball_mpl_cache` and
+`XDG_CACHE_HOME=/private/tmp/baseball_xdg_cache` are acceptable only for cache
+noise and must not be treated as result locations. For quick Vicon/C3D checks,
+use a project-local output directory such as:
+
+```text
+reports/previews/<task_name>/
+reports/assets/vicon_reconstruction/
+reports/assets/vicon_reconstruction_models/
+```
+
+## Vicon C3D 3D Reconstruction Memory
+
+Use `scripts/run_vicon_c3d_pipeline.py` for the current Vicon 2026 C3D flow.
+It wraps metric extraction, all-frame marker export, project-style pose3d CSV
+export, key-pose summary export, PNG/GIF/MP4/AVI rendering, and OBJ key-pose
+model export.
+
+Rendering conventions from the latest review:
+
+- Key-frame PNGs and videos must use the same figure size, DPI, view, and fixed
+  coordinate limits. Videos must not autoscale per frame; only the athlete,
+  bat, and trajectory should move.
+- Keep the visual style calm and report-oriented: white background, light gray
+  grid, red body connections, blue body markers, green bat markers/structure,
+  and gray dashed bat-head trajectory.
+- Do not write marker names on body or bat points. Keep the legend compact and
+  limited to bat and bat-head trajectory.
+- Treat "points" comments as applying to all markers, including `Bat1-Bat5`,
+  not only human body markers.
+- For batting, render the bat as a rigid structure connecting `Bat1-Bat5` with
+  outer/complete connections; the dashed trajectory is the bat-head (`Bat1`)
+  trail.
+- Y-axis display recentering should keep the feet near the visual Y center.
+  Do not recenter Z just to move the feet; the user specifically asked for Y
+  centering.
+- MP4 is kept for compatibility, but OpenCV MP4 can tint white backgrounds
+  slightly. The MJPG AVI output is the color-accurate video artifact.
+
 ## Git Tracking Discipline
 
 When a conversation changes source code, commit those code changes before the

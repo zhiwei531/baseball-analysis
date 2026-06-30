@@ -14,10 +14,12 @@ __pycache__/
 .venv_gvhmr310/
 venv/
 *.egg-info/
+node_modules/
 
 data/interim/
 data/processed/
 data_full/
+reports/previews/
 outputs/
 outputs_full/
 .cache/

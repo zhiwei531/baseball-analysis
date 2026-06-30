@@ -15,6 +15,8 @@ PROJECT_ROOT = ROOT.parent
 DEFAULT_INPUT = PROJECT_ROOT / "vicon_2026"
 DEFAULT_METRICS = ROOT / "reports" / "vicon_2026_metrics.csv"
 DEFAULT_POINTS = ROOT / "reports" / "vicon_2026_point_summary.csv"
+DEFAULT_ALL_POINTS = ROOT / "reports" / "vicon_2026_points_all.csv"
+DEFAULT_POSE3D = ROOT / "reports" / "vicon_2026_pose3d.csv"
 
 
 @dataclass
@@ -201,6 +203,13 @@ def trial_id(path: Path) -> str:
     return f"{path.parent.name}_{path.stem}".replace(" ", "_").lower()
 
 
+def source_file_label(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def compute_trial_metrics(trial: C3DTrial) -> dict[str, object]:
     action = infer_action(trial.path)
     sample = trial.path.parent.name
@@ -247,7 +256,7 @@ def compute_trial_metrics(trial: C3DTrial) -> dict[str, object]:
         "sample_name": sample,
         "athlete": sample,
         "action_type": action,
-        "source_file": str(trial.path.relative_to(PROJECT_ROOT)),
+        "source_file": source_file_label(trial.path),
         "frames": frame_count,
         "rate_hz": trial.rate_hz,
         "duration_sec": frame_count / trial.rate_hz,
@@ -320,7 +329,7 @@ def point_summary_rows(trial: C3DTrial) -> list[dict[str, object]]:
         if np.isfinite(window[:, 0]).any():
             key_point = safe_nanmean(window, axis=0)
         else:
-            key_point = pts[valid][len(pts[valid]) // 2]
+            continue
         rows.append(
             {
                 "trial_id": trial_id(trial.path),
@@ -343,6 +352,82 @@ def point_summary_rows(trial: C3DTrial) -> list[dict[str, object]]:
     return rows
 
 
+def reconstruction_point_names(trial: C3DTrial) -> list[tuple[int, str, str]]:
+    names: list[tuple[int, str, str]] = []
+    seen: set[str] = set()
+    for idx, raw_label in enumerate(trial.labels):
+        name = clean_label(raw_label)
+        if name in seen or not is_reconstruction_point(name):
+            continue
+        seen.add(name)
+        names.append((idx, raw_label, name))
+    return names
+
+
+def all_point_rows(trial: C3DTrial) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    tid = trial_id(trial.path)
+    sample = trial.path.parent.name
+    action = infer_action(trial.path)
+    source_file = source_file_label(trial.path)
+    for frame_index in range(trial.points.shape[0]):
+        timestamp = frame_index / trial.rate_hz
+        for point_index, raw_label, name in reconstruction_point_names(trial):
+            xyz = trial.points[frame_index, point_index, :3]
+            residual = trial.points[frame_index, point_index, 3]
+            valid = bool(np.isfinite(xyz).all())
+            rows.append(
+                {
+                    "trial_id": tid,
+                    "sample_name": sample,
+                    "athlete": sample,
+                    "action_type": action,
+                    "source_file": source_file,
+                    "frame_index": frame_index,
+                    "timestamp_sec": timestamp,
+                    "point": name,
+                    "raw_label": raw_label,
+                    "point_index": point_index,
+                    "x_mm": float(xyz[0]) if valid else "",
+                    "y_mm": float(xyz[1]) if valid else "",
+                    "z_mm": float(xyz[2]) if valid else "",
+                    "residual": float(residual) if math.isfinite(float(residual)) else "",
+                    "valid": int(valid),
+                    "units": trial.units,
+                }
+            )
+    return rows
+
+
+def pose3d_rows_from_all_points(
+    rows: list[dict[str, object]],
+    condition_id: str = "vicon_c3d_raw",
+) -> list[dict[str, object]]:
+    pose_rows: list[dict[str, object]] = []
+    for row in rows:
+        valid = bool(row["valid"])
+        pose_rows.append(
+            {
+                "clip_id": row["trial_id"],
+                "condition_id": condition_id,
+                "frame_index": row["frame_index"],
+                "timestamp_sec": row["timestamp_sec"],
+                "joint_name": row["point"],
+                "x_3d": row["x_mm"] if valid else float("nan"),
+                "y_3d": row["y_mm"] if valid else float("nan"),
+                "z_3d": row["z_mm"] if valid else float("nan"),
+                "scale_mode": f"vicon_c3d_{row['units']}",
+                "lift_backend": "vicon_c3d",
+                "input_quality_score": 1.0 if valid else 0.0,
+            }
+        )
+    return pose_rows
+
+
+def pose3d_rows(trial: C3DTrial, condition_id: str = "vicon_c3d_raw") -> list[dict[str, object]]:
+    return pose3d_rows_from_all_points(all_point_rows(trial), condition_id=condition_id)
+
+
 def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -359,18 +444,32 @@ def main() -> None:
     parser.add_argument("--input-dir", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--metrics-out", type=Path, default=DEFAULT_METRICS)
     parser.add_argument("--points-out", type=Path, default=DEFAULT_POINTS)
+    parser.add_argument("--all-points-out", type=Path, default=DEFAULT_ALL_POINTS)
+    parser.add_argument("--pose3d-out", type=Path, default=DEFAULT_POSE3D)
+    parser.add_argument("--pose3d-condition", default="vicon_c3d_raw")
     args = parser.parse_args()
     c3d_paths = sorted(path for path in args.input_dir.glob("*/*.c3d") if not path.name.startswith("._"))
     metric_rows: list[dict[str, object]] = []
     point_rows: list[dict[str, object]] = []
+    all_rows: list[dict[str, object]] = []
+    pose_rows: list[dict[str, object]] = []
     for path in c3d_paths:
         trial = read_c3d(path)
         metric_rows.append(compute_trial_metrics(trial))
         point_rows.extend(point_summary_rows(trial))
+        trial_all_rows = all_point_rows(trial)
+        all_rows.extend(trial_all_rows)
+        pose_rows.extend(
+            pose3d_rows_from_all_points(trial_all_rows, condition_id=args.pose3d_condition)
+        )
     write_csv(args.metrics_out, metric_rows)
     write_csv(args.points_out, point_rows)
+    write_csv(args.all_points_out, all_rows)
+    write_csv(args.pose3d_out, pose_rows)
     print(args.metrics_out)
     print(args.points_out)
+    print(args.all_points_out)
+    print(args.pose3d_out)
 
 
 if __name__ == "__main__":

@@ -430,10 +430,7 @@ $PY scripts/import_vicon_xlsx.py \
 Vicon 2026 C3D exports for the current Chinese benchmark HTML report:
 
 ```bash
-.venv312/bin/python scripts/build_vicon_2026_metrics.py \
-  --input-dir ../vicon_2026 \
-  --metrics-out reports/vicon_2026_metrics.csv \
-  --points-out reports/vicon_2026_point_summary.csv
+.venv312/bin/python scripts/run_vicon_c3d_pipeline.py --input-dir ../vicon_2026
 ```
 
 Inputs:
@@ -450,8 +447,15 @@ Notes:
 - Ignore `../vicon_2026/*/._*.c3d`; those are macOS resource-fork files.
 - The script has a small built-in C3D parser for `POINT:LABELS`, frame rate,
   point scale/data start, and float point frames. It does not require `ezc3d`.
-- It outputs trial-level optical reference metrics and a point-summary table
-  used by the reconstruction renderer to build body/bat 3D PNG screenshots.
+- It outputs trial-level optical reference metrics, an all-frame point CSV,
+  a project-style 3D pose CSV, and a key-pose point-summary table used by the
+  reconstruction renderer to build body/bat 3D PNG screenshots, GIFs, and OBJ
+  key-pose model files.
+- `reports/vicon_2026_points_all.csv` contains every reconstruction point for
+  every frame of every trial, not only the key-action window.
+- `reports/vicon_2026_pose3d.csv` mirrors the project 3D CSV contract
+  (`clip_id`, `frame_index`, `joint_name`, `x_3d`, `y_3d`, `z_3d`, ...), with
+  Vicon marker names used as joint names and millimeter coordinates preserved.
 - The point-summary table is not a global point average. The script first
   extracts a key action position, then averages a short local window around
   that frame: pitching uses the dominant hand-speed peak; batting uses the
@@ -460,17 +464,28 @@ Notes:
 - `sample_name` is the direct folder name under `../vicon_2026/`; do not invent
   display names for Vicon samples.
 - Run `scripts/render_vicon_reconstruction_images.py` before building the HTML.
-  It generates key-frame PNGs and full-trial animated GIFs. The report embeds
-  the GIF files when available instead of drawing C3D reconstruction figures
-  inline with SVG.
+  The one-command pipeline runs it automatically. It generates key-frame PNGs,
+  key-action-window animated GIF/MP4/AVI files, and OBJ model files under
+  `reports/assets/vicon_reconstruction_models/`. The report embeds the GIF
+  files when available instead of drawing C3D reconstruction figures inline
+  with SVG. MP4 is retained for compatibility; MJPG AVI is the color-accurate
+  video export when white backgrounds must match the PNG.
 - Pitching C3D files include full-body AI/model points; batting C3D files
   include body markers plus `Bat:Bat1` through `Bat:Bat5`.
+- Current 3D reconstruction style is fixed for professional report visuals:
+  white background, light gray grid, red body connections, blue body markers,
+  green bat, and gray dashed bat-head trajectory. Marker names are not drawn
+  on body or bat points, and the compact legend only lists the bat and bat-head
+  trajectory.
+- Animation coordinate axes are fixed once per key-action window. Do not
+  autoscale axes per frame. PNG and video exports share figure size/DPI,
+  camera view, and coordinate-limit logic; Y-axis centering should keep foot
+  markers near the visual Y center without changing Z centering.
 
 Current benchmark HTML report:
 
 ```bash
-.venv312/bin/python scripts/build_vicon_2026_metrics.py
-MPLCONFIGDIR=/private/tmp/baseball_mpl_cache .venv312/bin/python scripts/render_vicon_reconstruction_images.py
+.venv312/bin/python scripts/run_vicon_c3d_pipeline.py
 python3 scripts/build_benchmark_report_html.py
 ```
 
@@ -482,8 +497,14 @@ output/data/benchmark_pitch_vertical_09_motion_metrics_full.csv
 output/data/benchmark_pitch_vertical_09_vs_pitch_horizontal_coach_metrics.csv
 reports/vicon_2026_metrics.csv
 reports/vicon_2026_point_summary.csv
+reports/vicon_2026_points_all.csv
+reports/vicon_2026_pose3d.csv
+reports/vicon_2026_key_pose_models.csv
 reports/assets/vicon_reconstruction/*.png
 reports/assets/vicon_reconstruction/*.gif
+reports/assets/vicon_reconstruction/*.mp4
+reports/assets/vicon_reconstruction/*.avi
+reports/assets/vicon_reconstruction_models/*.obj
 data_full/benchmark_rtmpose_test/processed/poses3d/*/image_center_motion_grabcut_pose_complete_smooth_3d_smooth.csv
 data_full/coach_pose3d/gvhmr/pitch_horizontal_coach.csv
 outputs/manual-20260611-slymask/presentations/slymask-benchmark-deck/assets/*.png
