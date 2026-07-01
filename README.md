@@ -175,6 +175,9 @@ global trial-wide point averages for reconstruction figures: pitching uses the
 hand-speed peak frame, and batting uses the bat-speed peak frame, with a short
 local window around that event. Videos use fixed coordinate limits so the grid
 and axes do not scale per frame; only the athlete, bat, and trajectory move.
+Batting videos use `0.6s` before / `0.4s` after the bat-speed peak; pitching
+videos use `1.4s` before / `0.4s` after the hand-speed peak so the front-leg
+lift before stride down is included.
 Vicon sample names are taken directly from the `../vicon_2026/{sample}/`
 folder name. MP4 is retained for compatibility; MJPG AVI is the
 color-accurate video artifact when the white background must match the PNG.

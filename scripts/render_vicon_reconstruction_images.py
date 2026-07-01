@@ -29,6 +29,9 @@ DEFAULT_MODEL_MANIFEST = ROOT / "reports" / "vicon_2026_key_pose_models.csv"
 DEFAULT_C3D_DIR = ROOT.parent / "vicon_2026"
 RENDER_FIGSIZE = (8.0, 5.2)
 RENDER_DPI = 180
+DEFAULT_GIF_BEFORE_SEC = 0.6
+DEFAULT_PITCH_GIF_BEFORE_SEC = 1.4
+DEFAULT_GIF_AFTER_SEC = 0.4
 
 PART_COLORS = {
     "头颈": "#d71920",
@@ -767,8 +770,9 @@ def render_trial_from_c3d(
     trial: C3DTrial,
     rows: list[dict[str, str]],
     out_dir: Path,
-    before_sec: float = 0.6,
-    after_sec: float = 0.4,
+    before_sec: float = DEFAULT_GIF_BEFORE_SEC,
+    after_sec: float = DEFAULT_GIF_AFTER_SEC,
+    pitch_before_sec: float = DEFAULT_PITCH_GIF_BEFORE_SEC,
     smooth_radius: int = 2,
 ) -> Path | None:
     if not rows:
@@ -776,6 +780,7 @@ def render_trial_from_c3d(
     first = rows[0]
     frame_count = trial.points.shape[0]
     key_idx, event = key_frame_from_rows(rows, frame_count)
+    before_sec = action_before_seconds(trial, before_sec, pitch_before_sec)
     before = max(1, int(round(before_sec * trial.rate_hz)))
     after = max(1, int(round(after_sec * trial.rate_hz)))
     start = max(0, key_idx - before)
@@ -881,15 +886,23 @@ def key_frame_from_rows(rows: list[dict[str, str]], frame_count: int) -> tuple[i
     return idx, first.get("key_event", "关键动作")
 
 
+def action_before_seconds(trial: C3DTrial, before_sec: float, pitch_before_sec: float) -> float:
+    if infer_action(trial.path) == "pitching":
+        return max(before_sec, pitch_before_sec)
+    return before_sec
+
+
 def key_action_frame_indices(
     trial: C3DTrial,
     rows: list[dict[str, str]],
     before_sec: float,
     after_sec: float,
     max_frames: int,
+    pitch_before_sec: float = DEFAULT_PITCH_GIF_BEFORE_SEC,
 ) -> tuple[np.ndarray, str]:
     frame_count = trial.points.shape[0]
     key_idx, event = key_frame_from_rows(rows, frame_count)
+    before_sec = action_before_seconds(trial, before_sec, pitch_before_sec)
     before = max(1, int(round(before_sec * trial.rate_hz)))
     after = max(1, int(round(after_sec * trial.rate_hz)))
     start = max(0, key_idx - before)
@@ -908,13 +921,21 @@ def render_trial_gif(
     max_frames: int = 72,
     frame_duration_ms: int = 85,
     smooth_radius: int = 2,
-    before_sec: float = 0.6,
-    after_sec: float = 0.4,
+    before_sec: float = DEFAULT_GIF_BEFORE_SEC,
+    after_sec: float = DEFAULT_GIF_AFTER_SEC,
+    pitch_before_sec: float = DEFAULT_PITCH_GIF_BEFORE_SEC,
 ) -> list[Path]:
     frame_count = trial.points.shape[0]
     if frame_count == 0:
         return []
-    frame_indices, event = key_action_frame_indices(trial, rows, before_sec, after_sec, max_frames)
+    frame_indices, event = key_action_frame_indices(
+        trial,
+        rows,
+        before_sec,
+        after_sec,
+        max_frames,
+        pitch_before_sec=pitch_before_sec,
+    )
     frames: list[Image.Image] = []
     video_frames: list[np.ndarray] = []
     font = zh_font()
@@ -1042,8 +1063,9 @@ def main() -> None:
     parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL_DIR)
     parser.add_argument("--model-manifest", type=Path, default=DEFAULT_MODEL_MANIFEST)
     parser.add_argument("--max-gif-frames", type=int, default=72)
-    parser.add_argument("--gif-before-sec", type=float, default=0.6)
-    parser.add_argument("--gif-after-sec", type=float, default=0.4)
+    parser.add_argument("--gif-before-sec", type=float, default=DEFAULT_GIF_BEFORE_SEC)
+    parser.add_argument("--pitch-gif-before-sec", type=float, default=DEFAULT_PITCH_GIF_BEFORE_SEC)
+    parser.add_argument("--gif-after-sec", type=float, default=DEFAULT_GIF_AFTER_SEC)
     args = parser.parse_args()
 
     by_trial: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -1086,6 +1108,7 @@ def main() -> None:
             args.out_dir,
             before_sec=args.gif_before_sec,
             after_sec=args.gif_after_sec,
+            pitch_before_sec=args.pitch_gif_before_sec,
         )
         if png_out is not None:
             outputs.append(png_out)
@@ -1096,6 +1119,7 @@ def main() -> None:
             max_frames=args.max_gif_frames,
             before_sec=args.gif_before_sec,
             after_sec=args.gif_after_sec,
+            pitch_before_sec=args.pitch_gif_before_sec,
         )
         outputs.extend(animation_outputs)
 

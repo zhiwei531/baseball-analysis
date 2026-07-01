@@ -30,6 +30,7 @@ def main() -> None:
     parser.add_argument("--assets-dir", type=Path, default=DEFAULT_ASSETS)
     parser.add_argument("--max-gif-frames", type=int, default=72)
     parser.add_argument("--gif-before-sec", type=float, default=0.6)
+    parser.add_argument("--pitch-gif-before-sec", type=float, default=1.4)
     parser.add_argument("--gif-after-sec", type=float, default=0.4)
     parser.add_argument("--skip-render", action="store_true")
     args = parser.parse_args()
@@ -82,6 +83,8 @@ def main() -> None:
                 str(args.max_gif_frames),
                 "--gif-before-sec",
                 str(args.gif_before_sec),
+                "--pitch-gif-before-sec",
+                str(args.pitch_gif_before_sec),
                 "--gif-after-sec",
                 str(args.gif_after_sec),
             ],

@@ -481,6 +481,9 @@ Notes:
   autoscale axes per frame. PNG and video exports share figure size/DPI,
   camera view, and coordinate-limit logic; Y-axis centering should keep foot
   markers near the visual Y center without changing Z centering.
+- Window defaults are action-specific: batting uses `0.6s` before / `0.4s`
+  after the bat-speed peak; pitching uses `1.4s` before / `0.4s` after the
+  hand-speed peak to include the front-leg lift before the stride down phase.
 
 Current benchmark HTML report:
 

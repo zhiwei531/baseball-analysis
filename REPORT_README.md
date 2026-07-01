@@ -220,6 +220,7 @@ reports/assets/vicon_reconstruction_models/{trial_id}_key_pose.obj
 渲染规范：
 
 - PNG 和视频使用同一画布、DPI、相机角度和固定坐标范围；视频每帧不得 autoscale。
+- 打击窗口默认关键帧前 `0.6 s`、后 `0.4 s`；投球窗口默认关键帧前 `1.4 s`、后 `0.4 s`，用于包含投球前的前腿抬起阶段。
 - 视觉风格为白底浅灰网格、红色人体连接、蓝色 marker、绿色球棒、灰色虚线棒头轨迹。
 - 人体和球棒 marker 点上都不标点名；图例只保留球棒和棒头轨迹。
 - Y 轴显示中心按脚部 marker 居中；不要为了脚部视觉位置修改 Z 轴范围。

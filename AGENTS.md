@@ -105,6 +105,9 @@ Rendering conventions from the latest review:
 - Key-frame PNGs and videos must use the same figure size, DPI, view, and fixed
   coordinate limits. Videos must not autoscale per frame; only the athlete,
   bat, and trajectory should move.
+- Batting key-action videos use the default `0.6s` before / `0.4s` after
+  window. Pitching videos use a longer `1.4s` before / `0.4s` after window so
+  the pre-pitch front-leg lift is included before the hand-speed peak.
 - Keep the visual style calm and report-oriented: white background, light gray
   grid, red body connections, blue body markers, green bat markers/structure,
   and gray dashed bat-head trajectory.
