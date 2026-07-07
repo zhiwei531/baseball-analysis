@@ -2,7 +2,7 @@
 
 Input: `../Vicon_Wave_250506(1)` Vicon trajectory CSV files.
 
-Assumptions: coordinates are in millimeters; sample rate comes from row 2 (`100 Hz`); `Z` is vertical; the bat axis is `bat4 -> bat1`. Bat angle is `atan2(delta_Z, horizontal_distance)` in degrees.
+Assumptions: coordinates are in millimeters; sample rate comes from row 2 (`100 Hz`); `Z` is vertical; the bat axis is `bat4 -> bat1`. Bat angle is `atan2(delta_Z, horizontal_distance)` in degrees. Pelvis yaw uses a stable left-right pelvis axis, preferring `LPSI/RPSI` and falling back to `LASI/RASI`; this avoids false yaw jumps when `RASI` is missing for part of a swing and later reappears.
 
 Swing event is selected as the frame where the bat-axis angle is closest to `-27 deg`, matching the provided reference. Swing duration is the contiguous high-speed window around that event where `bat4` speed remains above `40%` of its trial peak. This threshold gives the Coach reference trial a `0.16 s` window.
 
@@ -29,8 +29,8 @@ The SlyMask categorical labels (`Good`, `Attention`, `Deviate`) and reliability 
 |---|---|---|---:|---|---|---|---|
 | 0506Coach_wave | Swing Analysis | Estimated Bat Speed | 131.717 | km/h | direct | `bat1/bat4` 3D coordinates, frame timestamps | 3D speed of bat1 at selected swing event; bat4 is also reported in the summary because barrel marker identity is ambiguous. |
 | 0506Coach_wave | Swing Analysis | Swing Speed | 131.717 | km/h | raw_only | `bat1/bat4` 3D coordinates, frame timestamps | Raw bat endpoint speed is available; SlyMask-style percentile needs a reference population. |
-| 0506Coach_wave | Swing Analysis | Hip Rotation | 34.523 | deg | direct | `LASI/RASI/LPSI/RPSI` pelvis markers | Pelvis yaw range over the selected high-speed swing window. |
-| 0506Coach_wave | Swing Analysis | Hip-Shoulder Sep | 36.178 | deg | direct | `LASI/RASI/LPSI/RPSI`, `LSHO/RSHO` | Absolute yaw difference between pelvis axis and shoulder axis at the event frame. |
+| 0506Coach_wave | Swing Analysis | Hip Rotation | 36.158 | deg | direct | `LASI/RASI/LPSI/RPSI` pelvis markers | Pelvis yaw range over the selected high-speed swing window. |
+| 0506Coach_wave | Swing Analysis | Hip-Shoulder Sep | 37.327 | deg | direct | `LASI/RASI/LPSI/RPSI`, `LSHO/RSHO` | Absolute yaw difference between pelvis axis and shoulder axis at the event frame. |
 | 0506Coach_wave | Swing Analysis | Weight Transfer | 1.475 | % | proxy | `LASI/RASI/LPSI/RPSI`, `LANK/RANK` | Pelvis midpoint translation from phase start to event, normalized by ankle stance width; not a full COM model. |
 | 0506Coach_wave | Swing Analysis | Lead Knee Angle | 136.435 | deg | direct | `LASI/LKNE/LANK` | Left lead-knee angle from LASI-LKNE-LANK. |
 | 0506Coach_wave | Swing Analysis | Trunk Tilt | 24.262 | deg | direct | `LSHO/RSHO`, `LASI/RASI/LPSI/RPSI`, vertical `Z` | Torso midpoint vector relative to vertical Z axis. |
@@ -40,9 +40,9 @@ The SlyMask categorical labels (`Good`, `Attention`, `Deviate`) and reliability 
 | 0506Coach_wave | Motion Metrics | Elbow Bend | 138.147 | deg | direct_batting_context | `RSHO/RELB/RWRA` | Right elbow angle from RSHO-RELB-RWRA; SlyMask's pitching acceleration interpretation is not directly applicable to this batting dataset. |
 | 0506Coach_wave | Motion Metrics | Arm Abduction | 105.572 | deg | direct_batting_context | `RSHO/RELB`, shoulder midpoint, pelvis midpoint | Right upper-arm angle relative to torso axis; pitching arm-slot interpretation is not directly applicable. |
 | 0506Coach_wave | Motion Metrics | Trunk Lean | 24.262 | deg | direct_batting_context | `LSHO/RSHO`, pelvis markers, vertical `Z` | Same torso-vs-vertical geometry as Trunk Tilt, measured at swing event instead of pitching release. |
-| 0506Coach_wave | Motion Metrics | Stride Angle | 57.488 | deg | proxy | `LANK/RANK`, pelvis axis markers | Planar angle between ankle stance line and pelvis axis at event; pitching front-foot-landing definition is unavailable. |
+| 0506Coach_wave | Motion Metrics | Stride Angle | 56.339 | deg | proxy | `LANK/RANK`, pelvis axis markers | Planar angle between ankle stance line and pelvis axis at event; pitching front-foot-landing definition is unavailable. |
 | 0506Coach_wave | Motion Metrics | Lead Knee | 136.435 | deg | direct_batting_context | `LASI/LKNE/LANK` | Left lead-knee angle from LASI-LKNE-LANK; measured at swing event. |
-| 0506Coach_wave | Motion Metrics | Hip-Shoulder Sep | 36.178 | deg | direct_batting_context | `LASI/RASI/LPSI/RPSI`, `LSHO/RSHO` | Same pelvis-shoulder yaw separation as batting metric, measured at swing event. |
+| 0506Coach_wave | Motion Metrics | Hip-Shoulder Sep | 37.327 | deg | direct_batting_context | `LASI/RASI/LPSI/RPSI`, `LSHO/RSHO` | Same pelvis-shoulder yaw separation as batting metric, measured at swing event. |
 | 0506Coach_wave | Motion Metrics | Arm Speed | 30.425 | km/h | raw_only | `LWRA/LWRB/RWRA/RWRB` 3D coordinates, frame timestamps | Fastest wrist marker at event is LWRA; percentile needs a reference population. |
 | 0506Coach_wave | Motion Metrics | Stride Length | 0.620 | body heights | proxy | `LANK/RANK`, head and foot height proxy markers | Ankle stance distance divided by head-to-foot height proxy; pitching stride event definition is unavailable. |
 | 0506Coach_wave | Motion Metrics | Weight Transfer | 1.475 | % | proxy | `LASI/RASI/LPSI/RPSI`, `LANK/RANK` | Same pelvis-shift proxy as batting Weight Transfer; not a validated COM transfer metric. |
@@ -52,29 +52,29 @@ The SlyMask categorical labels (`Good`, `Attention`, `Deviate`) and reliability 
 | 0506Coach_wave | Motion Metrics | Fingertip Speed | 39.432 | km/h | raw_only | `LFIN/RFIN` 3D coordinates, frame timestamps | Fastest hand/finger marker at event is LFIN; percentile needs a reference population. |
 | Julian_wave02 | Swing Analysis | Estimated Bat Speed | 74.019 | km/h | direct | `bat1/bat4` 3D coordinates, frame timestamps | 3D speed of bat1 at selected swing event; bat4 is also reported in the summary because barrel marker identity is ambiguous. |
 | Julian_wave02 | Swing Analysis | Swing Speed | 74.019 | km/h | raw_only | `bat1/bat4` 3D coordinates, frame timestamps | Raw bat endpoint speed is available; SlyMask-style percentile needs a reference population. |
-| Julian_wave02 | Swing Analysis | Hip Rotation | 99.432 | deg | direct | `LASI/RASI/LPSI/RPSI` pelvis markers | Pelvis yaw range over the selected high-speed swing window. |
-| Julian_wave02 | Swing Analysis | Hip-Shoulder Sep | 9.657 | deg | direct | `LASI/RASI/LPSI/RPSI`, `LSHO/RSHO` | Absolute yaw difference between pelvis axis and shoulder axis at the event frame. |
-| Julian_wave02 | Swing Analysis | Weight Transfer | 3.851 | % | proxy | `LASI/RASI/LPSI/RPSI`, `LANK/RANK` | Pelvis midpoint translation from phase start to event, normalized by ankle stance width; not a full COM model. |
+| Julian_wave02 | Swing Analysis | Hip Rotation | 65.436 | deg | direct | `LASI/RASI/LPSI/RPSI` pelvis markers | Pelvis yaw range over the selected high-speed swing window. |
+| Julian_wave02 | Swing Analysis | Hip-Shoulder Sep | 23.996 | deg | direct | `LASI/RASI/LPSI/RPSI`, `LSHO/RSHO` | Absolute yaw difference between pelvis axis and shoulder axis at the event frame. |
+| Julian_wave02 | Swing Analysis | Weight Transfer | 7.152 | % | proxy | `LASI/RASI/LPSI/RPSI`, `LANK/RANK` | Pelvis midpoint translation from phase start to event, normalized by ankle stance width; not a full COM model. |
 | Julian_wave02 | Swing Analysis | Lead Knee Angle | 164.733 | deg | direct | `LASI/LKNE/LANK` | Left lead-knee angle from LASI-LKNE-LANK. |
 | Julian_wave02 | Swing Analysis | Trunk Tilt | 41.206 | deg | direct | `LSHO/RSHO`, `LASI/RASI/LPSI/RPSI`, vertical `Z` | Torso midpoint vector relative to vertical Z axis. |
 | Julian_wave02 | Swing Analysis | Contact Time |  | ms | unavailable | Missing ball marker or bat-ball contact label | No ball-contact label, bat-ball impact event, or ball marker exists in this CSV. |
 | Julian_wave02 | Swing Analysis | Attack Angle | -26.255 | deg | proxy | `bat1/bat4` 3D coordinates | Bat axis angle relative to the horizontal plane at selected event; true attack angle needs a contact-frame definition. |
 | Julian_wave02 | Swing Analysis | Head Stability | 48.623 | % | proxy | `LFHD/RFHD/LBHD/RBHD`, pelvis markers | Head midpoint drift relative to pelvis midpoint over the selected swing window. |
 | Julian_wave02 | Motion Metrics | Elbow Bend | 135.717 | deg | direct_batting_context | `RSHO/RELB/RWRA` | Right elbow angle from RSHO-RELB-RWRA; SlyMask's pitching acceleration interpretation is not directly applicable to this batting dataset. |
-| Julian_wave02 | Motion Metrics | Arm Abduction | 122.050 | deg | direct_batting_context | `RSHO/RELB`, shoulder midpoint, pelvis midpoint | Right upper-arm angle relative to torso axis; pitching arm-slot interpretation is not directly applicable. |
+| Julian_wave02 | Motion Metrics | Arm Abduction | 114.957 | deg | direct_batting_context | `RSHO/RELB`, shoulder midpoint, pelvis midpoint | Right upper-arm angle relative to torso axis; pitching arm-slot interpretation is not directly applicable. |
 | Julian_wave02 | Motion Metrics | Trunk Lean | 41.206 | deg | direct_batting_context | `LSHO/RSHO`, pelvis markers, vertical `Z` | Same torso-vs-vertical geometry as Trunk Tilt, measured at swing event instead of pitching release. |
-| Julian_wave02 | Motion Metrics | Stride Angle | 14.478 | deg | proxy | `LANK/RANK`, pelvis axis markers | Planar angle between ankle stance line and pelvis axis at event; pitching front-foot-landing definition is unavailable. |
+| Julian_wave02 | Motion Metrics | Stride Angle | 48.132 | deg | proxy | `LANK/RANK`, pelvis axis markers | Planar angle between ankle stance line and pelvis axis at event; pitching front-foot-landing definition is unavailable. |
 | Julian_wave02 | Motion Metrics | Lead Knee | 164.733 | deg | direct_batting_context | `LASI/LKNE/LANK` | Left lead-knee angle from LASI-LKNE-LANK; measured at swing event. |
-| Julian_wave02 | Motion Metrics | Hip-Shoulder Sep | 9.657 | deg | direct_batting_context | `LASI/RASI/LPSI/RPSI`, `LSHO/RSHO` | Same pelvis-shoulder yaw separation as batting metric, measured at swing event. |
+| Julian_wave02 | Motion Metrics | Hip-Shoulder Sep | 23.996 | deg | direct_batting_context | `LASI/RASI/LPSI/RPSI`, `LSHO/RSHO` | Same pelvis-shoulder yaw separation as batting metric, measured at swing event. |
 | Julian_wave02 | Motion Metrics | Arm Speed | 15.011 | km/h | raw_only | `LWRA/LWRB/RWRA/RWRB` 3D coordinates, frame timestamps | Fastest wrist marker at event is RWRA; percentile needs a reference population. |
 | Julian_wave02 | Motion Metrics | Stride Length | 0.611 | body heights | proxy | `LANK/RANK`, head and foot height proxy markers | Ankle stance distance divided by head-to-foot height proxy; pitching stride event definition is unavailable. |
-| Julian_wave02 | Motion Metrics | Weight Transfer | 3.851 | % | proxy | `LASI/RASI/LPSI/RPSI`, `LANK/RANK` | Same pelvis-shift proxy as batting Weight Transfer; not a validated COM transfer metric. |
+| Julian_wave02 | Motion Metrics | Weight Transfer | 7.152 | % | proxy | `LASI/RASI/LPSI/RPSI`, `LANK/RANK` | Same pelvis-shift proxy as batting Weight Transfer; not a validated COM transfer metric. |
 | Julian_wave02 | Motion Metrics | Head Stability | 48.623 | % | proxy | `LFHD/RFHD/LBHD/RBHD`, pelvis markers | Head drift relative to pelvis over the swing window; SlyMask stride-line definition is unavailable. |
 | Julian_wave02 | Motion Metrics | Foot Direction | 78.326 | deg | proxy | `LTOE/LHEE`, `LANK/RANK` | Left heel-to-toe direction relative to stance line at event; home-plate target direction is unavailable. |
 | Julian_wave02 | Motion Metrics | Wrist Snap | 47.194 | deg | proxy | `LELB/RELB`, wrist pair, `LFIN/RFIN` | Change in elbow-wrist-finger angle from phase start to event using the fastest hand side. |
 | Julian_wave02 | Motion Metrics | Fingertip Speed | 18.954 | km/h | raw_only | `LFIN/RFIN` 3D coordinates, frame timestamps | Fastest hand/finger marker at event is RFIN; percentile needs a reference population. |
 
-General formulas used in the table: joint angles use the vector dot product at the middle marker, `acos((BA dot BC) / (||BA|| ||BC||))`; marker speeds use 3D position differencing over adjacent frames; pelvis/shoulder rotations use planar yaw from left-right marker axes; normalization metrics use available body marker distances because the CSV has no explicit whole-body COM model.
+General formulas used in the table: joint angles use the vector dot product at the middle marker, `acos((BA dot BC) / (||BA|| ||BC||))`; marker speeds use 3D position differencing over adjacent frames; pelvis/shoulder rotations use planar yaw from stable left-right marker axes; normalization metrics use available body marker distances because the CSV has no explicit whole-body COM model.
 
 ## Coverage Summary
 
@@ -118,5 +118,5 @@ Reference comparison: `0506Coach_wave` matches the requested bat angle (`-27.1 d
 
 | trial | hip rotation (deg) | hip-shoulder sep (deg) | lead knee (deg) | trunk tilt (deg) | head stability (%) |
 |---|---:|---:|---:|---:|---:|
-| 0506Coach_wave | 34.523 | 36.178 | 136.435 | 24.262 | 49.174 |
-| Julian_wave02 | 99.432 | 9.657 | 164.733 | 41.206 | 48.623 |
+| 0506Coach_wave | 36.158 | 37.327 | 136.435 | 24.262 | 49.174 |
+| Julian_wave02 | 65.436 | 23.996 | 164.733 | 41.206 | 48.623 |

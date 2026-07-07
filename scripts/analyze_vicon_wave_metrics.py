@@ -306,8 +306,7 @@ def bat_axis_angle(bat1: np.ndarray, bat4: np.ndarray) -> float:
 
 
 def hip_yaw(frame: FrameData, prefix: str) -> float | None:
-    left = marker_mean(frame.markers, prefix, ("LASI", "LPSI"))
-    right = marker_mean(frame.markers, prefix, ("RASI", "RPSI"))
+    left, right = pelvis_axis_points(frame.markers, prefix)
     if left is None or right is None:
         return None
     vector = right - left
@@ -392,8 +391,7 @@ def weight_transfer_proxy(
 def stride_angle(markers: dict[str, np.ndarray], prefix: str) -> float | None:
     left_ankle = markers.get(f"{prefix}:LANK")
     right_ankle = markers.get(f"{prefix}:RANK")
-    left_hip = marker_mean(markers, prefix, ("LASI", "LPSI"))
-    right_hip = marker_mean(markers, prefix, ("RASI", "RPSI"))
+    left_hip, right_hip = pelvis_axis_points(markers, prefix)
     if left_ankle is None or right_ankle is None or left_hip is None or right_hip is None:
         return None
     return planar_axis_angle(left_ankle - right_ankle, left_hip - right_hip)
@@ -458,7 +456,31 @@ def wrist_finger_angle(markers: dict[str, np.ndarray], prefix: str, side: str) -
 
 
 def pelvis_midpoint(markers: dict[str, np.ndarray], prefix: str) -> np.ndarray | None:
+    all_markers = [markers.get(f"{prefix}:{name}") for name in ("LASI", "RASI", "LPSI", "RPSI")]
+    if all(point is not None for point in all_markers):
+        return np.mean(all_markers, axis=0)
+    left, right = pelvis_axis_points(markers, prefix)
+    if left is not None and right is not None:
+        return (left + right) / 2.0
     return marker_mean(markers, prefix, ("LASI", "RASI", "LPSI", "RPSI"))
+
+
+def pelvis_axis_points(markers: dict[str, np.ndarray], prefix: str) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """Return a stable left/right pelvis axis.
+
+    Some Vicon trials have RASI missing for part of the swing window. Averaging
+    LASI/LPSI against RASI/RPSI changes the axis definition mid-window when RASI
+    reappears and creates a false hip-yaw jump. Prefer the PSIS pair because it
+    is present across both current trials, then fall back to ASIS.
+    """
+    for left_name, right_name in (("LPSI", "RPSI"), ("LASI", "RASI")):
+        left = markers.get(f"{prefix}:{left_name}")
+        right = markers.get(f"{prefix}:{right_name}")
+        if left is not None and right is not None:
+            return left, right
+    left = marker_mean(markers, prefix, ("LASI", "LPSI"))
+    right = marker_mean(markers, prefix, ("RASI", "RPSI"))
+    return left, right
 
 
 def body_height_proxy(markers: dict[str, np.ndarray], prefix: str) -> float | None:
@@ -774,7 +796,7 @@ def write_report(path: Path, trials: list[TrialMetrics]) -> None:
         "",
         "Input: `../Vicon_Wave_250506(1)` Vicon trajectory CSV files.",
         "",
-        "Assumptions: coordinates are in millimeters; sample rate comes from row 2 (`100 Hz`); `Z` is vertical; the bat axis is `bat4 -> bat1`. Bat angle is `atan2(delta_Z, horizontal_distance)` in degrees.",
+        "Assumptions: coordinates are in millimeters; sample rate comes from row 2 (`100 Hz`); `Z` is vertical; the bat axis is `bat4 -> bat1`. Bat angle is `atan2(delta_Z, horizontal_distance)` in degrees. Pelvis yaw uses a stable left-right pelvis axis, preferring `LPSI/RPSI` and falling back to `LASI/RASI`; this avoids false yaw jumps when `RASI` is missing for part of a swing and later reappears.",
         "",
         "Swing event is selected as the frame where the bat-axis angle is closest to `-27 deg`, matching the provided reference. Swing duration is the contiguous high-speed window around that event where `bat4` speed remains above `40%` of its trial peak. This threshold gives the Coach reference trial a `0.16 s` window.",
         "",
@@ -808,7 +830,7 @@ def write_report(path: Path, trials: list[TrialMetrics]) -> None:
     lines.extend(
         [
             "",
-            "General formulas used in the table: joint angles use the vector dot product at the middle marker, `acos((BA dot BC) / (||BA|| ||BC||))`; marker speeds use 3D position differencing over adjacent frames; pelvis/shoulder rotations use planar yaw from left-right marker axes; normalization metrics use available body marker distances because the CSV has no explicit whole-body COM model.",
+            "General formulas used in the table: joint angles use the vector dot product at the middle marker, `acos((BA dot BC) / (||BA|| ||BC||))`; marker speeds use 3D position differencing over adjacent frames; pelvis/shoulder rotations use planar yaw from stable left-right marker axes; normalization metrics use available body marker distances because the CSV has no explicit whole-body COM model.",
             "",
             *coverage_summary(details),
             "",
