@@ -129,6 +129,103 @@ README.txt
 | `green` | pitching | `vicon_2026/green/006 Pitch 09.c3d` | 教练模块投球对照 |
 | `green` | batting | `vicon_2026/green/006 Bat 04.c3d` | 教练模块打击对照 |
 
+## Julian/Coach Batting Metrics Section
+
+`reports/vicon_2026_julian_coach/` 是当前 Julian 与 Coach 打击专项
+metrics 的独立工作区。它不生成完整报告，只生成 metrics section、事件 GIF、
+速度标注 GIF、2D 几何标注截图和 Excel 指标表。
+
+输入数据：
+
+```text
+reports/vicon_2026_julian_coach/vicon_2026_points_all.csv
+reports/vicon_2026_julian_coach/vicon_2026_point_summary.csv
+../vicon_2026/julian/007-julian Cal 04 Bat 05.c3d
+../vicon_2026/coach/008-coach Cal 03 Bat 02.c3d
+```
+
+构建顺序：
+
+```bash
+.venv312/bin/python scripts/build_batting_dashboard_metrics.py \
+  --points reports/vicon_2026_julian_coach/vicon_2026_points_all.csv \
+  --out reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --wide-out reports/vicon_2026_julian_coach/batting_dashboard_metrics_wide.csv \
+  --ready-valid-start-frame 770
+
+MPLCONFIGDIR=/private/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/private/tmp/baseball_xdg_cache \
+.venv312/bin/python scripts/build_julian_coach_event_gifs.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --out-dir reports/vicon_2026_julian_coach/assets/vicon_reconstruction_events
+
+MPLCONFIGDIR=/private/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/private/tmp/baseball_xdg_cache \
+.venv312/bin/python scripts/build_julian_coach_annotated_speed_gifs.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --points reports/vicon_2026_julian_coach/vicon_2026_point_summary.csv \
+  --out-dir reports/vicon_2026_julian_coach/assets/vicon_reconstruction_annotated
+
+.venv312/bin/python scripts/build_julian_coach_metrics_section.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --out reports/vicon_2026_julian_coach/julian_coach_metrics_section.html
+
+node scripts/build_batting_metrics_xlsx.mjs
+
+.venv312/bin/python ../srs_2d_video_report_package_20260702_194156/render_vicon_geometry_metrics_on_2d.py
+```
+
+主要产物：
+
+```text
+reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv
+reports/vicon_2026_julian_coach/batting_dashboard_metrics_wide.csv
+reports/vicon_2026_julian_coach/julian_coach_metrics_section.html
+reports/vicon_2026_julian_coach/assets/vicon_reconstruction_events/julian_ready.gif
+reports/vicon_2026_julian_coach/assets/vicon_reconstruction_events/julian_contact.gif
+reports/vicon_2026_julian_coach/assets/vicon_reconstruction_annotated/julian_speed_annotated.gif
+reports/vicon_2026_julian_coach/assets/vicon_reconstruction_annotated/coach_speed_annotated.gif
+reports/vicon_2026_julian_coach/assets/vicon_2d_geometry_annotations/ready_position_vicon_geometry_on_2d.png
+reports/vicon_2026_julian_coach/assets/vicon_2d_geometry_annotations/contact_position_vicon_geometry_on_2d.png
+../srs_2d_video_report_package_20260702_194156/outputs/julian_bat_2d_vicon_alignment/vicon_geometry_metric_annotations/vicon_geometry_metrics_on_2d_events.mp4
+outputs/batting_metrics_excel/007-julian Cal 04 Bat 05_batting_report_metrics.xlsx
+```
+
+其中 `vicon_2026_points_all.csv`、`vicon_2026_pose3d.csv`、zip 包和各类
+`output/` 导出目录属于本地生成物，不随 Git 提交；仓库保留汇总指标表、HTML
+section 和关键 PNG/GIF 可视化资产。需要完整重建时从 C3D 输入重新生成。
+
+当前 HTML section 以 Julian 为主、Coach 为对照。Ready Position 和
+Contact Position 的 2D 几何标注图放在各自 section title 正下方，不放在右侧
+media 卡片里；图宽接近左侧三个 metrics card 的总宽度。右侧只放 Julian 的事件
+GIF；Coach 不在这两块重复放 GIF。3D Reconstruction 速度标注使用 Julian/Coach
+两张整段动作窗口 GIF，左侧卡片烘进 GIF，且只显示逐帧瞬时值，不显示
+Ready/Contact event 固定汇总值。当前页面展示移除了“击球区稳定性”这一项；
+CSV 计算脚本仍保留该项原始计算，方便后续恢复或研究使用。
+
+2D 几何标注图只用于“把 Vicon 3D 计算结果放回视频画面中解释”。数值必须来自
+Vicon metrics CSV/Excel，不允许用 2D 关键点重新计算后展示。当前对齐采用：
+`video_frame = event_frame + (vicon_time - event_time) * 240`，其中 Vicon 球棒速度
+峰值 frame 854 对齐到视频 frame 184；验证点为 844 -> 160、854 -> 184、
+870 -> 222。Ready 的 Vicon event center 是 frame 772，但严格映射不在当前 2D
+overlay 可视窗口内，所以使用视频开头骨架较稳定的一帧做视觉底图，仍标注 Vicon
+frame 772 的几何值。Contact 使用 Vicon frame 853 / video frame 182，因为该帧
+2D 骨架比 nominal center 更贴合人体。
+
+最终视觉规则：
+
+- Ready 只标注后侧加载相关几何：后髋角、后膝角、髋肩分离；右打假设下后腿是右腿。
+- Contact 只标注接触瞬间几何：骨盆旋转、躯干旋转、前膝角；右打假设下前腿是左腿。
+- 关节角不再用角度 arc 表示，改用细实线肢段、夹角处细虚线延长线、从夹角中心引出的细 leader line 和小号角度值。
+- 旋转角使用标准单弧箭头；箭头要横向更扁、整体不覆盖太多人体、头部贴近身体轮廓、尾部裁掉约 20%，保留从头到尾约 80% 的弧线。
+- 页面文字尽量少；除 metric 名称和值以外，几何关系优先由线、虚线、箭头和颜色表达。
+
+Excel 导出仿照投球 `*_pitch_report_metrics.xlsx` 的三 sheet 结构：
+
+- `报告指标`：7 列指标表，列为事件、前端大指标、后台字段、数值、单位、Vicon 数据来源、说明。
+- `事件定位`：Ready、Contact、真实挥棒段和 3D Reconstruction 动作窗口的帧号、时间和定位方法。
+- `说明`：基础信息、右打假设、无球 marker 限制和主要计算逻辑。
+
 ## 输入与输出
 
 HTML 报告当前直接读取：

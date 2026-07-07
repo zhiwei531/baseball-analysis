@@ -565,6 +565,7 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 |---|---|---|---|---|
 | `athlete-bat-overall-radar` | 打击六维评分图 | 这个球员打击动作整体强弱在哪里？ | 归一化 0-100：站姿稳定、跨步控制、髋肩分离、躯干旋转、挥棒平面、击球后平衡。 | 与投球雷达图风格一致，但维度必须是 batting 专属，不要复用投球维度。 |
 | `athlete-bat-photo-angles` | 打击关键截图角度标注 | 球员在准备、启动、击球、随挥时哪里需要改？ | 准备姿势、前脚落地、球棒进入击球区、击球点、随挥关键帧。 | 在照片上标注前膝、髋肩、躯干倾斜、球棒角度和头部稳定；尽量用少量大字。 |
+| `athlete-bat-vicon-2d-geometry-overlay` | 打击 Vicon 几何值 2D 视频标注 | Vicon 算出的几何角度在真实视频画面中对应哪里？ | Vicon C3D/Excel 几何值 + 已对齐 2D skeleton overlay 截图；2D 只作为视觉辅助，不作为数值来源。 | Ready/Contact 各一张图，放在对应 section title 下方，宽度接近左侧三张 metrics card；右侧 media 卡仍只放事件 GIF。关节角用细肢段线、夹角虚线延长线、细 leader line 和小号数值，不用角度 arc；骨盆/躯干旋转用横向压扁的标准单弧箭头，尾部裁掉约 20%，避免覆盖人体。 |
 | `athlete-bat-key-metrics` | 打击关键指标卡 | 打击动作最重要的指标是否达标？ | 跨步长度、前脚方向、髋肩分离、躯干旋转速度、球棒平面角、手部速度、头部稳定。 | 6-8 张卡片；重点解释“这会影响击球稳定性/挥棒速度/击球角度”。 |
 | `athlete-bat-swing-path` | 挥棒轨迹示意图 | 球棒是否稳定进入击球区？ | 球棒端点、手部轨迹或可用 proxy；若无球棒点则用手腕/手部 proxy。 | 用清晰轨迹线叠加击球区；必须标注 proxy 限制，不要把手腕轨迹说成真实球棒轨迹。 |
 | `athlete-bat-training-targets` | 打击训练目标卡 | 接下来练什么，怎么复测？ | 来自关键短板和复测指标。 | 3-5 条训练建议，包含 tee drill、分解挥棒、下肢稳定、节奏控制等可执行练习。 |
@@ -633,12 +634,14 @@ HTML 报告可以有折叠详情、视频播放、模型动态展示和导出按
 - 每张图必须标注方法：`3D计算`、`3D速度估算`、`2D视频估算`、`Vicon`、`雷达枪` 或 `手部 proxy`。
 - Pitching 与 batting 的阶段标签必须分开。投球使用抬腿、落脚、最大外旋、出手、随挥；打击使用准备、启动、前脚落地、进入击球区、击球点、随挥。
 - 如果某项指标只是 proxy，图上必须写“估算”或“参考趋势”，不要写成真实测量。
+- 当图像把 Vicon 值叠加到 2D 视频截图上时，必须明确区分“数值来源”和“视觉辅助”：角度值来自 Vicon C3D/Excel，2D 骨架线只是帮助读者定位身体部位。不要把 2D 关键点计算值展示成 Vicon 几何值。
 - 图例不得覆盖标题、曲线、坐标轴或数据点；移动端允许横向滚动，不允许把文字压缩到不可读。
 - 报告交付版不得出现大段英文标题、英文 caption 或英文状态；英文 metric name 只能出现在研究者原始字段追溯表中，且旁边必须有中文指标名。
 - 图表 caption/title 要短，不要把方法说明塞进图内；方法说明放在图下“怎么看”或 module note。
 
 **Current HTML Implementation Requirements**
 - 当前 HTML 报告由 `scripts/build_benchmark_report_html.py` 生成，Vicon 2026 中间表由 `scripts/build_vicon_2026_metrics.py` 从 `../vicon_2026/*/*.c3d` 生成，C3D 重建截图和动图由 `scripts/render_vicon_reconstruction_images.py` 生成。当前主体 raw data source 必须统一为 `../vicon_2026` 下的 Vicon C3D：`bryan` 是主分析人，`green` 只作为教练模块对照，子文件夹名就是被试名。报告必须优先读取当前 Vicon 派生表、原始 C3D 和预渲染 PNG/GIF 生成真实图表：`reports/vicon_2026_metrics.csv`、`reports/vicon_2026_point_summary.csv`、`reports/assets/vicon_reconstruction/*.png`、`reports/assets/vicon_reconstruction/*.gif`、`../vicon_2026/bryan/*.c3d` 和 `../vicon_2026/green/*.c3d`。临时 coach 参考可继续读取既有 coach 3D 数据和 coach 指标表，但只能作为投球参考线或评分参考，正文必须标注临时性；旧 benchmark 视频 CV/GVHMR 身体数据不得混入当前主体指标、曲线或 C3D 来源表。
+- Julian/Coach batting metrics section 是当前独立打击 dashboard 的设计样例：前端卡片只展示聚合后的前端指标和评分，后台 Vicon 几何/速度字段用于加权计算和 Excel 追溯。Ready/Contact 的 2D 几何标注图应直接放在 section title 下方，不放进右侧 GIF 卡；右侧保留 Julian 事件 GIF。Ready 标注后髋、后膝和髋肩分离，右打假设下后腿为右腿；Contact 标注骨盆旋转、躯干旋转和前膝，右打假设下前腿为左腿。角度标注必须贴合实际夹角和补角语义：如果报告值是 `180 - angle(...)` 的屈曲角，视觉上要保留夹角处虚线延长线，并用 leader line 指向该屈曲角数值，避免在明显大于 90 度的身体夹角上画一个 40-50 度的错误 arc。
 - 姿态纠正图不得再使用固定 SVG placeholder。当前实现口径：球员投球样本出手附近帧作为浅蓝虚线，教练三维序列出手侧手部速度峰值附近帧作为绿色参考，偏差最大的球员骨段用红色强调。
 - C3D 点重建图不得使用全局 trial points 或全局平均点。必须先提取关键动作位置，再从该关键帧附近小窗口重建点位：投球使用出手侧/主导手速度峰值，打击使用球棒速度峰值。重建资产必须先单独渲染为 PNG/GIF/MP4/AVI，再嵌入 report；不得在 HTML 中临时用内联 SVG 拼接 C3D 重建图。报告中 C3D 重建区块应展示关键动作窗口 GIF/视频，而不是完整 trial GIF 或只放单张关键帧图片；打击窗口默认关键帧前约 0.6 秒、后约 0.4 秒，投球窗口默认关键帧前约 1.4 秒、后约 0.4 秒以包含前腿抬起阶段，PNG 仅作为关键帧截图或动图缺失时的 fallback。动图/视频必须使用关键动作窗口内的固定坐标范围和固定相机视角，不能每帧 autoscale 导致背景网格缩放；点位可做短窗口可视化平滑以降低 marker 抖动，但不能改变用于指标计算的原始数据。报告中必须能追溯 `sample_name`、`key_event`、`key_frame_index` 和 `key_time_sec`，其中 `sample_name` 必须直接来自 `vicon_2026` 下的子文件夹名。Vicon 报告区块不得硬编码某一个样本名或只展示某一个 trial；必须按 `sample_name` 和动作类型动态遍历当前 CSV 中的所有 C3D trial。C3D 动图骨架只使用真实身体 marker 的人体连接关系，不画 Plug-in Gait/model 局部轴段或其他辅助 segments；可显示真实 marker 散点、`CentreOfMass` 和打击时的 `Bat1-Bat5`，但不得显示 `CentreOfMassFloor` 这类地面/辅助点导致画面误读。三维人体不得塞满画布，渲染时必须放大坐标边界并给骨架四周留出明显空白；Y 轴显示中心应让脚部 marker 位于视觉中心附近，不要为了脚部位置改 Z 轴范围。三维重建图使用专业报告风格：白底、浅灰网格、红色人体连接、蓝色 marker 点、绿色球棒、灰色虚线棒头轨迹；不要在人体或球棒 marker 点上标注点名，图例只保留球棒和棒头轨迹。头部 `LFHD/RFHD/LBHD/RBHD` 四点必须连接为闭合立体面，并全部连接到 `C7`；躯干 `C7/CLAV/STRN/T10/RBAK`、骨盆 `LASI/RASI/LPSI/RPSI`、左右脚踝/跟/趾和 `Bat1-Bat5` 必须分别连接为刚体结构。打击时 `Bat1-Bat5` 既按顺序连接，也要增加外轮廓/互相连接来勾勒球棒形状；灰色虚线轨迹表示棒头 `Bat1`。
 - 研究者模块不得在已有逐帧 3D 姿态 CSV 时保留“缺少逐帧数据”占位。至少要生成投球角度曲线、投球速度曲线、打击角度曲线、打击速度曲线和三维姿态数据质量图。

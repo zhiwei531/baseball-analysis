@@ -131,6 +131,77 @@ Entry points:
 npm run export:report
 ```
 
+Julian/Coach batting metrics standalone artifacts use a narrower Vicon C3D
+workflow centered on `reports/vicon_2026_julian_coach/`. It reuses the C3D
+all-points output, then computes event-based Ready/Contact batting metrics,
+renders Ready/Contact GIFs, renders frame-by-frame velocity annotated 3D GIFs,
+renders Vicon-valued geometry annotations on the aligned 2D skeleton video,
+builds a metrics-only HTML section, and can export a pitching-template-style
+Excel workbook:
+
+```bash
+.venv312/bin/python scripts/build_batting_dashboard_metrics.py \
+  --points reports/vicon_2026_julian_coach/vicon_2026_points_all.csv \
+  --out reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --wide-out reports/vicon_2026_julian_coach/batting_dashboard_metrics_wide.csv \
+  --ready-valid-start-frame 770
+
+MPLCONFIGDIR=/private/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/private/tmp/baseball_xdg_cache \
+.venv312/bin/python scripts/build_julian_coach_event_gifs.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv
+
+MPLCONFIGDIR=/private/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/private/tmp/baseball_xdg_cache \
+.venv312/bin/python scripts/build_julian_coach_annotated_speed_gifs.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --points reports/vicon_2026_julian_coach/vicon_2026_point_summary.csv
+
+.venv312/bin/python scripts/build_julian_coach_metrics_section.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --out reports/vicon_2026_julian_coach/julian_coach_metrics_section.html
+
+node scripts/build_batting_metrics_xlsx.mjs
+```
+
+After the aligned 2D overlay video has been generated in the sibling
+`srs_2d_video_report_package_20260702_194156` package, rebuild the 2D geometry
+annotation stills with:
+
+```bash
+.venv312/bin/python ../srs_2d_video_report_package_20260702_194156/render_vicon_geometry_metrics_on_2d.py
+```
+
+This writes Ready/Contact PNGs and an event preview MP4 under:
+
+```text
+../srs_2d_video_report_package_20260702_194156/outputs/julian_bat_2d_vicon_alignment/vicon_geometry_metric_annotations/
+reports/vicon_2026_julian_coach/assets/vicon_2d_geometry_annotations/
+```
+
+The batting metrics are not trial-wide averages. The script first detects the
+actual swing segment from Bat1 speed, chooses Ready Position from low-speed
+raised-bat frames before the swing, and chooses Contact Position from the
+lowest Bat1_Z frames inside the detected swing. See
+[docs/pipeline_playbook.md](docs/pipeline_playbook.md) for the current metric
+definitions, formulas, and output contract.
+
+The frame-level Vicon exports `vicon_2026_points_all.csv` and
+`vicon_2026_pose3d.csv`, report zip files, and `output/` export folders are
+local/generated artifacts and are ignored by Git because they are large or
+duplicative. Regenerate them from the C3D inputs when rebuilding the report.
+
+For the 2D geometry annotation images, all displayed values must come from the
+Vicon metrics CSV/Excel; the 2D skeleton is only a visual scaffold. The current
+alignment uses `video_frame = event_frame + (vicon_time - event_time) * 240`,
+with Vicon bat-speed peak frame 854 aligned to video frame 184. Ready uses
+Vicon frame 772 metrics on an early-video fallback visual frame because the
+strict mapped Ready frame is outside the visible overlay window. Contact uses
+Vicon frame 853 on video frame 182, selected because the skeleton fit is better
+than the nominal center frame. In the HTML section, these PNGs sit directly
+below the Ready/Contact section titles and are sized roughly to the left
+three-card metric grid; the right side remains the Julian event GIF.
+
 Inputs:
 
 ```text

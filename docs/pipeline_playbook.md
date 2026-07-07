@@ -485,6 +485,238 @@ Notes:
   after the bat-speed peak; pitching uses `1.4s` before / `0.4s` after the
   hand-speed peak to include the front-leg lift before the stride down phase.
 
+### Julian/Coach Batting Metrics Artifacts
+
+The Julian/Coach batting section is a standalone report slice, not the main
+`report.html`. It exists to test a Vicon + bat-rigid-body metrics dashboard
+using Julian as the main athlete and Coach as the comparison source.
+
+Main inputs:
+
+```text
+reports/vicon_2026_julian_coach/vicon_2026_points_all.csv
+reports/vicon_2026_julian_coach/vicon_2026_point_summary.csv
+../vicon_2026/julian/007-julian Cal 04 Bat 05.c3d
+../vicon_2026/coach/008-coach Cal 03 Bat 02.c3d
+```
+
+Build order:
+
+```bash
+.venv312/bin/python scripts/build_batting_dashboard_metrics.py \
+  --points reports/vicon_2026_julian_coach/vicon_2026_points_all.csv \
+  --out reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --wide-out reports/vicon_2026_julian_coach/batting_dashboard_metrics_wide.csv \
+  --ready-valid-start-frame 770
+
+MPLCONFIGDIR=/private/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/private/tmp/baseball_xdg_cache \
+.venv312/bin/python scripts/build_julian_coach_event_gifs.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --out-dir reports/vicon_2026_julian_coach/assets/vicon_reconstruction_events
+
+MPLCONFIGDIR=/private/tmp/baseball_mpl_cache \
+XDG_CACHE_HOME=/private/tmp/baseball_xdg_cache \
+.venv312/bin/python scripts/build_julian_coach_annotated_speed_gifs.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --points reports/vicon_2026_julian_coach/vicon_2026_point_summary.csv \
+  --out-dir reports/vicon_2026_julian_coach/assets/vicon_reconstruction_annotated
+
+.venv312/bin/python scripts/build_julian_coach_metrics_section.py \
+  --metrics reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv \
+  --out reports/vicon_2026_julian_coach/julian_coach_metrics_section.html
+
+node scripts/build_batting_metrics_xlsx.mjs
+
+.venv312/bin/python ../srs_2d_video_report_package_20260702_194156/render_vicon_geometry_metrics_on_2d.py
+```
+
+Outputs:
+
+```text
+reports/vicon_2026_julian_coach/batting_dashboard_metrics.csv
+reports/vicon_2026_julian_coach/batting_dashboard_metrics_wide.csv
+reports/vicon_2026_julian_coach/julian_coach_metrics_section.html
+reports/vicon_2026_julian_coach/assets/vicon_reconstruction_events/{julian,coach}_{ready,contact}.gif
+reports/vicon_2026_julian_coach/assets/vicon_reconstruction_annotated/{julian,coach}_speed_annotated.gif
+reports/vicon_2026_julian_coach/assets/vicon_2d_geometry_annotations/{ready_position,contact_position}_vicon_geometry_on_2d.png
+../srs_2d_video_report_package_20260702_194156/outputs/julian_bat_2d_vicon_alignment/vicon_geometry_metric_annotations/vicon_geometry_metrics_on_2d_events.mp4
+outputs/batting_metrics_excel/007-julian Cal 04 Bat 05_batting_report_metrics.xlsx
+```
+
+Large frame-level exports (`vicon_2026_points_all.csv`,
+`vicon_2026_pose3d.csv`), report zip packages, and `output/` export folders are
+local/generated artifacts and are ignored by Git. The repository keeps the
+summary CSVs, standalone HTML, key PNG/GIF visual assets, scripts, and build
+documentation needed to regenerate them from C3D inputs.
+
+Script roles:
+
+- `scripts/build_batting_dashboard_metrics.py` reads the all-frame Vicon point
+  CSV and computes event-based batting metrics. It also writes a wide CSV for
+  quick spreadsheet-style inspection.
+- `scripts/build_julian_coach_event_gifs.py` renders short Ready and Contact
+  GIFs around the event center frame. The HTML currently embeds only Julian's
+  Ready/Contact GIFs in the corresponding sections.
+- `scripts/build_julian_coach_annotated_speed_gifs.py` renders whole
+  reconstruction-window GIFs with left-side metric cards baked into the image.
+  These GIF cards show only frame-by-frame instantaneous values, not fixed
+  event summary values.
+- `scripts/build_julian_coach_metrics_section.py` builds the standalone
+  metrics-only HTML section using Julian as the main data source and Coach as
+  the comparison source.
+- `scripts/build_batting_metrics_xlsx.mjs` is the
+  current Excel export helper for the Julian batting metrics. It mirrors the
+  three-sheet pitching metrics workbook format: `报告指标`, `事件定位`, and `说明`.
+- `../srs_2d_video_report_package_20260702_194156/render_vicon_geometry_metrics_on_2d.py`
+  renders Ready/Contact stills and a short preview MP4 from the aligned 2D
+  skeleton overlay. It uses the 2D video only as a visual scaffold; displayed
+  geometry values are Vicon values from the metrics CSV/Excel.
+
+#### Event Detection Rules
+
+Do not compute these metrics over the full trial or a fixed wall-clock window.
+The C3D includes pre-swing walking/waving and post-swing bat drop artifacts, so
+the metrics pipeline first isolates the actual batting action:
+
+1. Compute Bat1 frame speed from 3D point differences:
+   `speed_kmh = norm(diff(Bat1_xyz_mm) / 1000) * rate_hz * 3.6`.
+2. Smooth Bat1 speed with a small moving window.
+3. Find the swing peak from the smoothed Bat1 speed.
+4. Find the continuous high-speed segment around that peak, then expand by
+   approximately `0.15 s` on each side. This is the detected swing segment.
+5. Ready Position is a continuous low-speed raised-bat block before the
+   detected swing. Current default is 5 frames. For the Julian/Coach Vicon
+   extract, pass `--ready-valid-start-frame 770` so pre-action content before
+   the actual batting setup cannot be selected.
+6. Contact Position is the lowest Bat1_Z event inside the detected swing
+   segment. Current default is 5 frames. There is no ball marker, so this is a
+   contact proxy rather than true ball contact.
+7. The 3D annotated speed GIF ignores Ready/Contact event aggregation and uses
+   the reconstruction action window around the bat-speed peak, defaulting to
+   `0.6 s` before and `0.4 s` after the peak. Each rendered GIF frame recomputes
+   instantaneous Bat1 speed, Attack Angle, and forearm roll speed for that
+   frame.
+
+#### 2D Geometry Annotation Event Mapping
+
+The aligned 2D overlay video has a playback FPS of `29.4802`, but the slow
+motion capture mapping uses `240 fps`. Do not map by video playback frame rate.
+Current mapping:
+
+```text
+video_frame = event_frame + (vicon_time - event_time) * 240
+event_frame = 184
+event_time = Vicon frame 854 / Vicon capture rate
+```
+
+Sanity checks:
+
+```text
+Vicon frame 844 -> video frame 160
+Vicon frame 854 -> video frame 184
+Vicon frame 870 -> video frame 222
+```
+
+Ready Position currently uses Vicon frames `770;771;772;773;774` with event
+center `772`, enforced by `--ready-valid-start-frame 770`. The strict mapped
+Ready frame is outside the useful 2D overlay window, so the annotation renderer
+uses a stable early-video visual frame as the background while still labeling
+the value source as Vicon frame 772. Contact Position uses Vicon frames
+`849;850;851;852;853`; the renderer uses Vicon frame `853` / video frame `182`
+because that overlay frame has a better skeleton-to-body fit than the nominal
+center frame.
+
+The current role mapping assumes a right-handed hitter:
+
+| Annotation | Vicon value source | 2D visual guide |
+| --- | --- | --- |
+| Ready rear hip flexion | `ready_rear_hip_flexion_deg` at frame 772 | shoulder mid -> right hip -> right knee |
+| Ready rear knee flexion | `ready_rear_knee_flexion_deg` at frame 772 | right hip -> right knee -> right ankle |
+| Ready hip-shoulder separation | `ready_hip_shoulder_separation_deg` at frame 772 | shoulder line and pelvis line |
+| Contact pelvis rotation | `contact_pelvis_rotation_open_deg` at frame 853 | hip line plus rotation arrow |
+| Contact torso rotation | `contact_torso_rotation_open_deg` at frame 853 | shoulder line plus rotation arrow |
+| Contact front knee flexion | `contact_front_knee_flexion_deg` at frame 853 | left hip -> left knee -> left ankle |
+
+Never swap front/rear leg roles when drawing these guides. The 2D overlay may
+have imperfect depth ordering; role assignment comes from batting handedness
+and the Vicon metric definition, not from whichever 2D limb appears closer in a
+single frame.
+
+#### Batting Metric Definitions
+
+The CSV stores one row per metric per sample and includes `event_name`,
+`event_rule`, `event_frame`, `event_frames`, `points_used`, `formula`,
+`components_json`, and `notes`. User-facing HTML currently shows 16 metrics;
+`coach_hitting_zone_stability_score` may still be present in CSV output but is
+hidden from the current dashboard.
+
+Ready Position metrics:
+
+| Metric key | Display metric | Event aggregation | Formula / points |
+| --- | --- | --- | --- |
+| `ready_com_height_ratio` | 重心高度 | mean over Ready frames | `mean(COM_Z_ready) / height_proxy`; COM uses `CentreOfMass` if present, else `0.6 * hip_mid + 0.4 * trunk_mid`; height uses head markers minus foot markers. |
+| `ready_rear_hip_flexion_deg` | 后髋屈曲角 | mean over Ready frames | `180 - angle(shoulder_mid, rear_hip, rear_knee)`; right-handed assumption: rear side is right. |
+| `ready_rear_knee_flexion_deg` | 后膝屈曲角 | mean over Ready frames | `180 - angle(rear_hip, rear_knee, rear_ankle)` using right hip/knee/ankle-heel-toe proxy. |
+| `ready_hip_shoulder_separation_deg` | 髋肩分离角 | mean over Ready frames | `abs(wrap_to_180(torso_rotation_xy - pelvis_rotation_xy))` using `LSHO/RSHO` and `LASI/RASI/LPSI/RPSI`. |
+| `ready_bat_tilt_deg` | 球棒倾角 | mean over Ready frames | `atan2(abs((Bat1 - Bat5)_Z), norm((Bat1 - Bat5)_XY))`; 0 deg is parallel to ground, 90 deg is vertical. |
+| `ready_hand_height_ratio` | 握棒手高度 | mean over Ready frames | `mean(grip_hand_center_Z_ready) / height_proxy`; grip hand center is the mean of left/right wrist centers. |
+
+Contact Position metrics:
+
+| Metric key | Display metric | Event aggregation | Formula / points |
+| --- | --- | --- | --- |
+| `contact_bat_speed_kmh` | 球棒速度 | mean over Contact frames | `mean(norm(diff(Bat1_xyz) / dt)) * 3.6 / 1000`; Contact is the lowest Bat1_Z event inside the detected swing segment, not the speed peak. |
+| `contact_attack_angle_deg` | 挥棒路径角（Attack Angle） | mean over Contact frames | `atan2(Bat1_velocity_Z, norm(Bat1_velocity_XY))`; negative means the bat head velocity points downward. |
+| `contact_pelvis_rotation_open_deg` | 骨盆旋转角 | mean over Contact frames | `abs(wrap_to_180(pelvis_rotation_xy_contact - mean(pelvis_rotation_xy_ready)))`; display value is direction-normalized opening magnitude. Signed raw event value is stored in `components_json`. |
+| `contact_torso_rotation_open_deg` | 躯干旋转角 | mean over Contact frames | `abs(wrap_to_180(torso_rotation_xy_contact - mean(torso_rotation_xy_ready)))`; display value is direction-normalized opening magnitude. Signed raw event value is stored in `components_json`. |
+| `contact_front_knee_flexion_deg` | 前膝屈曲角 | mean over Contact frames | `180 - angle(front_hip, front_knee, front_ankle)`; right-handed assumption: front side is left. |
+| `ready_to_contact_head_displacement_mm` | 头部位移 | event-to-event distance | `norm(mean(head_center_contact) - mean(head_center_ready))` using `LFHD/RFHD/LBHD/RBHD`. |
+
+Coach Flag metrics:
+
+| Metric key | Display metric | Event aggregation | Formula / points |
+| --- | --- | --- | --- |
+| `coach_high_com_risk_index` | 重心偏高指数 | Ready composite | `100 * mean(clip((COM_height_ratio - 0.48) / 0.14), clip((35 - rear_hip_flexion) / 35), clip((35 - rear_knee_flexion) / 35))`; higher means taller COM plus straighter rear hip/knee. |
+| `coach_rear_elbow_height_diff_mm` | 后肘高度差（掉肘） | mean over Ready frames | `mean(RELB_Z - RSHO_Z)`; negative means rear elbow is below rear shoulder. |
+| `coach_bat_loading_angle_to_catcher_deg` | 球棒加载角（引棒不足） | mean over Ready frames | `angle(project_xy(Bat5 - Bat1), catcher_direction)`; catcher direction is inferred as `-project_xy(mean(Bat1_velocity_contact))`. |
+| `coach_rollover_forearm_roll_velocity_deg_s` | 手腕翻转角速度（翻腕） | peak over Contact frames | `max(abs(d/dt signed_angle_about_axis(wrist_marker_axis, elbow_to_wrist_axis, global_Z_reference)))` using `RELB/RWRA/RWRB`; this is a forearm pronation proxy. |
+
+Hidden/research metric:
+
+| Metric key | Display metric | Event aggregation | Formula / points |
+| --- | --- | --- | --- |
+| `coach_hitting_zone_stability_score` | 击球区稳定性 | high-speed hitting zone composite | Uses frames where Bat1 speed is at least 90% of swing-segment peak. Score combines high-speed path length, Attack Angle standard deviation, and barrel-path curvature. Currently not shown in the Julian metrics section or Excel main table. |
+
+#### Visual QA Rules
+
+- Ready/Contact section media should show only Julian event GIFs.
+- Ready/Contact 2D geometry PNGs should sit directly below the section title,
+  above the metric grid, with width close to the left three-card metric area.
+  Do not place these screenshots in the right-side media card.
+- For 2D geometry annotations, the value labels are Vicon 3D metrics. The 2D
+  skeleton lines are visual guides only and must not be described as the
+  measurement source.
+- Joint angles should not use angle arcs in the current design. Draw thin limb
+  guide lines, keep the dashed complementary extension lines at the actual
+  angle center, then draw a thin leader line from the joint/angle center to a
+  small, light angle value.
+- Rotation metrics use a standard single elliptical arc arrow, not an S-curve.
+  The arc should be horizontally flattened, reduced enough to avoid covering
+  the athlete, shifted so the arrow head touches or nearly touches the body
+  outline, and trimmed so the tail removes roughly the final 20% while the
+  existing direction and radius remain unchanged.
+- If the mapped Contact frame has a visibly broken 2D skeleton, select another
+  frame from the Contact event window with a better skeleton fit while keeping
+  Vicon values from the selected Vicon event frame.
+- Speed annotations should be baked into the 3D GIF, placed on the left side,
+  with readable font size and no overlap with the skeleton, bat, or trajectory.
+- Speed annotation cards show only instantaneous values for each frame. Do not
+  add the fixed event summary values back into those cards unless the report
+  design changes.
+- Verify representative frames visually after changing camera limits, card
+  size, font size, or action-window sampling.
+
 Current benchmark HTML report:
 
 ```bash
@@ -641,6 +873,10 @@ $PY scripts/build_pdf_report.py \
 | `scripts/analyze_vicon_wave_metrics.py` | Vicon swing metric analysis and report figures. |
 | `scripts/build_vicon_2026_metrics.py` | C3D parser and Vicon 2026 report metrics/point-summary builder. |
 | `scripts/build_benchmark_report_html.py` | Current Chinese benchmark HTML report builder using SlyMask, GVHMR/RTMPose, and Vicon 2026 data. |
+| `scripts/build_batting_dashboard_metrics.py` | Julian/Coach Vicon batting Ready/Contact event detector and dashboard metrics CSV builder. |
+| `scripts/build_julian_coach_event_gifs.py` | Short Ready/Contact event GIF renderer for the Julian/Coach metrics section. |
+| `scripts/build_julian_coach_annotated_speed_gifs.py` | Whole-window Vicon 3D GIF renderer with baked-in frame-by-frame speed, Attack Angle, and forearm roll annotations. |
+| `scripts/build_julian_coach_metrics_section.py` | Standalone Julian-centered, Coach-comparison batting metrics HTML section builder. |
 | `scripts/build_realsense_task3_report.py` | RealSense D435 comparison report and figures. |
 | `scripts/build_pitch_report_template.py` | Local Chinese pitching report template; currently untracked. |
 | `scripts/export_gvhmr_joints.py` | External GVHMR `.pt` to project 3D CSV handoff. |
