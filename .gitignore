@@ -22,11 +22,20 @@ data_full/
 reports/previews/
 outputs/
 outputs_full/
+output/
 .cache/
 .cache_gvhmr/
 models/*.task
 models/*.onnx
 external/
+
+# Generated report archives and large frame-level Vicon exports stay local.
+*.zip
+reports/vicon_2026_*/vicon_2026_points_all.csv
+reports/vicon_2026_*/vicon_2026_pose3d.csv
+reports/vicon_2026_*/assets/vicon_reconstruction/**/*.avi
+reports/vicon_2026_*/assets/vicon_reconstruction/**/*.mp4
+reports/vicon_2026_*/assets/vicon_reconstruction_events/_tmp_*/
 
 # Keep raw videos local unless the submission explicitly requires binaries.
 raw/*.mov
