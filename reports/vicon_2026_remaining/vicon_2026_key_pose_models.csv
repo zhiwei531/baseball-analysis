@@ -1,0 +1,11 @@
+trial_id,sample_name,athlete,action_type,key_event,key_rule,key_frame_index,key_time_sec,model_path,point_count
+7zai_002_cal_04_pitch_05,7zai,7zai,pitching,右手峰值速度,right_hand_speed_peak,1066,10.66,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/7zai_002_cal_04_pitch_05_key_pose.obj,117
+7zai_002_cal_05_bat_04,7zai,7zai,batting,球棒峰值速度,bat_speed_peak,761,7.61,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/7zai_002_cal_05_bat_04_key_pose.obj,122
+branden_011-branden_bat_03,branden,branden,batting,球棒峰值速度,bat_speed_peak,1053,10.53,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/branden_011-branden_bat_03_key_pose.obj,122
+branden_011-branden_pitch_09,branden,branden,pitching,右手峰值速度,right_hand_speed_peak,430,4.3,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/branden_011-branden_pitch_09_key_pose.obj,117
+james_010-james_bat_04,james,james,batting,球棒峰值速度,bat_speed_peak,130,1.3,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/james_010-james_bat_04_key_pose.obj,106
+james_010-james_pitch_09,james,james,pitching,右手峰值速度,right_hand_speed_peak,1394,13.94,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/james_010-james_pitch_09_key_pose.obj,101
+xuanxuan_005-xuanxuan_bat_04,xuanxuan,xuanxuan,batting,球棒峰值速度,bat_speed_peak,1943,19.43,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/xuanxuan_005-xuanxuan_bat_04_key_pose.obj,100
+xuanxuan_005-xuanxuan_pitch_15,xuanxuan,xuanxuan,pitching,右手峰值速度,right_hand_speed_peak,1617,16.17,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/xuanxuan_005-xuanxuan_pitch_15_key_pose.obj,117
+youyou_009-youyou_bat_04,youyou,youyou,batting,球棒峰值速度,bat_speed_peak,1507,15.07,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/youyou_009-youyou_bat_04_key_pose.obj,83
+youyou_009-youyou_pitch_08,youyou,youyou,pitching,右手峰值速度,right_hand_speed_peak,2415,24.15,reports/vicon_2026_remaining/assets/vicon_reconstruction_models/youyou_009-youyou_pitch_08_key_pose.obj,81

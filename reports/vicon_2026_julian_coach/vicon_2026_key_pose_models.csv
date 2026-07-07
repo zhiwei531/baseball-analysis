@@ -1,0 +1,5 @@
+trial_id,sample_name,athlete,action_type,key_event,key_rule,key_frame_index,key_time_sec,model_path,point_count
+coach_008-coach_cal_03_bat_02,coach,coach,batting,球棒峰值速度,bat_speed_peak,844,8.44,reports/vicon_2026_julian_coach/assets/vicon_reconstruction_models/coach_008-coach_cal_03_bat_02_key_pose.obj,122
+coach_008-coach_cal_03_pitch_07,coach,coach,pitching,右手峰值速度,right_hand_speed_peak,1195,11.95,reports/vicon_2026_julian_coach/assets/vicon_reconstruction_models/coach_008-coach_cal_03_pitch_07_key_pose.obj,117
+julian_007-julian_cal_04_bat_05,julian,julian,batting,球棒峰值速度,bat_speed_peak,854,8.54,reports/vicon_2026_julian_coach/assets/vicon_reconstruction_models/julian_007-julian_cal_04_bat_05_key_pose.obj,44
+julian_007-julian_cal_04_pitch_08,julian,julian,pitching,右手峰值速度,right_hand_speed_peak,359,3.59,reports/vicon_2026_julian_coach/assets/vicon_reconstruction_models/julian_007-julian_cal_04_pitch_08_key_pose.obj,117

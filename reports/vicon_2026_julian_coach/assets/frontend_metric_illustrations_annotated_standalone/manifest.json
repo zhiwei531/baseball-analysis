@@ -1,0 +1,100 @@
+[
+  {
+    "module": "Ready",
+    "metric": "平衡",
+    "source_file": "ready_balance.png",
+    "annotated_file": "ready_balance_annotated.png",
+    "subtitle": "重心高度 0.79 身高 + 头部位移 345 毫米"
+  },
+  {
+    "module": "Ready",
+    "metric": "下肢加载",
+    "source_file": "ready_lower_body_load.png",
+    "annotated_file": "ready_lower_body_load_annotated.png",
+    "subtitle": "后髋屈曲角 51.0° + 后膝屈曲角 38.1°"
+  },
+  {
+    "module": "Ready",
+    "metric": "躯干蓄力",
+    "source_file": "ready_torso_coil.png",
+    "annotated_file": "ready_torso_coil_annotated.png",
+    "subtitle": "髋肩分离角 3.3°"
+  },
+  {
+    "module": "Ready",
+    "metric": "球棒准备",
+    "source_file": "ready_bat_readiness.png",
+    "annotated_file": "ready_bat_readiness_annotated.png",
+    "subtitle": "球棒倾角 67.4° + 握棒手高度 0.79 身高"
+  },
+  {
+    "module": "Contact",
+    "metric": "球棒效率",
+    "source_file": "contact_bat_efficiency.png",
+    "annotated_file": "contact_bat_efficiency_annotated.png",
+    "subtitle": "棒头速度 61.1 公里/小时"
+  },
+  {
+    "module": "Contact",
+    "metric": "挥棒轨迹",
+    "source_file": "contact_swing_path.png",
+    "annotated_file": "contact_swing_path_annotated.png",
+    "subtitle": "攻击角 -1.9°"
+  },
+  {
+    "module": "Contact",
+    "metric": "下半身姿态",
+    "source_file": "contact_lower_body_posture.png",
+    "annotated_file": "contact_lower_body_posture_annotated.png",
+    "subtitle": "骨盆旋转角 133.1°"
+  },
+  {
+    "module": "Contact",
+    "metric": "上半身姿态",
+    "source_file": "contact_upper_body_posture.png",
+    "annotated_file": "contact_upper_body_posture_annotated.png",
+    "subtitle": "躯干旋转角 144.4°"
+  },
+  {
+    "module": "Contact",
+    "metric": "支撑能力",
+    "source_file": "contact_front_leg_support.png",
+    "annotated_file": "contact_front_leg_support_annotated.png",
+    "subtitle": "前膝屈曲角 25.3°"
+  },
+  {
+    "module": "Contact",
+    "metric": "稳定性",
+    "source_file": "contact_stability.png",
+    "annotated_file": "contact_stability_annotated.png",
+    "subtitle": "Ready-to-Contact 头部位移 345 毫米"
+  },
+  {
+    "module": "Coach Flag",
+    "metric": "重心偏高",
+    "source_file": "issue_high_center_of_mass.png",
+    "annotated_file": "issue_high_center_of_mass_annotated.png",
+    "subtitle": "重心偏高指数 33/100；重心 0.79 身高"
+  },
+  {
+    "module": "Coach Flag",
+    "metric": "掉肘",
+    "source_file": "issue_dropped_rear_elbow.png",
+    "annotated_file": "issue_dropped_rear_elbow_annotated.png",
+    "subtitle": "后肘相对后肩高度差 -145 毫米"
+  },
+  {
+    "module": "Coach Flag",
+    "metric": "引棒不足",
+    "source_file": "issue_insufficient_bat_load.png",
+    "annotated_file": "issue_insufficient_bat_load_annotated.png",
+    "subtitle": "球棒加载角 30.2°"
+  },
+  {
+    "module": "Coach Flag",
+    "metric": "翻腕",
+    "source_file": "issue_early_wrist_roll.png",
+    "annotated_file": "issue_early_wrist_roll_annotated.png",
+    "subtitle": "前臂翻转角速度峰值 1311°/秒"
+  }
+]

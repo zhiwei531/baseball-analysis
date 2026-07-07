@@ -1,0 +1,86 @@
+[
+  {
+    "module": "Ready Position",
+    "metric": "平衡",
+    "status": "需复核",
+    "file": "ready_balance.png"
+  },
+  {
+    "module": "Ready Position",
+    "metric": "下肢加载",
+    "status": "良好",
+    "file": "ready_lower_body_load.png"
+  },
+  {
+    "module": "Ready Position",
+    "metric": "躯干蓄力",
+    "status": "关注",
+    "file": "ready_torso_coil.png"
+  },
+  {
+    "module": "Ready Position",
+    "metric": "球棒准备",
+    "status": "关注",
+    "file": "ready_bat_readiness.png"
+  },
+  {
+    "module": "Contact Position",
+    "metric": "球棒效率",
+    "status": "关注",
+    "file": "contact_bat_efficiency.png"
+  },
+  {
+    "module": "Contact Position",
+    "metric": "挥棒轨迹",
+    "status": "关注",
+    "file": "contact_swing_path.png"
+  },
+  {
+    "module": "Contact Position",
+    "metric": "下半身姿态",
+    "status": "关注",
+    "file": "contact_lower_body_posture.png"
+  },
+  {
+    "module": "Contact Position",
+    "metric": "上半身姿态",
+    "status": "良好",
+    "file": "contact_upper_body_posture.png"
+  },
+  {
+    "module": "Contact Position",
+    "metric": "支撑能力",
+    "status": "关注",
+    "file": "contact_front_leg_support.png"
+  },
+  {
+    "module": "Contact Position",
+    "metric": "稳定性",
+    "status": "关注",
+    "file": "contact_stability.png"
+  },
+  {
+    "module": "专项问题",
+    "metric": "重心偏高",
+    "status": "良好",
+    "file": "issue_high_center_of_mass.png"
+  },
+  {
+    "module": "专项问题",
+    "metric": "掉肘",
+    "status": "需复核",
+    "file": "issue_dropped_rear_elbow.png"
+  },
+  {
+    "module": "专项问题",
+    "metric": "引棒不足",
+    "status": "需复核",
+    "file": "issue_insufficient_bat_load.png"
+  },
+  {
+    "module": "专项问题",
+    "metric": "翻腕",
+    "status": "关注",
+    "file": "issue_early_wrist_roll.png"
+  }
+]
