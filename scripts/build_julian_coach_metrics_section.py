@@ -1301,7 +1301,8 @@ def main() -> None:
     rows = read_csv(args.metrics)
     peer_rows = read_peer_metrics(args.peers)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(render(rows, peer_rows), encoding="utf-8")
+    html_text = "\n".join(line.rstrip() for line in render(rows, peer_rows).splitlines()) + "\n"
+    args.out.write_text(html_text, encoding="utf-8")
     print(args.out)
 
 
